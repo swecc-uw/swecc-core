@@ -1,0 +1,11 @@
+.vevn/
+*venv*
+*node_modules*
+*__pycache__*
+.vscode/*
+frontend/.vscode/*
+backend/.vscode/*
+*.log
+*.log.*
+*django.log*
+.DS_Store

@@ -1,0 +1,25 @@
+services:
+  ai-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swecc-ai
+    ports:
+      - '8008:8008'
+    volumes:
+      - ./app:/app/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload
+    restart: unless-stopped
+    networks:
+      - swecc-default
+
+networks:
+  swecc-default:
+    name: swecc-default
+    external: true

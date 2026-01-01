@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  swag:
+    image: linuxserver/swag
+    container_name: swag
+    ports:
+      - "80:80"   # HTTP
+      - "443:443" # HTTPS
+    volumes:
+      - ./config:/config
+    environment:
+      - URL=api.swecc.org
+      - EMAIL=sweccuw@gmail.com # shawnc6@cs.washington.edu 
+      - VALIDATION=http
+    networks:
+      - swag-network
+    restart: unless-stopped
+
+networks:
+  swag-network:
+    external: true
+

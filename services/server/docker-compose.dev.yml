@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:latest
+    networks:
+      - swecc-default
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - '80:80'
+    depends_on:
+      - web
+  web:
+    tty: true
+    build:
+      context: .
+      target: development # multi-stage build
+    networks:
+      - swecc-default
+    volumes:
+      - .:/app
+    ports:
+      - '8000:8000' # exposed for profiler, not used in production
+    expose:
+      - '8000'
+    depends_on:
+      - db
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG}
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - INTERNSHIP_CHANNEL_ID=${INTERNSHIP_CHANNEL_ID}
+      - NEW_GRAD_CHANNEL_ID=${NEW_GRAD_CHANNEL_ID}
+      - METRIC_SERVER_URL=${METRIC_SERVER_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+    command: python3 server/manage.py runserver 0.0.0.0:8000
+    restart: always
+
+  db:
+    image: postgres:13
+    networks:
+      - swecc-default
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '${DB_PORT}:${DB_PORT}'
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PORT=${DB_PORT}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    networks:
+      - swecc-default
+    ports:
+      - '5050:80'
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=elimelt@uw.edu
+      - PGADMIN_DEFAULT_PASSWORD=password
+    depends_on:
+      - db
+
+  redis:
+    image: redis:6.0.7
+    container_name: swecc-redis-instance
+    restart: always
+    networks:
+      - swecc-default
+    volumes:
+      - redis_volume_data:/data
+    ports:
+      - 6379:6379
+
+  redis_insight:
+    image: redislabs/redisinsight:1.14.0
+    container_name: redis_insight
+    restart: always
+    networks:
+      - swecc-default
+    ports:
+      - 8001:8001
+    volumes:
+      - redis_insight_volume_data:/db
+
+  rabbitmq-host:
+    image: 'rabbitmq:3-management'
+    container_name: rabbitmq-host
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    restart: always
+    networks:
+      - swecc-default
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  rabbitmq-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.manager
+    container_name: rabbitmq-manager
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG}
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - INTERNSHIP_CHANNEL_ID=${INTERNSHIP_CHANNEL_ID}
+      - NEW_GRAD_CHANNEL_ID=${NEW_GRAD_CHANNEL_ID}
+      - METRIC_SERVER_URL=${METRIC_SERVER_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+      - RABBITMQ_HOST=rabbitmq-host
+    depends_on:
+      - rabbitmq-host
+      - web
+    networks:
+      - swecc-default
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_volume_data:
+  redis_insight_volume_data:
+  rabbitmq_data:
+
+networks:
+  swecc-default:
+    external: true
+    name: swecc-default

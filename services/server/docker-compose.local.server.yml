@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  web:
+    tty: true
+    build: .
+    networks:
+      - swecc-default
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - INTERNSHIP_CHANNEL_ID=${INTERNSHIP_CHANNEL_ID}
+      - NEW_GRAD_CHANNEL_ID=${NEW_GRAD_CHANNEL_ID}
+      - METRIC_SERVER_URL=${METRIC_SERVER_URL}
+
+networks:
+  swecc-default:
+    external: true
+    name: swecc-default

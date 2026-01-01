@@ -1,0 +1,42 @@
+# SSL certificates and keys
+config/keys/
+config/keys/letsencrypt/
+*.pem
+*.key
+*.crt
+
+# Let's Encrypt accounts and certificates
+config/etc/letsencrypt/accounts/
+config/etc/letsencrypt/archive/
+config/etc/letsencrypt/live/
+config/etc/letsencrypt/csr/
+config/etc/letsencrypt/keys/
+
+# Log files
+config/log/
+*.log
+config/log/nginx/
+config/log/php/
+config/log/fail2ban/
+config/log/letsencrypt/
+config/log/logrotate.status
+
+# DNS configuration with potential credentials
+config/dns-conf/*.ini
+config/dns-conf/*.json
+config/dns-conf/acmedns-registration.json
+config/dns-conf/google.json
+
+# Database files
+*.sqlite3
+config/fail2ban/fail2ban.sqlite3
+
+# Backup files
+*.backup
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Custom configs that may contain sensitive information
+*.env

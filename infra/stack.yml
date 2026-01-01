@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /usr/share/nginx/html:/usr/share/nginx/html
+      - ${PWD}/nginx.conf:/etc/nginx/nginx.conf
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - 80:80
+      - 443:443
+    networks:
+      - swecc-network
+
+networks:
+  swecc-network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  chronos_data:
+  redis_data:
+  rabbitmq_data:
+
+configs:
+  bot_env:
+    external: true
+  chronos_env:
+    external: true
+  scheduler_env:
+    external: true
+  server_env:
+    external: true
+  sockets_env:
+    external: true

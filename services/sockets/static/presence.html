@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Real-time Presence</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+
+      .container {
+        background-color: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        color: #333;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+      }
+
+      .section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+      }
+
+      input,
+      button {
+        padding: 8px 12px;
+        margin: 5px 0;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+
+      input[type="text"] {
+        width: 70%;
+      }
+
+      #messages {
+        margin-top: 10px;
+        color: #666;
+        font-style: italic;
+      }
+
+      #users {
+        display: flex;
+        flex-wrap: wrap;
+        margin-top: 20px;
+        gap: 15px;
+      }
+
+      .user {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .user-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: #3f51b5;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+
+      .user-name {
+        font-size: 12px;
+        max-width: 80px;
+        text-align: center;
+        word-break: break-word;
+      }
+
+      .room-info {
+        margin: 15px 0;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .status {
+        font-weight: bold;
+        margin-top: 10px;
+      }
+
+      .connected {
+        color: #009900;
+      }
+
+      .disconnected {
+        color: #990000;
+      }
+
+      .rooms-list {
+        margin: 15px 0;
+      }
+
+      .room-item {
+        padding: 5px 10px;
+        margin: 5px 0;
+        background-color: #f0f0f0;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .room-item:hover {
+        background-color: #e0e0e0;
+      }
+
+      .system-message {
+        color: #0066cc;
+        margin: 10px 0;
+      }
+
+      .error-message {
+        color: #cc0000;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Real-time Presence</h1>
+
+      <div class="section">
+        <h3>Connection</h3>
+        <div>
+          <input
+            type="text"
+            id="tokenInput"
+            placeholder="Enter JWT token"
+            style="width: 70%"
+          />
+          <button id="connectButton">Connect</button>
+          <button id="disconnectButton" disabled>Disconnect</button>
+          <div id="connectionStatus" class="status disconnected">
+            Status: Disconnected
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Room</h3>
+        <div>
+          <input
+            type="text"
+            id="roomIdInput"
+            placeholder="Enter room ID"
+            disabled
+          />
+          <button id="joinRoomButton" disabled>Join Room</button>
+          <button id="leaveRoomButton" disabled>Leave Room</button>
+          <button id="listRoomsButton" disabled>List Rooms</button>
+        </div>
+        <div id="roomsList" class="rooms-list" style="display: none"></div>
+        <div id="currentRoom" style="display: none" class="room-info">
+          <span>Not in a room</span>
+        </div>
+        <div id="systemMessages"></div>
+      </div>
+
+      <div class="section">
+        <h3>Users in Room</h3>
+        <div id="users"></div>
+        <div
+          id="emptyRoom"
+          style="display: none; font-style: italic; color: #666"
+        >
+          No users in room
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const tokenInput = document.getElementById("tokenInput");
+      const connectButton = document.getElementById("connectButton");
+      const disconnectButton = document.getElementById("disconnectButton");
+      const connectionStatus = document.getElementById("connectionStatus");
+      const roomIdInput = document.getElementById("roomIdInput");
+      const joinRoomButton = document.getElementById("joinRoomButton");
+      const leaveRoomButton = document.getElementById("leaveRoomButton");
+      const listRoomsButton = document.getElementById("listRoomsButton");
+      const roomsList = document.getElementById("roomsList");
+      const currentRoom = document.getElementById("currentRoom");
+      const systemMessages = document.getElementById("systemMessages");
+      const usersContainer = document.getElementById("users");
+      const emptyRoom = document.getElementById("emptyRoom");
+
+      let socket;
+      let activeRoomId = null;
+
+      function getRandomColor(username) {
+        let hash = 0;
+        for (let i = 0; i < username.length; i++) {
+          hash = username.charCodeAt(i) + ((hash << 5) - hash);
+        }
+
+        const h = Math.abs(hash) % 360;
+        return `hsl(${h}, 70%, 45%)`;
+      }
+
+      function addSystemMessage(message) {
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("system-message");
+        messageElement.textContent = message;
+        systemMessages.appendChild(messageElement);
+
+        if (systemMessages.children.length > 5) {
+          systemMessages.removeChild(systemMessages.children[0]);
+        }
+      }
+
+      function addErrorMessage(message) {
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("error-message");
+        messageElement.textContent = message;
+        systemMessages.appendChild(messageElement);
+
+        if (systemMessages.children.length > 5) {
+          systemMessages.removeChild(systemMessages.children[0]);
+        }
+      }
+
+      function updateConnectionUI(connected) {
+        connectButton.disabled = connected;
+        disconnectButton.disabled = !connected;
+        roomIdInput.disabled = !connected;
+        joinRoomButton.disabled = !connected;
+        listRoomsButton.disabled = !connected;
+        leaveRoomButton.disabled = !connected || !activeRoomId;
+
+        connectionStatus.className = connected
+          ? "status connected"
+          : "status disconnected";
+        connectionStatus.textContent = `Status: ${
+          connected ? "Connected" : "Disconnected"
+        }`;
+
+        if (!connected) {
+          activeRoomId = null;
+          currentRoom.style.display = "none";
+          usersContainer.innerHTML = "";
+          emptyRoom.style.display = "none";
+          roomsList.style.display = "none";
+          roomsList.innerHTML = "";
+          systemMessages.innerHTML = "";
+        }
+      }
+
+      function updateRoomUI() {
+        if (activeRoomId) {
+          currentRoom.style.display = "flex";
+          currentRoom.querySelector(
+            "span"
+          ).textContent = `Current Room: ${activeRoomId}`;
+          leaveRoomButton.disabled = false;
+        } else {
+          currentRoom.style.display = "none";
+          usersContainer.innerHTML = "";
+          emptyRoom.style.display = "none";
+          leaveRoomButton.disabled = true;
+        }
+      }
+
+      function updateUsers(users) {
+        usersContainer.innerHTML = "";
+
+        if (users && users.length > 0) {
+          emptyRoom.style.display = "none";
+
+          users.forEach((user) => {
+            const userDiv = document.createElement("div");
+            userDiv.className = "user";
+
+            const avatar = document.createElement("div");
+            avatar.className = "user-avatar";
+            avatar.style.backgroundColor = getRandomColor(user.username);
+            avatar.textContent = user.username.charAt(0).toUpperCase();
+
+            const name = document.createElement("div");
+            name.className = "user-name";
+            name.textContent = user.username;
+
+            userDiv.appendChild(avatar);
+            userDiv.appendChild(name);
+            usersContainer.appendChild(userDiv);
+          });
+        } else {
+          emptyRoom.style.display = "block";
+        }
+      }
+
+      connectButton.addEventListener("click", () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          addErrorMessage("Please enter a JWT token");
+          return;
+        }
+
+        if (socket) {
+          socket.close();
+        }
+
+        try {
+          const protocol =
+            window.location.protocol === "https:" ? "wss:" : "ws:";
+          const wsBaseUrl =
+            protocol +
+            "//" +
+            (window.location.host === "localhost" ||
+            window.location.host.startsWith("127.")
+              ? "localhost"
+              : "api.swecc.org");
+
+          socket = new WebSocket(`${wsBaseUrl}/ws/presence/${token}`);
+
+          socket.addEventListener("open", (event) => {
+            addSystemMessage("Connected to Presence Service");
+            updateConnectionUI(true);
+          });
+
+          socket.addEventListener("message", (event) => {
+            try {
+              const data = JSON.parse(event.data);
+
+              switch (data.type) {
+                case "system":
+                  addSystemMessage(data.message);
+                  break;
+
+                case "room_joined":
+                  activeRoomId = data.room_id;
+                  updateRoomUI();
+                  addSystemMessage(`Joined room: ${data.room_id}`);
+                  break;
+
+                case "room_left":
+                  activeRoomId = null;
+                  updateRoomUI();
+                  addSystemMessage(`Left room: ${data.room_id}`);
+                  break;
+
+                case "presence_update":
+                  if (data.room_id === activeRoomId) {
+                    updateUsers(data.data.users);
+                    addSystemMessage(
+                      `Room updated: ${data.data.user_count} users`
+                    );
+                  }
+                  break;
+
+                case "room_list":
+                  displayRoomsList(data.data.rooms);
+                  break;
+
+                case "error":
+                  addErrorMessage(data.message);
+                  break;
+
+                default:
+                  console.log("Unknown message type:", data.type, data);
+              }
+            } catch (e) {
+              console.error("Error parsing message:", e, event.data);
+            }
+          });
+
+          socket.addEventListener("close", (event) => {
+            const reason = event.reason ? ` - ${event.reason}` : "";
+            addSystemMessage(
+              `Connection closed (code: ${event.code}${reason})`
+            );
+            updateConnectionUI(false);
+          });
+
+          socket.addEventListener("error", (event) => {
+            addErrorMessage("WebSocket error");
+            console.error("WebSocket error:", event);
+          });
+        } catch (error) {
+          addErrorMessage(`Error: ${error.message}`);
+          console.error("Connection error:", error);
+        }
+      });
+
+      function displayRoomsList(rooms) {
+        roomsList.innerHTML = "";
+
+        if (rooms.length === 0) {
+          const noRoomsMsg = document.createElement("div");
+          noRoomsMsg.textContent = "No active rooms";
+          noRoomsMsg.style.fontStyle = "italic";
+          noRoomsMsg.style.color = "#666";
+          roomsList.appendChild(noRoomsMsg);
+        } else {
+          rooms.forEach((room) => {
+            const roomItem = document.createElement("div");
+            roomItem.className = "room-item";
+            roomItem.textContent = `${room.id} (${room.user_count} users)`;
+
+            roomItem.addEventListener("click", () => {
+              roomIdInput.value = room.id;
+              joinRoomButton.click();
+              roomsList.style.display = "none";
+            });
+
+            roomsList.appendChild(roomItem);
+          });
+        }
+
+        roomsList.style.display = "block";
+      }
+
+      disconnectButton.addEventListener("click", () => {
+        if (socket) {
+          socket.close(1000, "User disconnected");
+          updateConnectionUI(false);
+        }
+      });
+
+      joinRoomButton.addEventListener("click", () => {
+        const roomId = roomIdInput.value.trim();
+        if (roomId && socket && socket.readyState === WebSocket.OPEN) {
+          const message = {
+            type: "join_room",
+            room_id: roomId,
+          };
+          socket.send(JSON.stringify(message));
+          roomsList.style.display = "none";
+        } else {
+          addErrorMessage("Please enter a room ID");
+        }
+      });
+
+      leaveRoomButton.addEventListener("click", () => {
+        if (activeRoomId && socket && socket.readyState === WebSocket.OPEN) {
+          const message = {
+            type: "leave_room",
+            room_id: activeRoomId,
+          };
+          socket.send(JSON.stringify(message));
+        }
+      });
+
+      listRoomsButton.addEventListener("click", () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          const message = {
+            type: "list_rooms",
+          };
+          socket.send(JSON.stringify(message));
+        }
+      });
+    </script>
+  </body>
+</html>

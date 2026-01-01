@@ -1,0 +1,11 @@
+services:
+  rabbitmq:
+    image: swecc/swecc-rabbit:latest
+    container_name: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+volumes:
+  rabbitmq_data:

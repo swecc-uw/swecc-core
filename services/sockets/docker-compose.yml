@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  websocket-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swecc-websocket
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./app:/app/app
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --reload
+    restart: unless-stopped
+    networks:
+      - swecc-default
+
+networks:
+  swecc-default:
+    name: swecc-default
+    external: true

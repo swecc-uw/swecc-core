@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Echo Service Test Client</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+
+      .container {
+        background-color: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        color: #333;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+      }
+
+      .section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+      }
+
+      #messages {
+        border: 1px solid #ccc;
+        padding: 10px;
+        height: 300px;
+        overflow-y: scroll;
+        margin: 10px 0;
+        background-color: #f9f9f9;
+        border-radius: 5px;
+      }
+
+      input,
+      button {
+        padding: 8px 12px;
+        margin: 5px 0;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+
+      input[type="text"] {
+        width: 70%;
+      }
+
+      .system {
+        color: #0066cc;
+        font-style: italic;
+      }
+
+      .sent {
+        color: #006600;
+        font-weight: bold;
+      }
+
+      .received {
+        color: #333;
+      }
+
+      .error {
+        color: #cc0000;
+        font-weight: bold;
+      }
+
+      .status {
+        font-weight: bold;
+        margin-top: 10px;
+      }
+
+      .connected {
+        color: #009900;
+      }
+
+      .disconnected {
+        color: #990000;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Echo Service Test Client</h1>
+
+      <div class="section">
+        <h3>Connection</h3>
+        <div>
+          <input
+            type="text"
+            id="tokenInput"
+            placeholder="Enter JWT token"
+            style="width: 70%"
+          />
+          <button id="connectButton">Connect</button>
+          <button id="disconnectButton" disabled>Disconnect</button>
+          <div id="connectionStatus" class="status disconnected">
+            Status: Disconnected
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Messages</h3>
+        <div id="messages"></div>
+
+        <div>
+          <input
+            type="text"
+            id="messageInput"
+            placeholder="Type a message to echo..."
+            disabled
+          />
+          <button id="sendButton" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const tokenInput = document.getElementById("tokenInput");
+      const connectButton = document.getElementById("connectButton");
+      const disconnectButton = document.getElementById("disconnectButton");
+      const connectionStatus = document.getElementById("connectionStatus");
+      const messagesDiv = document.getElementById("messages");
+      const messageInput = document.getElementById("messageInput");
+      const sendButton = document.getElementById("sendButton");
+
+      let socket;
+
+      function addMessage(message, type) {
+        const time = new Date().toLocaleTimeString();
+        const messageElement = document.createElement("div");
+        messageElement.classList.add(type);
+        messageElement.textContent = `[${time}] ${message}`;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      function updateConnectionUI(connected) {
+        connectButton.disabled = connected;
+        disconnectButton.disabled = !connected;
+        messageInput.disabled = !connected;
+        sendButton.disabled = !connected;
+
+        connectionStatus.className = connected
+          ? "status connected"
+          : "status disconnected";
+        connectionStatus.textContent = `Status: ${
+          connected ? "Connected" : "Disconnected"
+        }`;
+      }
+
+      connectButton.addEventListener("click", () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          addMessage("Please enter a JWT token", "error");
+          return;
+        }
+
+        if (socket) {
+          socket.close();
+        }
+
+        try {
+          const protocol =
+            window.location.protocol === "https:" ? "wss:" : "ws:";
+          const wsBaseUrl =
+            protocol +
+            "//" +
+            (window.location.host === "localhost" ||
+            window.location.host.startsWith("127.")
+              ? "localhost"
+              : "api.swecc.org");
+
+          socket = new WebSocket(`${wsBaseUrl}/ws/echo/${token}`);
+
+          socket.addEventListener("open", (event) => {
+            addMessage("Connected to Echo Service", "system");
+            updateConnectionUI(true);
+          });
+
+          socket.addEventListener("message", (event) => {
+            try {
+              const data = JSON.parse(event.data);
+
+              switch (data.type) {
+                case "system":
+                  addMessage(`System: ${data.message}`, "system");
+                  break;
+
+                case "echo":
+                  addMessage(`Echo: ${data.message}`, "received");
+                  break;
+
+                case "error":
+                  addMessage(`Error: ${data.message}`, "error");
+                  break;
+
+                default:
+                  addMessage(`Received: ${event.data}`, "received");
+              }
+            } catch (e) {
+              addMessage(`Received: ${event.data}`, "received");
+            }
+          });
+
+          socket.addEventListener("close", (event) => {
+            const reason = event.reason ? ` - ${event.reason}` : "";
+            addMessage(
+              `Connection closed (code: ${event.code}${reason})`,
+              "system"
+            );
+            updateConnectionUI(false);
+          });
+
+          socket.addEventListener("error", (event) => {
+            addMessage("WebSocket error", "error");
+            console.error("WebSocket error:", event);
+          });
+        } catch (error) {
+          addMessage(`Error: ${error.message}`, "error");
+        }
+      });
+
+      disconnectButton.addEventListener("click", () => {
+        if (socket) {
+          socket.close(1000, "User disconnected");
+          updateConnectionUI(false);
+        }
+      });
+
+      sendButton.addEventListener("click", () => {
+        const message = messageInput.value.trim();
+        if (message && socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(message);
+          addMessage(`Sent: ${message}`, "sent");
+          messageInput.value = "";
+        }
+      });
+
+      messageInput.addEventListener("keyup", (event) => {
+        if (event.key === "Enter") {
+          sendButton.click();
+        }
+      });
+    </script>
+  </body>
+</html>

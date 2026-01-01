@@ -1,0 +1,13 @@
+discord
+asyncpraw
+aiohttp
+asyncio
+helper
+python-dotenv
+gitpython
+pycord
+requests
+pytz
+ics
+google-genai
+pika

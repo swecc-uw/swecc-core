@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+websockets
+python-jose
+pydantic
+python-multipart
+PyJWT==1.7.1
+docker
+aiohttp
+pika
