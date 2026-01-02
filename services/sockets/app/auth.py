@@ -43,6 +43,7 @@ class Auth:
         user = await Auth.validate_token(token)
 
         if not user:
+            await websocket.accept()
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return None
 
@@ -50,6 +51,7 @@ class Auth:
         if required_groups:
             has_permission = any(group in user.get("groups", []) for group in required_groups)
             if not has_permission:
+                await websocket.accept()
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return None
 
