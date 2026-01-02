@@ -108,4 +108,3 @@ jobs:
           echo "❌ Deployment verification timed out"
           docker service ps ${{ env.SERVICE_NAME }} --no-trunc
           exit 1
-
