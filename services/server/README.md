@@ -147,3 +147,4 @@ and in network tab you get status `(failed)net::ERR_CONNECTION_REFUSED`, you mig
 ```
 cd ~/swag; docker-compose up -d
 ```
+# CI check
