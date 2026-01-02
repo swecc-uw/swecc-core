@@ -27,3 +27,4 @@ export PREFIX_COMMAND=<...>
 | task | command |
 | --- | --- |
 | run server | `python main.py` |
+# CI check
