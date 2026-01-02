@@ -1,0 +1,22 @@
+name: Deploy Sockets
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'services/sockets/**'
+      - 's/ops/**'
+      - 's/lib.sh'
+      - '.github/workflows/deploy-sockets.yml'
+      - '.github/workflows/reusable-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: sockets
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+

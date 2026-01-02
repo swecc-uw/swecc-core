@@ -1,0 +1,100 @@
+name: Deploy All Services
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy-all" to confirm deployment of all services'
+        required: true
+        type: string
+
+jobs:
+  validate:
+    name: Validate Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        if: inputs.confirm != 'deploy-all'
+        run: |
+          echo "Deployment cancelled. You must type 'deploy-all' to confirm."
+          exit 1
+
+  deploy-server:
+    name: Deploy Server
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: server
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-bot:
+    name: Deploy Bot
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bot
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-ai:
+    name: Deploy AI
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: ai
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-chronos:
+    name: Deploy Chronos
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: chronos
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-sockets:
+    name: Deploy Sockets
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: sockets
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-scheduler:
+    name: Deploy Scheduler
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: scheduler
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  summary:
+    name: Deployment Summary
+    needs: [deploy-server, deploy-bot, deploy-ai, deploy-chronos, deploy-sockets, deploy-scheduler]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Server | ${{ needs.deploy-server.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bot | ${{ needs.deploy-bot.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| AI | ${{ needs.deploy-ai.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Chronos | ${{ needs.deploy-chronos.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sockets | ${{ needs.deploy-sockets.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scheduler | ${{ needs.deploy-scheduler.result }} |" >> $GITHUB_STEP_SUMMARY
+

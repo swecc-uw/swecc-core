@@ -1,0 +1,23 @@
+name: Deploy Server
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'services/server/**'
+      - '!services/server/rabbit_listener.py'
+      - 's/ops/**'
+      - 's/lib.sh'
+      - '.github/workflows/deploy-server.yml'
+      - '.github/workflows/reusable-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: server
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+

@@ -1,0 +1,42 @@
+name: RabbitMQ User Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to create RabbitMQ user for'
+        required: true
+        type: choice
+        options:
+          - server
+          - bot
+          - ai
+          - sockets
+          - all
+
+jobs:
+  create_user:
+    name: Create RabbitMQ User
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create RabbitMQ user(s)
+        run: |
+          chmod +x ./s/ops/rabbitmq.sh ./s/lib.sh
+          
+          if [ "${{ inputs.service }}" == "all" ]; then
+            for svc in server bot ai sockets; do
+              echo "Creating user for $svc"
+              ./s/ops/rabbitmq.sh create-user $svc || true
+            done
+          else
+            ./s/ops/rabbitmq.sh create-user ${{ inputs.service }}
+          fi
+
+      - name: List RabbitMQ users
+        run: ./s/ops/rabbitmq.sh list-users
+

@@ -1,0 +1,22 @@
+name: Deploy AI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'services/ai/**'
+      - 's/ops/**'
+      - 's/lib.sh'
+      - '.github/workflows/deploy-ai.yml'
+      - '.github/workflows/reusable-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: ai
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
