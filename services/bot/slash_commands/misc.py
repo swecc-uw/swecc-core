@@ -500,9 +500,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         )  # pass only the timeline
 
         if not TIMELINE_CHANNEL:
-            await interaction.followup.send(
-                "Timeline feature is not configured.", ephemeral=True
-            )
+            await interaction.followup.send("Timeline feature is not configured.", ephemeral=True)
             return
 
         channel = self.bot.get_channel(TIMELINE_CHANNEL)
