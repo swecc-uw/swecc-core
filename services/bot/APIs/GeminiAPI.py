@@ -48,7 +48,7 @@ class GeminiAPI:
         self.BUTLER_MESSAGE_PREFIX = "Response: "
         self.EXPECTED_RESPONSE_INFO = f"Use the context to better tailor your response, but focus on the provided message.{self.BUTLER_MESSAGE_PREFIX}"
 
-        self.url = os.getenv("AI_API_URL", "http://ai-server:8008")
+        self.url = os.getenv("AI_API_URL", "http://ai:8008")
         self.config_key = "swecc-bot"
 
         self.session = requests.Session()
@@ -120,7 +120,9 @@ class GeminiAPI:
         return re.sub(self.prompt.lower(), "", message.content.lower(), 1).strip()
 
     def is_authorized(self, message):
-        return any(role.id in self.allowlisted_roles_id for role in message.author.roles)
+        return any(
+            role.id in self.allowlisted_roles_id for role in message.author.roles
+        )
 
     def clean_response(self, response):
         if "@" in response:
@@ -149,7 +151,9 @@ class GeminiAPI:
         tries = 0
         failed_response_message = "Request failed. Please try again later."
         while tries < self.max_tries:
-            with self.session.get(f"{self.url}/inference/status/{request_id}") as response:
+            with self.session.get(
+                f"{self.url}/inference/status/{request_id}"
+            ) as response:
                 if response.status_code == 200:
                     status = response.json()["status"]
                     if status == "success":
@@ -164,7 +168,9 @@ class GeminiAPI:
                         logging.info("Response is still pending...")
                     elif status == "error":
                         logging.error("Error in response.")
-                        failed_response_message = "Error occurred Please try again later."
+                        failed_response_message = (
+                            "Error occurred Please try again later."
+                        )
                         break
                     elif status == "in_progress":
                         logging.info("Response is in-progress")
