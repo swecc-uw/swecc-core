@@ -39,4 +39,3 @@ jobs:
 
       - name: List RabbitMQ users
         run: ./s/ops/rabbitmq.sh list-users
-

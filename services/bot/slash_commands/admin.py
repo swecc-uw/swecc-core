@@ -1,9 +1,12 @@
 import logging
-from .utils import slugify
+
 import discord
 from APIs.SweccAPI import SweccAPI
 
+from .utils import slugify
+
 swecc = SweccAPI()
+
 
 # TODO: Implement admin endpoint to check if user is admin
 async def set_ephemeral(ctx: discord.Interaction):
@@ -11,7 +14,10 @@ async def set_ephemeral(ctx: discord.Interaction):
         bot_context.ephemeral = not bot_context.ephemeral
         await ctx.response.send_message(f"Ephemeral set to {bot_context.ephemeral}", ephemeral=True)
     else:
-        await ctx.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        await ctx.response.send_message(
+            "You do not have permission to use this command.", ephemeral=True
+        )
+
 
 async def sync_cohort_channels(ctx: discord.Interaction) -> None:
 
@@ -56,7 +62,9 @@ async def sync_cohort_channels(ctx: discord.Interaction) -> None:
             slug = slugify(cohort["name"])
             if existing_channel_name != slug:
                 await channel.edit(name=slug, reason="Cohort channel name updated by bot.")
-                msg.append(f"Updated channel {channel.mention} to {slug} for cohort {cohort['name']}")
+                msg.append(
+                    f"Updated channel {channel.mention} to {slug} for cohort {cohort['name']}"
+                )
             else:
                 msg.append(f"Channel {channel.mention} already exists for cohort {cohort['name']}")
 
@@ -64,7 +72,7 @@ async def sync_cohort_channels(ctx: discord.Interaction) -> None:
             role = await guild.create_role(
                 name=cohort["name"],
                 reason="Cohort role created by bot.",
-                mentionable=True
+                mentionable=True,
             )
             write["discord_role_id"] = role.id
             msg.append(f"Created role {role.name} for cohort {cohort['name']}")
@@ -87,10 +95,11 @@ async def sync_cohort_channels(ctx: discord.Interaction) -> None:
             member = guild.get_member(discord_id)
             if member is not None:
                 await member.add_roles(role, reason="Cohort role added by bot.")
-                msg.append(f"Added {member.mention} to role {role.name} for cohort {cohort['name']}")
+                msg.append(
+                    f"Added {member.mention} to role {role.name} for cohort {cohort['name']}"
+                )
             else:
                 msg.append(f"Member {discord_id} not found in guild for cohort {cohort['name']}")
-
 
     if msg:
         await bot_context.log(ctx, "\n".join(msg))

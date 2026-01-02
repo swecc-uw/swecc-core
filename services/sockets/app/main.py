@@ -1,23 +1,24 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
+import asyncio
+import json
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import logging
-import json
-from pathlib import Path
-import asyncio
 
-from .mq import initialize_rabbitmq, shutdown_rabbitmq
-from .mq.consumers import *
-from .config import settings
 from .auth import Auth
-from .events import Event, EventType
+from .config import settings
 from .connection_manager import ConnectionManager
 from .event_emitter import EventEmitter
+from .events import Event, EventType
+from .handlers import HandlerKind
 from .handlers.echo_handler import EchoHandler
 from .handlers.logs_handler import ContainerLogsHandler
-from contextlib import asynccontextmanager
-from .handlers import HandlerKind
 from .handlers.resume_handler import ResumeHandler
+from .mq import initialize_rabbitmq, shutdown_rabbitmq
+from .mq.consumers import *
 
 EVENT_EMITTERS: dict[HandlerKind, EventEmitter] = {
     HandlerKind.Echo: EventEmitter(),
@@ -68,9 +69,7 @@ async def cleanup_websocket(kind: HandlerKind, user: dict):
             username=user["username"],
         )
         await event_emitter.emit(disconnect_event)
-        logger.info(
-            f"Echo client disconnected: {user['username']} (ID: {user['user_id']})"
-        )
+        logger.info(f"Echo client disconnected: {user['username']} (ID: {user['user_id']})")
     except Exception as e:
         logger.error(f"Error during WebSocket cleanup: {str(e)}", exc_info=True)
 
@@ -123,9 +122,7 @@ async def echo_endpoint(websocket: WebSocket, token: str):
     user = None
 
     try:
-        user, websocket = await authenticate_and_connect(
-            HandlerKind.Echo, websocket, token
-        )
+        user, websocket = await authenticate_and_connect(HandlerKind.Echo, websocket, token)
         user_id = user["user_id"]
         username = user["username"]
         # Message loop
@@ -152,9 +149,7 @@ async def echo_endpoint(websocket: WebSocket, token: str):
             except WebSocketDisconnect:
                 break
             except Exception as e:
-                logger.error(
-                    f"Error handling WebSocket message: {str(e)}", exc_info=True
-                )
+                logger.error(f"Error handling WebSocket message: {str(e)}", exc_info=True)
                 break
     except WebSocketDisconnect:
         pass
@@ -177,9 +172,7 @@ async def logs_endpoint(websocket: WebSocket, token: str):
 
     try:
         # Authenticate and check for admin rights
-        user, websocket = await authenticate_and_connect(
-            HandlerKind.Logs, websocket, token
-        )
+        user, websocket = await authenticate_and_connect(HandlerKind.Logs, websocket, token)
         user_id = user["user_id"]
         username = user["username"]
         # Message loop
@@ -207,9 +200,7 @@ async def logs_endpoint(websocket: WebSocket, token: str):
             except WebSocketDisconnect:
                 break
             except Exception as e:
-                logger.error(
-                    f"Error handling WebSocket message: {str(e)}", exc_info=True
-                )
+                logger.error(f"Error handling WebSocket message: {str(e)}", exc_info=True)
                 break
 
     except WebSocketDisconnect:
@@ -230,9 +221,7 @@ async def resume_endpoint(websocket: WebSocket, token: str):
     user = None
 
     try:
-        user, websocket = await authenticate_and_connect(
-            HandlerKind.Resume, websocket, token
-        )
+        user, websocket = await authenticate_and_connect(HandlerKind.Resume, websocket, token)
         user_id = user["user_id"]
         username = user["username"]
         # Message loop
@@ -251,9 +240,7 @@ async def resume_endpoint(websocket: WebSocket, token: str):
             except WebSocketDisconnect:
                 break
             except Exception as e:
-                logger.error(
-                    f"Error handling WebSocket message: {str(e)}", exc_info=True
-                )
+                logger.error(f"Error handling WebSocket message: {str(e)}", exc_info=True)
                 break
     except WebSocketDisconnect:
         pass

@@ -9,8 +9,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Clearing the interview pool..."))
         try:
             n, d = InterviewPool.objects.all().delete()
-            self.stdout.write(
-                self.style.SUCCESS(f"Interview pool cleared, {n} members removed")
-            )
+            self.stdout.write(self.style.SUCCESS(f"Interview pool cleared, {n} members removed"))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"An error occurred: {e}"))

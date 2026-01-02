@@ -20,4 +20,3 @@ services:
 networks:
   swag-network:
     external: true
-

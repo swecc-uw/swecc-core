@@ -44,9 +44,7 @@ class GetReportByID(APIView):
 
         report = Report.objects.filter(report_id=report_id)
         if not report:
-            return Response(
-                {"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = ReportSerializer(report[0])
         return Response({"report": serializer.data}, status=status.HTTP_200_OK)
@@ -59,36 +57,26 @@ class AssignReportToAdmin(APIView):
 
         report = Report.objects.filter(report_id=report_id)
         if not report:
-            return Response(
-                {"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if "assignee" not in request.data:
-            return Response(
-                {"error": "assignee is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "assignee is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         report = report[0]
 
         # check if admin exists
         member = User.objects.get(id=request.data["assignee"])
         if not member:
-            return Response(
-                {"error": "Admin not found"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Admin not found"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not member.groups.filter(name="is_admin").exists():
-            return Response(
-                {"error": "User is not an admin"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "User is not an admin"}, status=status.HTTP_400_BAD_REQUEST)
 
         report.assignee = member
         report.status = "resolving"
         report.save()
 
-        return Response(
-            {"report": ReportSerializer(report).data}, status=status.HTTP_200_OK
-        )
+        return Response({"report": ReportSerializer(report).data}, status=status.HTTP_200_OK)
 
 
 class CreateReport(APIView):
@@ -114,9 +102,7 @@ class CreateReport(APIView):
             }
 
             if report_data["type"] == "interview":
-                interview = Interview.objects.get(
-                    interview_id=request.data["associated_id"]
-                )
+                interview = Interview.objects.get(interview_id=request.data["associated_id"])
                 if not (
                     interview.interviewer.id == reporter.id
                     or interview.interviewee.id == reporter.id
@@ -128,9 +114,7 @@ class CreateReport(APIView):
                 report_data["associated_interview"] = interview
 
             elif report_data["type"] == "question":
-                question = TechnicalQuestion.objects.get(
-                    question_id=request.data["associated_id"]
-                )
+                question = TechnicalQuestion.objects.get(question_id=request.data["associated_id"])
                 report_data["associated_question"] = question
 
             elif report_data["type"] == "member":
@@ -151,9 +135,7 @@ class CreateReport(APIView):
             return Response({"report": serializer.data}, status=status.HTTP_201_CREATED)
 
         except User.DoesNotExist:
-            return Response(
-                {"error": "Reporter user not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Reporter user not found"}, status=status.HTTP_404_NOT_FOUND)
         except (Interview.DoesNotExist, TechnicalQuestion.DoesNotExist):
             return Response(
                 {"error": f"{report_data['type'].capitalize()} not found"},
@@ -170,20 +152,14 @@ class UpdateReportStatus(APIView):
 
         report = Report.objects.filter(report_id=report_id)
         if not report:
-            return Response(
-                {"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if "status" not in request.data:
-            return Response(
-                {"error": "status is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "status is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         updated_status = request.data["status"]
 
-        if not any(
-            updated_status in valid_choice for valid_choice in Report.STATUS_CHOICES
-        ):
+        if not any(updated_status in valid_choice for valid_choice in Report.STATUS_CHOICES):
             return Response(
                 {"error": "Invalid status provided"}, status=status.HTTP_400_BAD_REQUEST
             )
@@ -192,6 +168,4 @@ class UpdateReportStatus(APIView):
         report.status = updated_status
         report.save()
 
-        return Response(
-            {"report": ReportSerializer(report).data}, status=status.HTTP_200_OK
-        )
+        return Response({"report": ReportSerializer(report).data}, status=status.HTTP_200_OK)

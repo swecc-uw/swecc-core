@@ -1,5 +1,4 @@
 from django.urls import path
-
 from server.settings import DJANGO_DEBUG
 
 from . import views

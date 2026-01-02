@@ -1,16 +1,16 @@
-import os
-import urllib.parse
 import asyncio
 import logging
-from typing import Dict, List, Optional, Callable, Any, Coroutine
+import os
+import urllib.parse
+from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 import pika
-from pika.exchange_type import ExchangeType
 from discord.ext import commands
+from pika.exchange_type import ExchangeType
 
+from .connection_manager import ConnectionManager
 from .consumer import AsyncRabbitConsumer
 from .producer import AsyncRabbitProducer
-from .connection_manager import ConnectionManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -74,9 +74,7 @@ class RabbitMQManager:
         def decorator(func):
             producer_name = f"{func.__module__}.{func.__name__}"
 
-            async def producer_factory(
-                message, routing_key_override=None, properties=None
-            ):
+            async def producer_factory(message, routing_key_override=None, properties=None):
                 loop = asyncio.get_event_loop()
                 producer = self.get_or_create_producer(
                     producer_name, exchange, exchange_type, routing_key, loop=loop
@@ -86,9 +84,7 @@ class RabbitMQManager:
                     assert (
                         self.client and self.bot_context
                     ), "Producer needs context but no client or bot_context set"
-                    processed_message = await func(
-                        message, self.client, self.bot_context
-                    )
+                    processed_message = await func(message, self.client, self.bot_context)
                 else:
                     processed_message = await func(message)
 
@@ -105,9 +101,7 @@ class RabbitMQManager:
 
         return decorator
 
-    def get_or_create_producer(
-        self, name, exchange, exchange_type, routing_key=None, loop=None
-    ):
+    def get_or_create_producer(self, name, exchange, exchange_type, routing_key=None, loop=None):
         if name not in self.producers:
             producer = AsyncRabbitProducer(
                 amqp_url=self.default_amqp_url,
@@ -128,9 +122,7 @@ class RabbitMQManager:
                 original_callback = config["callback"]
 
                 async def context_callback(body, properties):
-                    return await original_callback(
-                        body, properties, self.client, self.bot_context
-                    )
+                    return await original_callback(body, properties, self.client, self.bot_context)
 
                 callback = context_callback
             else:
@@ -222,9 +214,7 @@ class RabbitMQManager:
                 try:
 
                     if not ConnectionManager(loop=bot.loop).is_connected():
-                        LOGGER.warning(
-                            "RabbitMQ connection lost, attempting to reconnect"
-                        )
+                        LOGGER.warning("RabbitMQ connection lost, attempting to reconnect")
                         try:
                             await ConnectionManager(loop=bot.loop).connect()
                         except Exception as e:
@@ -234,27 +224,19 @@ class RabbitMQManager:
 
                     for name, consumer in list(self.consumers.items()):
                         if not consumer._connection or not consumer._channel:
-                            LOGGER.warning(
-                                f"Consumer {name} disconnected, attempting to reconnect"
-                            )
+                            LOGGER.warning(f"Consumer {name} disconnected, attempting to reconnect")
                             try:
                                 await consumer.connect(loop=bot.loop)
                             except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to reconnect consumer {name}: {str(e)}"
-                                )
+                                LOGGER.error(f"Failed to reconnect consumer {name}: {str(e)}")
 
                     for name, producer in list(self.producers.items()):
                         if not producer._connected or not producer._channel:
-                            LOGGER.warning(
-                                f"Producer {name} disconnected, attempting to reconnect"
-                            )
+                            LOGGER.warning(f"Producer {name} disconnected, attempting to reconnect")
                             try:
                                 await producer.connect(loop=bot.loop)
                             except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to reconnect producer {name}: {str(e)}"
-                                )
+                                LOGGER.error(f"Failed to reconnect producer {name}: {str(e)}")
 
                     await asyncio.sleep(30)
                 except Exception as e:

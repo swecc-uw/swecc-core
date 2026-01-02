@@ -7,9 +7,7 @@ class Command(BaseCommand):
     help = "Add user to admin group"
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--username", type=str, help="SWECC Interview Website Username"
-        )
+        parser.add_argument("--username", type=str, help="SWECC Interview Website Username")
 
     def handle(self, *args, **options):
 
@@ -23,6 +21,4 @@ class Command(BaseCommand):
         is_verified_groups, _ = Group.objects.get_or_create(name="is_admin")
         member.groups.add(is_verified_groups)
 
-        self.stdout.write(
-            self.style.SUCCESS(f"Added to admin group - username: {username}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Added to admin group - username: {username}"))

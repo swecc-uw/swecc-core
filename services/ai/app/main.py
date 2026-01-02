@@ -1,18 +1,19 @@
-from fastapi import FastAPI, Response, status as APIStatus
-from .config import settings
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from .mq import initialize_rabbitmq, shutdown_rabbitmq
-from .mq import consumers
-from .mq import producers
 import asyncio
 import logging
-from .llm.gemini import Gemini
-from .llm.context import ContextManager
-from .llm.message import Message
-from pydantic import BaseModel
+from contextlib import asynccontextmanager
 from datetime import datetime
-from .polling import Status, PollingRequest, generate_request_id
+
+from fastapi import FastAPI, Response
+from fastapi import status as APIStatus
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from .config import settings
+from .llm.context import ContextManager
+from .llm.gemini import Gemini
+from .llm.message import Message
+from .mq import consumers, initialize_rabbitmq, producers, shutdown_rabbitmq
+from .polling import PollingRequest, Status, generate_request_id
 
 client = Gemini()
 ctx = ContextManager()
@@ -51,13 +52,12 @@ class ConfigRequest(BaseModel):
     context_invalidation_time_seconds: int
     system_instruction: str
 
+
 @app.get("/test")
 async def test():
-    await producers.finish_review({
-        "feedback": "This is a test feedback",
-        "key": "1-1-test.pdf"
-    })
+    await producers.finish_review({"feedback": "This is a test feedback", "key": "1-1-test.pdf"})
     return {"message": "Hello, World!"}
+
 
 # Register an inference user with the given key
 # If context already exists, it won't change at all
@@ -74,14 +74,23 @@ class CompleteRequest(BaseModel):
     metadata: dict
     needs_context: bool = True
 
+
 def format_message(message: CompleteRequest) -> str:
-    return "".join(f"{key}: {value}\n" for key, value in message.metadata.items()) + f"Message: {message.message}\n"
+    return (
+        "".join(f"{key}: {value}\n" for key, value in message.metadata.items())
+        + f"Message: {message.message}\n"
+    )
+
 
 async def complete_task(request_id: str, key: str, message: CompleteRequest):
     waiting_requests[request_id].status = Status.IN_PROGRESS
     try:
         message_parsed = format_message(message)
-        prompt = ctx.contextualize_prompt(key, message_parsed) if message.needs_context else message_parsed
+        prompt = (
+            ctx.contextualize_prompt(key, message_parsed)
+            if message.needs_context
+            else message_parsed
+        )
         model_response = await client.prompt_model(
             prompt, ctx.context_configs[key].system_instruction
         )
@@ -109,9 +118,7 @@ async def complete_task(request_id: str, key: str, message: CompleteRequest):
 
     waiting_requests[request_id].status = Status.SUCCESS
     waiting_requests[request_id].result = model_response
-    logger.info(
-        f"Completed request {request_id} for key {key}. Response: {model_response}"
-    )
+    logger.info(f"Completed request {request_id} for key {key}. Response: {model_response}")
 
 
 # Get a completion for the given message

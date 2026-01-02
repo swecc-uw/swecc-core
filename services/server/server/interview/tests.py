@@ -24,21 +24,15 @@ class TestCommonAvailabilityStableMatching(TestCase):
             7 * 48,
         )
 
-        availability1 = np.array(
-            [([True] * 24) + ([False] * 24) for _ in range(7)], dtype=bool
-        )
-        availability2 = np.array(
-            [([True] * 12) + ([False] * 36) for _ in range(7)], dtype=bool
-        )
+        availability1 = np.array([([True] * 24) + ([False] * 24) for _ in range(7)], dtype=bool)
+        availability2 = np.array([([True] * 12) + ([False] * 36) for _ in range(7)], dtype=bool)
         self.assertEqual(
             self.algorithm.calculate_common_slots_numpy(availability1, availability2),
             7 * 12,
         )
 
         availability1 = np.array([[True] * 48 for _ in range(7)], dtype=bool)
-        availability2 = np.array(
-            [[True] * 48 for _ in range(6)] + [[False] * 48], dtype=bool
-        )
+        availability2 = np.array([[True] * 48 for _ in range(6)] + [[False] * 48], dtype=bool)
         self.assertEqual(
             self.algorithm.calculate_common_slots_numpy(availability1, availability2),
             6 * 48,

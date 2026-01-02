@@ -10,6 +10,4 @@ class Command(BaseCommand):
 
         cohort_stats = CohortStats.objects.all()
         for cohort_stat in cohort_stats:
-            self.stdout.write(
-                self.style.SUCCESS(f"{CohortStatsSerializer(cohort_stat).data}")
-            )
+            self.stdout.write(self.style.SUCCESS(f"{CohortStatsSerializer(cohort_stat).data}"))

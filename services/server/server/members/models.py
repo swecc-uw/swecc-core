@@ -10,9 +10,7 @@ def validate_social_field(value):
     if not isinstance(value, dict):
         raise ValidationError("Field must be a dictionary.")
     if set(value.keys()) != required_keys:
-        raise ValidationError(
-            f"Field must contain exactly the following keys: {required_keys}"
-        )
+        raise ValidationError(f"Field must contain exactly the following keys: {required_keys}")
     if not isinstance(value["username"], str):
         raise ValidationError('The "username" field must be a string.')
     if not isinstance(value["isPrivate"], bool):
@@ -33,13 +31,9 @@ class User(AbstractUser):
     major = models.CharField(max_length=100, blank=True, null=True)
     grad_date = models.DateField(blank=True, null=True)
     discord_username = models.CharField(max_length=100)
-    linkedin = models.JSONField(
-        blank=True, null=True, validators=[validate_social_field]
-    )
+    linkedin = models.JSONField(blank=True, null=True, validators=[validate_social_field])
     github = models.JSONField(blank=True, null=True, validators=[validate_social_field])
-    leetcode = models.JSONField(
-        blank=True, null=True, validators=[validate_social_field]
-    )
+    leetcode = models.JSONField(blank=True, null=True, validators=[validate_social_field])
     resume_url = models.URLField(blank=True, null=True)
     local = models.CharField(max_length=100, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)

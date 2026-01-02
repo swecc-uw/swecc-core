@@ -12,20 +12,14 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name="user",
-            index=models.Index(
-                fields=["username"], name="members_use_usernam_82d39a_idx"
-            ),
+            index=models.Index(fields=["username"], name="members_use_usernam_82d39a_idx"),
         ),
         migrations.AddIndex(
             model_name="user",
-            index=models.Index(
-                fields=["first_name"], name="members_use_first_n_056ccc_idx"
-            ),
+            index=models.Index(fields=["first_name"], name="members_use_first_n_056ccc_idx"),
         ),
         migrations.AddIndex(
             model_name="user",
-            index=models.Index(
-                fields=["last_name"], name="members_use_last_na_5b1ab6_idx"
-            ),
+            index=models.Index(fields=["last_name"], name="members_use_last_na_5b1ab6_idx"),
         ),
     ]

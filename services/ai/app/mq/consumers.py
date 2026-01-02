@@ -1,13 +1,13 @@
 # Declare consumers here
-from . import consumer as mq_consumer
 import json
 import logging
+
+from . import consumer as mq_consumer
 
 logger = logging.getLogger(__name__)
 from ..aws.s3 import S3Client
 from ..llm.gemini import Gemini
 from .producers import finish_review
-
 
 RESUME_PROMPT = """
 You are an expert software engineering recruiter and hiring manager who has screened thousands of resumes at top tech companies. Review the following resume carefully and provide feedback that is:
@@ -36,9 +36,7 @@ Include only your feedback and no extra commentary. Focus on **rewriting bullets
 """
 
 
-@mq_consumer(
-    queue="ai.to-review-queue", exchange="swecc-ai-exchange", routing_key="to-review"
-)
+@mq_consumer(queue="ai.to-review-queue", exchange="swecc-ai-exchange", routing_key="to-review")
 async def consume_to_review_message(body, properties):
     message_str = body.decode("utf-8")
     message: dict = json.loads(message_str)

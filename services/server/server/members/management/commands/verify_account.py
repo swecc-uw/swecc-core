@@ -9,18 +9,14 @@ class Command(BaseCommand):
     verify_account = "Verify User account"
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--username", type=str, help="SWECC Interview Website Username"
-        )
+        parser.add_argument("--username", type=str, help="SWECC Interview Website Username")
         parser.add_argument("--discord_id", type=str, help="User's Discord ID")
 
     def handle(self, *args, **options):
         DJANGO_DEBUG = environ["DJANGO_DEBUG"]
 
         if not DJANGO_DEBUG or DJANGO_DEBUG.lower() != "true":
-            self.stdout.write(
-                self.style.ERROR("This command is ONLY allowed in development mode.")
-            )
+            self.stdout.write(self.style.ERROR("This command is ONLY allowed in development mode."))
             return
 
         username = options["username"]
@@ -38,7 +34,5 @@ class Command(BaseCommand):
         member.groups.add(is_verified_groups)
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Verified Username: {username} Discord ID: {new_discord_id}"
-            )
+            self.style.SUCCESS(f"Verified Username: {username} Discord ID: {new_discord_id}")
         )

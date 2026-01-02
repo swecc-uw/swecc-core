@@ -1,5 +1,6 @@
-import discord
 import re
+
+import discord
 
 
 async def handle_cohort_stat_update(
@@ -25,6 +26,7 @@ async def handle_cohort_stat_update(
 
 def is_valid_school_email(email: str) -> bool:
     return email.endswith("@uw.edu")
+
 
 def slugify(value: str) -> str:
     value = value.lower().strip()

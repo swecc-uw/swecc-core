@@ -7,9 +7,7 @@ from members.models import User
 class QuestionTopic(models.Model):
     topic_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(
-        User, related_name="topic_created_by", on_delete=models.CASCADE
-    )
+    created_by = models.ForeignKey(User, related_name="topic_created_by", on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
 
     def __str__(self):

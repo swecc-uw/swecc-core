@@ -97,4 +97,3 @@ jobs:
           echo "| Chronos | ${{ needs.deploy-chronos.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Sockets | ${{ needs.deploy-sockets.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Scheduler | ${{ needs.deploy-scheduler.result }} |" >> $GITHUB_STEP_SUMMARY
-

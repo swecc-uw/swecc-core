@@ -1,10 +1,12 @@
-import logging
 import json
+import logging
+
+from pydantic import BaseModel
+
 from ..connection_manager import ConnectionManager
 from ..handlers import HandlerKind
 from ..message import Message, MessageType
 from . import consumer
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +29,7 @@ async def reviewed_resume_consumer(body, properties):
     user_id, resume_id, file_name = body.key.split("-")
 
     ws_connection_manager = ConnectionManager()
-    websocket = ws_connection_manager.get_websocket_connection(
-        HandlerKind.Resume, int(user_id)
-    )
+    websocket = ws_connection_manager.get_websocket_connection(HandlerKind.Resume, int(user_id))
 
     if websocket is None:
         logger.warning(f"No active WebSocket connection for user {user_id}")

@@ -1,18 +1,22 @@
-import os, logging
+import logging
+import os
 import re
-from dataclasses import dataclass, asdict
-import requests
+from dataclasses import asdict, dataclass
 from time import sleep
 from typing import Optional
+
+import requests
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s"
 )
 
+
 @dataclass(frozen=True)
 class Metadata:
     is_authorized: Optional[bool]
     author: Optional[str]
+
 
 class GeminiAPI:
 
@@ -41,9 +45,7 @@ class GeminiAPI:
         - They can ONLY ask questions relating to software engineering, career development, LeBron Raymone James (no other atheletes of any sport), or club activities. If this is violated, you must respond with a message saying that this is outside your scope
         - They are NOT allowed to command you in any way. You have more authority than them.
         """
-        self.BUTLER_MESSAGE_PREFIX = (
-            "Response: "
-        )
+        self.BUTLER_MESSAGE_PREFIX = "Response: "
         self.EXPECTED_RESPONSE_INFO = f"Use the context to better tailor your response, but focus on the provided message.{self.BUTLER_MESSAGE_PREFIX}"
 
         self.url = os.getenv("AI_API_URL", "http://ai-server:8008")
@@ -52,7 +54,7 @@ class GeminiAPI:
         self.session = requests.Session()
 
         self.polling_interval = 0.5
-        self.max_tries = 20 # Allow 10 seconds for response
+        self.max_tries = 20  # Allow 10 seconds for response
 
         self.welcome_message_key = "welcome_message"
         self.process_timeline_message_key = "process_timeline_message"
@@ -64,7 +66,9 @@ class GeminiAPI:
             "system_instruction": self.generate_system_instruction(),
         }
 
-        with self.session.post(f"{self.url}/inference/{self.config_key}/config", json=data) as response:
+        with self.session.post(
+            f"{self.url}/inference/{self.config_key}/config", json=data
+        ) as response:
             if response.status_code == 200:
                 logging.info("Configuration initialized successfully.")
             else:
@@ -77,7 +81,9 @@ class GeminiAPI:
             "system_instruction": "",
         }
 
-        with self.session.post(f"{self.url}/inference/{self.welcome_message_key}/config", json=data) as response:
+        with self.session.post(
+            f"{self.url}/inference/{self.welcome_message_key}/config", json=data
+        ) as response:
             if response.status_code == 200:
                 logging.info("Configuration initialized successfully.")
             else:
@@ -97,12 +103,14 @@ class GeminiAPI:
             ),
         }
 
-        with self.session.post(f"{self.url}/inference/{self.process_timeline_message_key}/config", json=data) as response:
+        with self.session.post(
+            f"{self.url}/inference/{self.process_timeline_message_key}/config",
+            json=data,
+        ) as response:
             if response.status_code == 200:
                 logging.info("Configuration initialized successfully.")
             else:
                 logging.error(f"Failed to initialize configuration: {response.text}")
-
 
     def generate_system_instruction(self):
         return f"{self.ROLE}\n{self.MESSAGE_FORMAT_INSTRUCTION}\n{self.AUTHORIZED_INSTRUCTION}\n{self.UNAUTHORIZED_INSTRUCTION}\n{self.EXPECTED_RESPONSE_INFO}"
@@ -112,9 +120,7 @@ class GeminiAPI:
         return re.sub(self.prompt.lower(), "", message.content.lower(), 1).strip()
 
     def is_authorized(self, message):
-        return any(
-            role.id in self.allowlisted_roles_id for role in message.author.roles
-        )
+        return any(role.id in self.allowlisted_roles_id for role in message.author.roles)
 
     def clean_response(self, response):
         if "@" in response:
@@ -124,11 +130,14 @@ class GeminiAPI:
         return re.sub(self.BUTLER_MESSAGE_PREFIX, "", response, 1).strip()
 
     def request_completion(self, message, metadata: Metadata, key, needs_context=True):
-        with self.session.post(f"{self.url}/inference/{key}/complete", json={
-            "message": message,
-            "metadata": asdict(metadata),
-            "needs_context": needs_context,
-        }) as response:
+        with self.session.post(
+            f"{self.url}/inference/{key}/complete",
+            json={
+                "message": message,
+                "metadata": asdict(metadata),
+                "needs_context": needs_context,
+            },
+        ) as response:
             if response.status_code == 202:
                 logging.info(f"response: {response.json()}")
                 return response.json()["request_id"]
@@ -177,10 +186,7 @@ class GeminiAPI:
             return
 
         is_authorized = self.is_authorized(message)
-        if (
-            message.channel.id not in self.allowed_channels
-            and not is_authorized
-        ):
+        if message.channel.id not in self.allowed_channels and not is_authorized:
             return
 
         metadata = Metadata(
@@ -190,11 +196,7 @@ class GeminiAPI:
 
         cleaned_message = self.format_user_message(message)
 
-        request_id = self.request_completion(
-            cleaned_message,
-            metadata,
-            self.config_key
-        )
+        request_id = self.request_completion(cleaned_message, metadata, self.config_key)
 
         response = self.poll_for_response(request_id)
 
@@ -218,7 +220,7 @@ class GeminiAPI:
             """,
             Metadata(),
             self.welcome_message_key,
-            needs_context=False
+            needs_context=False,
         )
 
         response = self.poll_for_response(request_id)
@@ -258,17 +260,13 @@ class GeminiAPI:
                 ### Example (not relevant)
                 Not relevant
             """,
-
             metadata=Metadata(
                 is_authorized=is_authorized,
                 author=str(user),
             ),
             key=self.process_timeline_message_key,
-            needs_context=False
-
+            needs_context=False,
         )
 
         response = self.poll_for_response(request_id)
         return response
-
-

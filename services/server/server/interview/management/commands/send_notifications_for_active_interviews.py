@@ -40,9 +40,7 @@ class Command(BaseCommand):
         failed_emails = []
 
         if not is_dry_run:
-            self.stdout.write(
-                self.style.WARNING("\nThis is a live run - sending notifications...")
-            )
+            self.stdout.write(self.style.WARNING("\nThis is a live run - sending notifications..."))
 
             for interview in pending_interviews:
                 # send to interviewer
@@ -105,9 +103,7 @@ class Command(BaseCommand):
 
             if failed_emails:
                 self.stdout.write(
-                    self.style.ERROR(
-                        f"\nFailed to send {len(failed_emails)} notifications:"
-                    )
+                    self.style.ERROR(f"\nFailed to send {len(failed_emails)} notifications:")
                 )
                 for interview_id, email, error in failed_emails:
                     self.stdout.write(f"  - Interview {interview_id}, {email}: {error}")

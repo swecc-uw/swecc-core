@@ -1,17 +1,18 @@
-import discord
-import os
 import datetime
+import os
+
+import discord
+from APIs.AdventOfCodeAPI import AdventOfCodeAPI
 from discord.ext import tasks
 from dotenv import load_dotenv
 from pytz import timezone
-from APIs.AdventOfCodeAPI import AdventOfCodeAPI
 
 load_dotenv()
 
-AOC_CHANNEL_ID = int(os.getenv('LC_CHANNEL_ID'))
-ADMIN_CHANNEL_ID = int(os.getenv('ADMIN_CHANNEL'))
-LEADERBOARD_KEY = os.getenv('AOC_LEADERBOARD_KEY')
-LEADERBOARD_ID = os.getenv('AOC_LEADERBOARD_ID')
+AOC_CHANNEL_ID = int(os.getenv("LC_CHANNEL_ID"))
+ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL"))
+LEADERBOARD_KEY = os.getenv("AOC_LEADERBOARD_KEY")
+LEADERBOARD_ID = os.getenv("AOC_LEADERBOARD_ID")
 
 aoc_api = AdventOfCodeAPI()
 
@@ -34,7 +35,7 @@ async def send_daily_aoc_message(client):
                 title=f"🎄 Day {day} of Advent of Code {year} is here! 🎄",
                 url=puzzle_url,
                 description=f"",
-                color=0x1f8b4c
+                color=0x1F8B4C,
             )
 
             if leaderboard_data:
@@ -44,18 +45,19 @@ async def send_daily_aoc_message(client):
                 )
                 embed.add_field(
                     name="🎖️ Leaderboard (Top 10)",
-                    value=(f"{leaderboard_text}\n\n"
+                    value=(
+                        f"{leaderboard_text}\n\n"
                         f"[View full leaderboard]({aoc_api.get_leaderboard_url()})\n\n"
                     ),
-                    inline=False
+                    inline=False,
                 )
 
             embed.set_footer(text=f"Leaderboard join key: {LEADERBOARD_KEY} ")
             embed.set_thumbnail(url="https://adventofcode.com/favicon.png")
 
             message = await channel.send(embed=embed)
-            await message.add_reaction('✅')
-            await message.add_reaction('❌')
+            await message.add_reaction("✅")
+            await message.add_reaction("❌")
             thread = await message.create_thread(name="Solutions")
             await thread.send("Post your solutions/discussion here!")
         except Exception as e:

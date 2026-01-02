@@ -21,9 +21,7 @@ class Command(BaseCommand):
             default=10,
             help="Timeout between API requests in seconds",
         )
-        parser.add_argument(
-            "--username", type=str, help="Update stats for specific username only"
-        )
+        parser.add_argument("--username", type=str, help="Update stats for specific username only")
         parser.add_argument(
             "--force", action="store_true", help="Force update even if recently updated"
         )
@@ -60,54 +58,32 @@ class Command(BaseCommand):
                     data = response.json()
                     if "errors" in data:
                         return None
-                    stats = data["data"]["matchedUser"]["submitStats"][
-                        "acSubmissionNum"
-                    ]
+                    stats = data["data"]["matchedUser"]["submitStats"]["acSubmissionNum"]
                     return {
                         "solvedProblem": next(
-                            (
-                                item["count"]
-                                for item in stats
-                                if item["difficulty"] == "All"
-                            ),
+                            (item["count"] for item in stats if item["difficulty"] == "All"),
                             0,
                         ),
                         "easySolved": next(
-                            (
-                                item["count"]
-                                for item in stats
-                                if item["difficulty"] == "Easy"
-                            ),
+                            (item["count"] for item in stats if item["difficulty"] == "Easy"),
                             0,
                         ),
                         "mediumSolved": next(
-                            (
-                                item["count"]
-                                for item in stats
-                                if item["difficulty"] == "Medium"
-                            ),
+                            (item["count"] for item in stats if item["difficulty"] == "Medium"),
                             0,
                         ),
                         "hardSolved": next(
-                            (
-                                item["count"]
-                                for item in stats
-                                if item["difficulty"] == "Hard"
-                            ),
+                            (item["count"] for item in stats if item["difficulty"] == "Hard"),
                             0,
                         ),
                     }
                 else:
                     self.stdout.write(
-                        self.style.ERROR(
-                            f"Error fetching data for {username}: {response.text}"
-                        )
+                        self.style.ERROR(f"Error fetching data for {username}: {response.text}")
                     )
                 return None
             except Exception as e:
-                self.stdout.write(
-                    self.style.ERROR(f"Error fetching data for {username}: {str(e)}")
-                )
+                self.stdout.write(self.style.ERROR(f"Error fetching data for {username}: {str(e)}"))
                 return None
 
         def update_user_stats(user):
@@ -117,10 +93,7 @@ class Command(BaseCommand):
             # skip if updated in last hour unless forced
             try:
                 stats = LeetcodeStats.objects.get(user=user)
-                if (
-                    not force
-                    and (timezone.now() - stats.last_updated).total_seconds() < 3600
-                ):
+                if not force and (timezone.now() - stats.last_updated).total_seconds() < 3600:
                     return False
             except LeetcodeStats.DoesNotExist:
                 stats = LeetcodeStats(user=user)
@@ -138,15 +111,11 @@ class Command(BaseCommand):
                 stats.save()
                 return True
 
-        users = (
-            User.objects.filter(username=username) if username else User.objects.all()
-        )
+        users = User.objects.filter(username=username) if username else User.objects.all()
 
         for user in users:
             if update_user_stats(user):
-                self.stdout.write(
-                    self.style.SUCCESS(f"Updated stats for {user.username}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"Updated stats for {user.username}"))
                 time.sleep(timeout)
             else:
                 self.stdout.write(self.style.WARNING(f"Skipped {user.username}"))

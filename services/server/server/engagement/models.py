@@ -68,9 +68,7 @@ class AttendanceSessionStats(models.Model):
 
 
 class CohortStats(models.Model):
-    member = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="cohort_member_stats"
-    )
+    member = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cohort_member_stats")
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE)
     applications = models.IntegerField(default=0)
     onlineAssessments = models.IntegerField(default=0)

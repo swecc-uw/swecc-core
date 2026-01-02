@@ -3,9 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path(
-        "topics/", views.QuestionTopicListCreateView.as_view(), name="topic-list-create"
-    ),
+    path("topics/", views.QuestionTopicListCreateView.as_view(), name="topic-list-create"),
     path(
         "topics/<uuid:topic_id>/",
         views.QuestionTopicUpdateView.as_view(),

@@ -117,4 +117,3 @@ case "$COMMAND" in
     die "Unknown command: $COMMAND"
     ;;
 esac
-

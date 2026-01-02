@@ -1,9 +1,11 @@
-from typing import Dict, List, Callable
-import logging
 import asyncio
+import logging
+from typing import Callable, Dict, List
+
 from .events import Event, EventType
 
 logger = logging.getLogger(__name__)
+
 
 class EventEmitter:
     def __init__(self):
@@ -40,5 +42,5 @@ class EventEmitter:
             listener_name = getattr(listener, "__name__", str(listener))
             logger.error(
                 f"Error in listener {listener_name} for event {event.type}: {str(e)}",
-                exc_info=True
+                exc_info=True,
             )

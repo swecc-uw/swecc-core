@@ -1,7 +1,9 @@
-import requests, os, logging
-import aiohttp
+import logging
+import os
+from random import choice, random
 
-from random import random, choice
+import aiohttp
+import requests
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s"
@@ -38,9 +40,7 @@ class SweccAPI:
             raise Exception("aiohttp session not set")
         return aio_session_global[0]
 
-    def register(
-        self, username, first_name, last_name, email, password, discord_username
-    ):
+    def register(self, username, first_name, last_name, email, password, discord_username):
         logging.info(f"Registering {username} with email {email}")
 
         try:
@@ -64,9 +64,7 @@ class SweccAPI:
             raise e
 
     def auth(self, discord_username, id, username):
-        logging.info(
-            f"Authenticating {discord_username} with id {id} and username {username}"
-        )
+        logging.info(f"Authenticating {discord_username} with id {id} and username {username}")
 
         data = {
             "discord_id": id,
@@ -118,7 +116,9 @@ class SweccAPI:
             f"{self.url}/members/reset-password/", headers=self.headers, json=data
         )
         data = response.json()
-        return f"https://interview.swecc.org/#/password-reset-confirm/{data['uid']}/{data['token']}/"
+        return (
+            f"https://interview.swecc.org/#/password-reset-confirm/{data['uid']}/{data['token']}/"
+        )
 
     async def process_reaction_event(self, payload, type):
         session = self.get_session()
@@ -129,10 +129,7 @@ class SweccAPI:
             payload.emoji,
         )
 
-        if (
-            channel_id in self.reaction_channel_subscriptions
-            and self.COMPLETED_EMOJI == emoji.name
-        ):
+        if channel_id in self.reaction_channel_subscriptions and self.COMPLETED_EMOJI == emoji.name:
 
             data = {
                 "discord_id": user_id,
@@ -166,9 +163,7 @@ class SweccAPI:
         session = self.get_session()
 
         # todo: remove this log after successful testing in prod
-        logging.info(
-            f"Processing message event for {discord_id} in channel {channel_id}"
-        )
+        logging.info(f"Processing message event for {discord_id} in channel {channel_id}")
 
         try:
 
@@ -222,9 +217,7 @@ class SweccAPI:
                         await response.json(),
                     )
                 else:
-                    logging.info(
-                        "Channels synced successfully, json: %s", await response.json()
-                    )
+                    logging.info("Channels synced successfully, json: %s", await response.json())
 
                 return response.status
         except Exception as e:
@@ -284,9 +277,7 @@ class SweccAPI:
             return None
 
     async def get_school_email_verification_url(self, discord_id, email):
-        logging.info(
-            f"Getting school email verification url for {discord_id} with email {email}"
-        )
+        logging.info(f"Getting school email verification url for {discord_id} with email {email}")
 
         data = {
             "discord_id": discord_id,

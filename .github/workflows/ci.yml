@@ -35,16 +35,7 @@ jobs:
           pip install pre-commit
 
       - name: Run pre-commit
-        working-directory: ./services/${{ matrix.service }}
-        run: |
-          if [ -f .pre-commit-config.yaml ]; then
-            pre-commit run --all-files
-          else
-            echo "No pre-commit config found, running basic linting"
-            chmod +x ../../s/ci/lint.sh ../../s/lib.sh
-            cd ../..
-            ./s/ci/lint.sh ${{ matrix.service }} || true
-          fi
+        run: pre-commit run --all-files
 
   detect-changes:
     name: Detect Changed Services
@@ -61,17 +52,22 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE=${{ github.event.pull_request.base.sha }}
-            HEAD=${{ github.sha }}
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.sha }}"
           else
-            BASE=${{ github.event.before }}
-            HEAD=${{ github.sha }}
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+
+          # Handle initial commit or force push (BASE is all zeros)
+          if [[ "$BASE" == "0000000000000000000000000000000000000000" ]] || [[ -z "$BASE" ]]; then
+            BASE=$(git rev-list --max-parents=0 HEAD)
           fi
 
           CHANGED_SERVICES="[]"
           for svc in server bot ai chronos sockets scheduler; do
-            if git diff --name-only $BASE $HEAD | grep -q "^services/$svc/"; then
-              CHANGED_SERVICES=$(echo $CHANGED_SERVICES | jq -c ". + [\"$svc\"]")
+            if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/$svc/"; then
+              CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"$svc\"]")
             fi
           done
 
@@ -102,4 +98,3 @@ jobs:
           tags: swecc-${{ matrix.service }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-

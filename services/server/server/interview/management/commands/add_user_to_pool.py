@@ -22,17 +22,13 @@ class Command(BaseCommand):
         username = options["username"]
         if not username:
             self.stdout.write(
-                self.style.ERROR(
-                    "Please provide a username to add to the interview pool"
-                )
+                self.style.ERROR("Please provide a username to add to the interview pool")
             )
             return
 
         member = User.objects.filter(username=username).first()
         if not member:
-            self.stdout.write(
-                self.style.ERROR(f"User with username {username} not found")
-            )
+            self.stdout.write(self.style.ERROR(f"User with username {username} not found"))
             return
 
         if InterviewPool.objects.filter(member=member).exists():
@@ -42,6 +38,4 @@ class Command(BaseCommand):
             return
 
         InterviewPool.objects.create(member=member)
-        self.stdout.write(
-            self.style.SUCCESS(f"User {username} added to the interview pool")
-        )
+        self.stdout.write(self.style.SUCCESS(f"User {username} added to the interview pool"))

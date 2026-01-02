@@ -197,4 +197,3 @@ networks:
   swecc-network:
     name: swecc-network
     driver: bridge
-

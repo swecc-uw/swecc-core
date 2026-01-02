@@ -1,5 +1,6 @@
-from app.services.dynamodb_service import db
 import logging
+
+from app.services.dynamodb_service import db
 
 try:
     db.create_health_metric_table()

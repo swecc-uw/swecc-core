@@ -1,20 +1,24 @@
-from pydantic import BaseModel, Field
-from typing import Dict, Optional, List, Union
 from datetime import datetime
 from enum import Enum
+from typing import Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field
+
 
 class ContainerMetadata(BaseModel):
     """container identification and configuration data"""
+
     short_id: str = Field(..., description="First 12 characters of container ID")
     name: str = Field(..., description="Container name")
     image: str = Field(..., description="Image name and tag")
     created_at: datetime = Field(..., description="Container creation timestamp")
     labels: Dict[str, str] = Field(default_factory=dict, description="Container labels")
 
-    command: Optional[Union[str, List[str]]] = Field(None, description="Command running in container")
+    command: Optional[Union[str, List[str]]] = Field(
+        None, description="Command running in container"
+    )
     ports: Dict[str, List[Dict[str, str]]] = Field(
-        default_factory=dict,
-        description="Exposed and mapped ports"
+        default_factory=dict, description="Exposed and mapped ports"
     )
 
     @property
@@ -23,11 +27,13 @@ class ContainerMetadata(BaseModel):
         if isinstance(self.command, str):
             return self.command
         elif isinstance(self.command, list):
-            return ' '.join(self.command)
+            return " ".join(self.command)
         return None
+
 
 class NetworkStats(BaseModel):
     """network interface statistics"""
+
     rx_bytes: int = Field(..., description="Received bytes")
     tx_bytes: int = Field(..., description="Transmitted bytes")
     rx_packets: int = Field(..., description="Received packets")
@@ -37,30 +43,33 @@ class NetworkStats(BaseModel):
     rx_dropped: int = Field(0, description="Received packets dropped")
     tx_dropped: int = Field(0, description="Transmitted packets dropped")
 
+
 class DiskStats(BaseModel):
     """block device I/O statistics"""
+
     read_bytes: int = Field(0, description="Total bytes read")
     write_bytes: int = Field(0, description="Total bytes written")
     reads: int = Field(0, description="Total read operations")
     writes: int = Field(0, description="Total write operations")
     io_service_bytes_recursive: Optional[List[Dict]] = Field(
-        None,
-        description="Detailed I/O statistics per block device"
+        None, description="Detailed I/O statistics per block device"
     )
 
     @classmethod
-    def create_empty(cls) -> 'DiskStats':
+    def create_empty(cls) -> "DiskStats":
         """Create an empty DiskStats object with zero values"""
         return cls(
             read_bytes=0,
             write_bytes=0,
             reads=0,
             writes=0,
-            io_service_bytes_recursive=[]
+            io_service_bytes_recursive=[],
         )
+
 
 class MemoryStats(BaseModel):
     """memory usage statistics"""
+
     usage_bytes: int = Field(..., description="Current memory usage in bytes")
     limit_bytes: int = Field(..., description="Memory limit in bytes")
     percent: float = Field(..., description="Memory usage percentage")
@@ -71,8 +80,10 @@ class MemoryStats(BaseModel):
     rss: Optional[int] = Field(None, description="Anonymous and swap cache")
     swap: Optional[int] = Field(0, description="Swap usage")
 
+
 class CpuStats(BaseModel):
     """CPU usage statistics"""
+
     percent: float = Field(..., description="CPU usage percentage")
     system_cpu_usage: int = Field(..., description="Host's total CPU usage")
     online_cpus: int = Field(..., description="Number of CPU cores available")
@@ -82,8 +93,10 @@ class CpuStats(BaseModel):
     usage_in_kernelmode: Optional[int] = Field(None, description="Time spent in kernel mode")
     cpu_usage: Optional[Dict] = Field(None, description="Detailed CPU usage statistics")
 
+
 class ContainerHealth(BaseModel):
     """container health and status information"""
+
     status: str = Field(..., description="Container status (running, stopped, etc.)")
     health_status: Optional[str] = Field(None, description="Health check status if configured")
     restarts: int = Field(0, description="Number of container restarts")
@@ -91,23 +104,23 @@ class ContainerHealth(BaseModel):
     started_at: Optional[datetime] = Field(None, description="Last start timestamp")
     finished_at: Optional[datetime] = Field(None, description="Last stop timestamp")
 
+
 class ContainerStats(BaseModel):
     """all container statistics"""
+
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Statistics timestamp")
     metadata: ContainerMetadata
     health: ContainerHealth
     cpu: CpuStats
     memory: MemoryStats
     network: Dict[str, NetworkStats] = Field(
-        default_factory=dict,
-        description="Stats per network interface"
+        default_factory=dict, description="Stats per network interface"
     )
     disk: DiskStats
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
 
 class DockerActionType(str, Enum):
     # general actions (more that one that have this type)
@@ -142,7 +155,7 @@ class DockerActionType(str, Enum):
     DISCONNECT = "disconnect"
     REMOVE = "remove"
 
-    #image actions
+    # image actions
     DELETE = "delete"
     IMPORT = "import"
     LOAD = "load"
@@ -152,12 +165,14 @@ class DockerActionType(str, Enum):
     TAG = "tag"
     UNTAG = "untag"
 
+
 class DockerEventType(str, Enum):
     CONTAINER = "container"
     NETWORK = "network"
     VOLUME = "volume"
     IMAGE = "image"
     PLUGIN = "plugin"
+
 
 class DockerEvent(BaseModel):
     id: str = Field(..., description="Event ID")
@@ -176,7 +191,7 @@ class DockerEvent(BaseModel):
         }
 
     @classmethod
-    def from_dynamo_item(cls, item: dict) -> 'DockerEvent':
+    def from_dynamo_item(cls, item: dict) -> "DockerEvent":
         """Convert a DynamoDB item back to a DockerEvent."""
         event_type, container_name = item["event_type#container_name"].split("#")
         return cls(
@@ -184,25 +199,27 @@ class DockerEvent(BaseModel):
             action=DockerActionType(item["action"]),
             time=datetime.fromtimestamp(float(item["timestamp"])),
             name=container_name,
-            type=DockerEventType(event_type)
+            type=DockerEventType(event_type),
         )
+
 
 def convert_raw_event_to_docker_event(raw_event: Dict) -> DockerEvent:
     """Convert raw event data to DockerEvent"""
-    event_type = raw_event.get('Type', '')
-    event_action = raw_event.get('Action', '')
-    event_time = datetime.fromtimestamp(raw_event.get('time', 0))
-    event_id = raw_event.get('id', '')
+    event_type = raw_event.get("Type", "")
+    event_action = raw_event.get("Action", "")
+    event_time = datetime.fromtimestamp(raw_event.get("time", 0))
+    event_id = raw_event.get("id", "")
 
-    target_name = raw_event.get('Actor', {}).get('Attributes', {}).get('name', '')
+    target_name = raw_event.get("Actor", {}).get("Attributes", {}).get("name", "")
 
     return DockerEvent(
         id=event_id,
         action=event_action,
         time=event_time,
         name=target_name,
-        type=DockerEventType(event_type)
+        type=DockerEventType(event_type),
     )
+
 
 class DynamoHealthMetric(BaseModel):
     # dynamodb type system is a pain
@@ -239,7 +256,7 @@ def convert_health_metric_to_dynamo(metric: ContainerStats) -> DynamoHealthMetri
     first_network_key = next(iter(metric.network))
     return DynamoHealthMetric(
         container_name=metric.metadata.name,
-        timestamp=metric.timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
+        timestamp=metric.timestamp.strftime("%Y-%m-%dT%H:%M:%S"),
         memory_usage_bytes=metric.memory.usage_bytes,
         memory_limit_bytes=metric.memory.limit_bytes,
         memory_percent=int(metric.memory.percent),
@@ -261,9 +278,18 @@ def convert_health_metric_to_dynamo(metric: ContainerStats) -> DynamoHealthMetri
         disk_writes=metric.disk.writes,
         restarts=metric.health.restarts,
         exit_code=metric.health.exit_code,
-        started_at=metric.health.started_at.strftime('%Y-%m-%dT%H:%M:%S') if metric.health.started_at else None,
-        finished_at=metric.health.finished_at.strftime('%Y-%m-%dT%H:%M:%S') if metric.health.finished_at else None
+        started_at=(
+            metric.health.started_at.strftime("%Y-%m-%dT%H:%M:%S")
+            if metric.health.started_at
+            else None
+        ),
+        finished_at=(
+            metric.health.finished_at.strftime("%Y-%m-%dT%H:%M:%S")
+            if metric.health.finished_at
+            else None
+        ),
     )
+
 
 class JobItem(BaseModel):
     id: str = Field(..., description="Job ID")

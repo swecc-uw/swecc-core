@@ -1,8 +1,5 @@
 from members.serializers import UserSerializer
-from questions.serializers import (
-    BehavioralQuestionSerializer,
-    TechnicalQuestionSerializer,
-)
+from questions.serializers import BehavioralQuestionSerializer, TechnicalQuestionSerializer
 from rest_framework import serializers
 
 from .models import Interview, InterviewAvailability, InterviewPool

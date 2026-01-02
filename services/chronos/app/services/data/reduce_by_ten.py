@@ -1,7 +1,7 @@
+import statistics
 from collections import defaultdict
 from datetime import datetime
 from typing import List
-import statistics
 
 from app.models.container import DynamoHealthMetric
 from app.services.data.data_compact import DataCompactStrategy
@@ -61,18 +61,26 @@ class ReduceByTenForEachContainer(DataCompactStrategy):
 
                 # Average values
                 averaged = {
-                    "memory_usage_bytes": int(statistics.mean(e.memory_usage_bytes for e in period_data)),
-                    "memory_limit_bytes": int(statistics.mean(e.memory_limit_bytes for e in period_data)),
+                    "memory_usage_bytes": int(
+                        statistics.mean(e.memory_usage_bytes for e in period_data)
+                    ),
+                    "memory_limit_bytes": int(
+                        statistics.mean(e.memory_limit_bytes for e in period_data)
+                    ),
                     "memory_percent": int(statistics.mean(e.memory_percent for e in period_data)),
-                    "system_cpu_usage": int(statistics.mean(e.system_cpu_usage for e in period_data)),
+                    "system_cpu_usage": int(
+                        statistics.mean(e.system_cpu_usage for e in period_data)
+                    ),
                     "online_cpus": int(statistics.mean(e.online_cpus for e in period_data)),
                 }
 
                 # Create a new compacted entry
-                representative_entry = period_data[0]  # Use the first entry for non-aggregated fields
+                representative_entry = period_data[
+                    0
+                ]  # Use the first entry for non-aggregated fields
 
                 did_exit = all(e.status == "exited" for e in period_data)
-                if(did_exit):
+                if did_exit:
                     representative_entry.status = "exited"
                     representative_entry.started_at = None
                     representative_entry.finished_at = None
@@ -80,7 +88,7 @@ class ReduceByTenForEachContainer(DataCompactStrategy):
                     representative_entry.status = "running"
 
                 compacted_entry = DynamoHealthMetric(
-                    timestamp=representative_entry.timestamp.strftime('%Y-%m-%dT%H:%M:%S'),
+                    timestamp=representative_entry.timestamp.strftime("%Y-%m-%dT%H:%M:%S"),
                     container_name=representative_entry.container_name,
                     status=representative_entry.status,
                     **accumulated,

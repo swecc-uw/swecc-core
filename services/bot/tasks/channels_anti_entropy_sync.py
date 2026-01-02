@@ -1,13 +1,13 @@
-import discord
-import os
 import datetime
-from discord.ext import tasks
-from APIs.SweccAPI import SweccAPI
-import dotenv
 import logging
+import os
 
-from mq.events import ChannelSnapshot
+import discord
+import dotenv
 import mq.producers
+from APIs.SweccAPI import SweccAPI
+from discord.ext import tasks
+from mq.events import ChannelSnapshot
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s"
@@ -24,6 +24,7 @@ ALLOWED_CHANNEL_TYPES = [
     discord.StageChannel,
     discord.ForumChannel,
 ]
+
 
 async def sync(guild):
     channels = [

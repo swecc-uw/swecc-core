@@ -9,10 +9,7 @@ from django.db.models import F
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from engagement.serializers import (
-    AttendanceStatsSerializer,
-    CohortStatsLeaderboardSerializer,
-)
+from engagement.serializers import AttendanceStatsSerializer, CohortStatsLeaderboardSerializer
 from members.models import User
 from members.permissions import IsApiKey
 from rest_framework import generics, status
@@ -48,9 +45,7 @@ class LeetcodeLeaderboardView(generics.ListAPIView):
     def generate_key():
         return "leetcode:all"
 
-    manager = LeetcodeLeaderboardManager(
-        DjangoCacheHandler(expiration=60 * 60), generate_key
-    )
+    manager = LeetcodeLeaderboardManager(DjangoCacheHandler(expiration=60 * 60), generate_key)
 
     def get(self, request):
         order_by = request.query_params.get("order_by", "total")
@@ -62,20 +57,14 @@ class LeetcodeLeaderboardView(generics.ListAPIView):
             element["completion_rate"] = (
                 element["total_solved"]
                 * 100.0
-                / (
-                    element["easy_solved"]
-                    + element["medium_solved"]
-                    + element["hard_solved"]
-                )
+                / (element["easy_solved"] + element["medium_solved"] + element["hard_solved"])
             )
 
         if time_range:
             try:
                 hours = int(time_range)
                 cutoff = timezone.now() - timedelta(hours=hours)
-                leetcode_data = filter(
-                    lambda x: x["last_updated"] >= cutoff, leetcode_data
-                )
+                leetcode_data = filter(lambda x: x["last_updated"] >= cutoff, leetcode_data)
             except ValueError:
                 raise ValidationError("updated_within must be a valid number of hours")
 
@@ -106,9 +95,7 @@ class GitHubLeaderboardView(generics.ListAPIView):
     def generate_key():
         return "github:all"
 
-    manager = GitHubLeaderboardManager(
-        DjangoCacheHandler(expiration=60 * 60), generate_key
-    )
+    manager = GitHubLeaderboardManager(DjangoCacheHandler(expiration=60 * 60), generate_key)
 
     def get(self, request):
         order_by = request.query_params.get("order_by", "commits")
@@ -317,9 +304,7 @@ class AttendanceSessionLeaderboard(APIView, CachedView):
     def generate_key(**kwargs):
         return "attendance:all"
 
-    manager = AttendanceLeaderboardManager(
-        DjangoCacheHandler(expiration=60 * 60), generate_key
-    )
+    manager = AttendanceLeaderboardManager(DjangoCacheHandler(expiration=60 * 60), generate_key)
 
     def get(self, request):
         order_by = request.query_params.get("order_by", "attendance")
@@ -334,8 +319,7 @@ class AttendanceSessionLeaderboard(APIView, CachedView):
                 cutoff = timezone.now() - timedelta(hours=hours)
                 # only include if >= 1 sessions attended
                 attendance_data = filter(
-                    lambda x: x["last_updated"] >= cutoff
-                    and x["sessions_attended"] >= 1,
+                    lambda x: x["last_updated"] >= cutoff and x["sessions_attended"] >= 1,
                     attendance_data,
                 )
             except ValueError:
@@ -379,9 +363,7 @@ class CohortStatsLeaderboard(APIView):
     def generate_key(**kwargs):
         return "cohort:all"
 
-    manager = CohortStatsLeaderboardManager(
-        DjangoCacheHandler(expiration=60 * 60), generate_key
-    )
+    manager = CohortStatsLeaderboardManager(DjangoCacheHandler(expiration=60 * 60), generate_key)
 
     def get(self, request):
         order_by = request.query_params.get("order_by", "daily_check")
@@ -396,14 +378,11 @@ class CohortStatsLeaderboard(APIView):
                 cutoff = timezone.now() - timedelta(hours=hours)
                 # only include if >= 1 sessions attended
                 cohort_stats = filter(
-                    lambda x: x["last_updated"] >= cutoff
-                    and x["sessions_attended"] >= 1,
+                    lambda x: x["last_updated"] >= cutoff and x["sessions_attended"] >= 1,
                     cohort_stats,
                 )
             except ValueError:
-                raise ValidationError(
-                    "`updated_within` must be a valid number of hours"
-                )
+                raise ValidationError("`updated_within` must be a valid number of hours")
 
         ordering_options = {
             "daily_check": "daily_checks",

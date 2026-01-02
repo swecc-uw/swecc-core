@@ -1,11 +1,12 @@
 import asyncio
-import logging
 import functools
-from typing import Callable, Any, Coroutine, Optional
-import pydantic
 import json
+import logging
+from typing import Any, Callable, Coroutine, Optional
 
+import pydantic
 from pika.exchange_type import ExchangeType
+
 from .connection_manager import ConnectionManager
 
 LOGGER = logging.getLogger(__name__)
@@ -69,9 +70,7 @@ class AsyncRabbitConsumer:
         """declare exchange"""
         if self._declare_exchange:
             LOGGER.info(f"Declaring exchange: {exchange_name}")
-            cb = functools.partial(
-                self.on_exchange_declareok, exchange_name=exchange_name
-            )
+            cb = functools.partial(self.on_exchange_declareok, exchange_name=exchange_name)
             if self._channel:
                 self._channel.exchange_declare(
                     exchange=exchange_name,
@@ -79,9 +78,7 @@ class AsyncRabbitConsumer:
                     callback=cb,
                 )
             else:
-                LOGGER.warning(
-                    f"Channel is not open for exchange declaration: {exchange_name}"
-                )
+                LOGGER.warning(f"Channel is not open for exchange declaration: {exchange_name}")
         else:
             LOGGER.info(f"Skipping exchange declaration for {exchange_name}")
             self.setup_queue(self._queue)
@@ -102,9 +99,7 @@ class AsyncRabbitConsumer:
 
     def on_queue_declareok(self, _unused_frame, queue_name):
         """queue is declared"""
-        LOGGER.info(
-            f"Binding {self._exchange} to {queue_name} with {self._routing_key}"
-        )
+        LOGGER.info(f"Binding {self._exchange} to {queue_name} with {self._routing_key}")
         cb = functools.partial(self.on_bindok, queue_name=queue_name)
         if self._channel:
             self._channel.queue_bind(

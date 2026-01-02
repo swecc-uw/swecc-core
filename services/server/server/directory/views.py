@@ -11,10 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .managers import DirectoryManager
-from .serializers import (
-    AdminDirectoryMemberSerializer,
-    RegularDirectoryMemberSerializer,
-)
+from .serializers import AdminDirectoryMemberSerializer, RegularDirectoryMemberSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +51,7 @@ class MemberDirectorySearchView(APIView, BaseMemberDirectoryView, CachedView):
                 for term in terms
                 for member in members
                 if (
-                    term in member.username
-                    or term in member.first_name
-                    or term in member.last_name
+                    term in member.username or term in member.first_name or term in member.last_name
                 )
             ]
 
@@ -127,6 +122,4 @@ class RecommendedMembersView(APIView, BaseMemberDirectoryView, CachedView):
 
         except Exception as e:
             logger.error("Error getting recommended members: %s", str(e))
-            return JsonResponse(
-                {"detail": "Error getting recommendations."}, status=500
-            )
+            return JsonResponse({"detail": "Error getting recommendations."}, status=500)

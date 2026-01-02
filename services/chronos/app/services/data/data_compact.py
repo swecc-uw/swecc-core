@@ -19,6 +19,7 @@ class DataCompactStrategy(ABC):
             return [DynamoHealthMetric(**item) for item in data]
         return data
 
+
 class DataCompactManager:
     def __init__(self, compacter_list: List[DataCompactStrategy]):
         self.compacter_list = compacter_list
@@ -42,4 +43,3 @@ class DataCompactManager:
 
     def get_current_pipeline(self) -> List[str]:
         return [str(compacter) for compacter in self.compacter_list]
-

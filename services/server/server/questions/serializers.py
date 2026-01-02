@@ -52,9 +52,7 @@ class BehavioralQuestionSerializer(serializers.ModelSerializer):
 
 
 class UpdateQueueSerializer(serializers.Serializer):
-    question_queue = serializers.ListField(
-        child=serializers.UUIDField(), allow_empty=True
-    )
+    question_queue = serializers.ListField(child=serializers.UUIDField(), allow_empty=True)
 
     def validate(self, data):
         """

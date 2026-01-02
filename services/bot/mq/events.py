@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class DiscordEventType(str, Enum):

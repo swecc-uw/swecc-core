@@ -36,9 +36,7 @@ class DiscordChannelsAntiEntropy(APIView):
             logger.error("Missing required fields in channel data")
             return False
 
-        if not any(
-            v == channel_data["channel_type"] for v, _ in DiscordChannel.CHANNEL_TYPES
-        ):
+        if not any(v == channel_data["channel_type"] for v, _ in DiscordChannel.CHANNEL_TYPES):
             logger.error(
                 "Invalid channel type %s, must be one of %s",
                 channel_data["channel_type"],
@@ -99,9 +97,7 @@ class DiscordChannelsAntiEntropy(APIView):
             for channel in channels_updated:
                 if not self._validate_channel_data(channel):
                     return Response(
-                        {
-                            "error": "Invalid channel data format or missing required fields"
-                        },
+                        {"error": "Invalid channel data format or missing required fields"},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -141,9 +137,7 @@ class DiscordChannelsAntiEntropy(APIView):
 
             for channel_id in to_create:
                 channel_data = desired_state[channel_id]
-                channels_to_create.append(
-                    DiscordChannel(channel_id=channel_id, **channel_data)
-                )
+                channels_to_create.append(DiscordChannel(channel_id=channel_id, **channel_data))
 
             for channel_id in to_check:
                 current = current_state[channel_id]
@@ -157,9 +151,7 @@ class DiscordChannelsAntiEntropy(APIView):
 
             deleted_count = 0
             if to_delete:
-                deleted_count, _ = DiscordChannel.objects.filter(
-                    channel_id__in=to_delete
-                ).delete()
+                deleted_count, _ = DiscordChannel.objects.filter(channel_id__in=to_delete).delete()
 
             if channels_to_create:
                 DiscordChannel.objects.bulk_create(channels_to_create)

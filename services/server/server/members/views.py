@@ -15,10 +15,9 @@ from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from supabase import Client, create_client
-
 from server import settings
 from server.settings import JWT_SECRET, VERIFICATION_EMAIL_ADDR
+from supabase import Client, create_client
 
 from .models import User
 from .notification import verify_school_email_html
@@ -44,9 +43,7 @@ class MemberRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
             return Response(serializer.data)
         except User.DoesNotExist:
             logger.error("Error retrieving user: %s", serializer.errors)
-            return Response(
-                {"detail": "Member not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Member not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AuthenticatedMemberProfile(APIView):
@@ -144,17 +141,13 @@ class ProfilePictureUploadView(APIView):
         allowed_types = ["image/jpeg", "image/png", "image/gif"]
         if file.content_type not in allowed_types:
             return JsonResponse(
-                {
-                    "error": "Invalid file type. Only JPEG, PNG and GIF files are allowed."
-                },
+                {"error": "Invalid file type. Only JPEG, PNG and GIF files are allowed."},
                 status=400,
             )
 
         # Validate file size (max 5MB)
         if file.size > 5 * 1024 * 1024:
-            return JsonResponse(
-                {"error": "File too large. Maximum size is 5MB."}, status=400
-            )
+            return JsonResponse({"error": "File too large. Maximum size is 5MB."}, status=400)
 
         # Generate unique filename
         file_extension = os.path.splitext(file.name)[1]
@@ -186,9 +179,7 @@ class ProfilePictureUploadView(APIView):
             # Delete old profile picture if it exists
             if member.profile_picture_url:
                 try:
-                    old_file_path = request.user.profile_picture_url.split(
-                        f"{bucket_name}/"
-                    )[1]
+                    old_file_path = request.user.profile_picture_url.split(f"{bucket_name}/")[1]
                     supabase.storage.from_(bucket_name).remove([old_file_path])
                 except Exception as e:
                     logger.warning(f"Failed to delete old profile picture: {str(e)}")
@@ -203,9 +194,7 @@ class ProfilePictureUploadView(APIView):
 
         except Exception as e:
             logger.error(f"Supabase storage error: {str(e)}")
-            return JsonResponse(
-                {"error": "Failed to upload file to storage"}, status=500
-            )
+            return JsonResponse({"error": "Failed to upload file to storage"}, status=500)
 
 
 class PasswordResetRequest(APIView):
@@ -268,9 +257,7 @@ class VerifySchoolEmailRequest(APIView):
         if not IsApiKey().has_permission(request, self) and request.user.id != user_id:
             return Response({"detail": "Provided user does not match."}, status=403)
 
-        existing_user_with_email = User.objects.filter(
-            school_email=school_email
-        ).first()
+        existing_user_with_email = User.objects.filter(school_email=school_email).first()
         if existing_user_with_email:
             return Response(
                 {"detail": "Email already in use."},
@@ -309,13 +296,9 @@ class ConfirmVerifySchoolEmail(APIView):
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
-            return Response(
-                {"detail": "Token has expired"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Token has expired"}, status=status.HTTP_400_BAD_REQUEST)
         except jwt.InvalidTokenError:
-            return Response(
-                {"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
         if request.user.id != payload["user_id"]:
             return Response({"detail": "User does not match token"}, status=403)

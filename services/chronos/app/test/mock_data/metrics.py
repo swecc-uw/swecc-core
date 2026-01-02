@@ -1,7 +1,8 @@
 from typing import List
+
 from app.models.container import DynamoHealthMetric
 
-METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
+METRICS_MOCK_DATA: List[DynamoHealthMetric] = [
     {
         "container_name": "seaport-fastapi-app-1",
         "timestamp": "2024-12-30T18:49:51",
@@ -27,7 +28,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -54,7 +55,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -81,7 +82,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -108,7 +109,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -135,7 +136,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -162,7 +163,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -189,7 +190,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -216,7 +217,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -243,7 +244,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -270,7 +271,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -297,7 +298,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -324,7 +325,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -351,7 +352,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-11-12T23:25:27",
-        "finished_at": "2024-11-12T23:26:34"
+        "finished_at": "2024-11-12T23:26:34",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -378,7 +379,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-11-12T23:25:27",
-        "finished_at": "2024-11-12T23:26:34"
+        "finished_at": "2024-11-12T23:26:34",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -405,7 +406,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-11-12T23:25:27",
-        "finished_at": "2024-11-12T23:26:34"
+        "finished_at": "2024-11-12T23:26:34",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -432,7 +433,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T19:30:54",
-        "finished_at": "2025-02-05T19:39:43"
+        "finished_at": "2025-02-05T19:39:43",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -459,7 +460,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:24:23",
-        "finished_at": "2025-02-05T21:26:37"
+        "finished_at": "2025-02-05T21:26:37",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -486,7 +487,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:24:23",
-        "finished_at": "2025-02-05T21:26:37"
+        "finished_at": "2025-02-05T21:26:37",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -513,7 +514,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:24:23",
-        "finished_at": "2025-02-05T21:26:37"
+        "finished_at": "2025-02-05T21:26:37",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -540,7 +541,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:24:23",
-        "finished_at": "2025-02-05T21:26:37"
+        "finished_at": "2025-02-05T21:26:37",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -567,7 +568,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:19",
-        "finished_at": "2025-02-05T21:26:37"
+        "finished_at": "2025-02-05T21:26:37",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -594,7 +595,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:19",
-        "finished_at": "2025-02-05T21:26:37"
+        "finished_at": "2025-02-05T21:26:37",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -621,7 +622,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:19",
-        "finished_at": "2025-02-05T21:30:07"
+        "finished_at": "2025-02-05T21:30:07",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -648,7 +649,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:19",
-        "finished_at": "2025-02-05T21:30:07"
+        "finished_at": "2025-02-05T21:30:07",
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -675,7 +676,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:19",
-        "finished_at": "2025-02-05T21:30:07"
+        "finished_at": "2025-02-05T21:30:07",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -702,7 +703,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -729,7 +730,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -756,7 +757,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -783,7 +784,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -810,7 +811,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -837,7 +838,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -864,7 +865,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -891,7 +892,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -918,7 +919,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -945,7 +946,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -972,7 +973,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -999,7 +1000,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1026,7 +1027,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:10:01",
-        "finished_at": "2025-01-17T00:09:21"
+        "finished_at": "2025-01-17T00:09:21",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1053,7 +1054,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:10:01",
-        "finished_at": "2025-01-17T00:09:21"
+        "finished_at": "2025-01-17T00:09:21",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1080,7 +1081,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:38:12",
-        "finished_at": "2025-01-17T00:38:07"
+        "finished_at": "2025-01-17T00:38:07",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1107,7 +1108,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1134,7 +1135,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1161,7 +1162,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1188,7 +1189,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1215,7 +1216,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1242,7 +1243,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1269,7 +1270,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1296,7 +1297,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1323,7 +1324,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-db-1",
@@ -1350,7 +1351,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:23",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1377,7 +1378,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1404,7 +1405,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1431,7 +1432,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1458,7 +1459,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1485,7 +1486,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1512,7 +1513,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1539,7 +1540,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1566,7 +1567,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1593,7 +1594,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1620,7 +1621,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1647,7 +1648,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1674,7 +1675,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1701,7 +1702,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:10:02",
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1728,7 +1729,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:10:02",
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1755,7 +1756,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:38:12",
-        "finished_at": "2025-01-17T00:38:06"
+        "finished_at": "2025-01-17T00:38:06",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1782,7 +1783,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1809,7 +1810,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1836,7 +1837,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1863,7 +1864,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1890,7 +1891,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1917,7 +1918,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1944,7 +1945,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1971,7 +1972,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -1998,7 +1999,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "swecc-server-web-1",
@@ -2025,7 +2026,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 137,
         "started_at": "2025-01-23T02:59:24",
-        "finished_at": "2025-01-23T03:43:54"
+        "finished_at": "2025-01-23T03:43:54",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2052,7 +2053,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2079,7 +2080,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2106,7 +2107,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2133,7 +2134,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2160,7 +2161,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2187,7 +2188,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2214,7 +2215,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2241,7 +2242,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2268,7 +2269,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2295,7 +2296,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2322,7 +2323,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2349,7 +2350,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "pedantic_fermi",
@@ -2376,7 +2377,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2403,7 +2404,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2430,7 +2431,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2457,7 +2458,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2484,7 +2485,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2511,7 +2512,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2538,7 +2539,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2565,7 +2566,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2592,7 +2593,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2619,7 +2620,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2646,7 +2647,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2673,7 +2674,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "pedantic_fermi",
@@ -2700,7 +2701,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2024-12-30T14:56:21",
-        "finished_at": "2024-12-30T14:57:35"
+        "finished_at": "2024-12-30T14:57:35",
     },
     {
         "container_name": "elegant_hellman",
@@ -2727,7 +2728,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2754,7 +2755,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2781,7 +2782,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2808,7 +2809,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2835,7 +2836,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2862,7 +2863,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2889,7 +2890,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2916,7 +2917,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2943,7 +2944,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2970,7 +2971,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -2997,7 +2998,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -3024,7 +3025,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "elegant_hellman",
@@ -3051,7 +3052,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3078,7 +3079,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3105,7 +3106,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3132,7 +3133,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3159,7 +3160,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3186,7 +3187,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3213,7 +3214,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3240,7 +3241,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3267,7 +3268,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3294,7 +3295,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3321,7 +3322,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3348,7 +3349,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "elegant_hellman",
@@ -3375,7 +3376,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-12-30T18:00:24",
-        "finished_at": "2024-12-31T03:37:51"
+        "finished_at": "2024-12-31T03:37:51",
     },
     {
         "container_name": "db",
@@ -3402,7 +3403,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3429,7 +3430,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3456,7 +3457,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3483,7 +3484,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3510,7 +3511,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3537,7 +3538,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3564,7 +3565,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3591,7 +3592,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3618,7 +3619,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3645,7 +3646,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3672,7 +3673,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3699,7 +3700,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "db",
@@ -3726,7 +3727,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3753,7 +3754,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3780,7 +3781,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3807,7 +3808,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3834,7 +3835,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3861,7 +3862,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3888,7 +3889,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3915,7 +3916,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3942,7 +3943,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3969,7 +3970,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -3996,7 +3997,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -4023,7 +4024,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "db",
@@ -4050,7 +4051,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 255,
         "started_at": "2024-11-06T09:31:43",
-        "finished_at": "2024-11-12T23:13:09"
+        "finished_at": "2024-11-12T23:13:09",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4077,7 +4078,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4104,7 +4105,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4131,7 +4132,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4158,7 +4159,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4185,7 +4186,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4212,7 +4213,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4239,7 +4240,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4266,7 +4267,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4293,7 +4294,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4320,7 +4321,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4347,7 +4348,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4374,7 +4375,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4401,7 +4402,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4428,7 +4429,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4455,7 +4456,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -4482,7 +4483,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:34:04",
-        "finished_at": "2024-12-31T06:34:06"
+        "finished_at": "2024-12-31T06:34:06",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4509,7 +4510,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:18:36",
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4536,7 +4537,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:18:36",
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4563,7 +4564,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-01-17T00:18:36",
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4590,7 +4591,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T19:30:33",
-        "finished_at": "2025-01-30T20:47:30"
+        "finished_at": "2025-01-30T20:47:30",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4617,7 +4618,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:26:32",
-        "finished_at": "2025-02-05T21:26:26"
+        "finished_at": "2025-02-05T21:26:26",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4644,7 +4645,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:26:32",
-        "finished_at": "2025-02-05T21:26:26"
+        "finished_at": "2025-02-05T21:26:26",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4671,7 +4672,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:26:32",
-        "finished_at": "2025-02-05T21:26:26"
+        "finished_at": "2025-02-05T21:26:26",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4698,7 +4699,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:26:32",
-        "finished_at": "2025-02-05T21:26:26"
+        "finished_at": "2025-02-05T21:26:26",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4725,7 +4726,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:14",
-        "finished_at": "2025-02-05T21:27:30"
+        "finished_at": "2025-02-05T21:27:30",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4752,7 +4753,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:28:14",
-        "finished_at": "2025-02-05T21:27:30"
+        "finished_at": "2025-02-05T21:27:30",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4779,7 +4780,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:30:01",
-        "finished_at": "2025-02-05T21:29:57"
+        "finished_at": "2025-02-05T21:29:57",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4806,7 +4807,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:30:01",
-        "finished_at": "2025-02-05T21:29:57"
+        "finished_at": "2025-02-05T21:29:57",
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -4833,7 +4834,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 0,
         "started_at": "2025-02-05T21:30:01",
-        "finished_at": "2025-02-05T21:29:57"
+        "finished_at": "2025-02-05T21:29:57",
     },
     {
         "container_name": "silly_ganguly",
@@ -4860,7 +4861,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "silly_ganguly",
@@ -4887,7 +4888,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "silly_ganguly",
@@ -4914,7 +4915,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": None,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
     },
     {
         "container_name": "silly_ganguly",
@@ -4941,7 +4942,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -4968,7 +4969,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -4995,7 +4996,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5022,7 +5023,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5049,7 +5050,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5076,7 +5077,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5103,7 +5104,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5130,7 +5131,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5157,7 +5158,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5184,7 +5185,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5211,7 +5212,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5238,7 +5239,7 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
+        "finished_at": "2024-12-31T06:35:37",
     },
     {
         "container_name": "silly_ganguly",
@@ -5265,6 +5266,6 @@ METRICS_MOCK_DATA : List[DynamoHealthMetric] = [
         "restarts": 0,
         "exit_code": 1,
         "started_at": "2024-12-31T06:35:35",
-        "finished_at": "2024-12-31T06:35:37"
-    }
+        "finished_at": "2024-12-31T06:35:37",
+    },
 ]

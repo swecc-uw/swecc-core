@@ -1,17 +1,18 @@
-import docker
-from typing import List, Dict, Optional
+import logging
 from datetime import datetime
+from typing import Dict, List, Optional
+
+import docker
 from app.models.container import (
-    ContainerMetadata,
     ContainerHealth,
+    ContainerMetadata,
     ContainerStats,
     CpuStats,
-    MemoryStats,
     DiskStats,
+    MemoryStats,
     NetworkStats,
 )
-import logging
-from docker.errors import NotFound, APIError
+from docker.errors import APIError, NotFound
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,7 @@ class DockerService:
     def get_all_containers_live_status(self):
         try:
             containers = self.client.containers.list(all=True)
-            return {
-                container.name: container.status
-                for container in containers
-            }
+            return {container.name: container.status for container in containers}
         except Exception as e:
             logger.error(f"Failed to list containers: {str(e)}")
             return {}
@@ -64,17 +62,13 @@ class DockerService:
             # command
             command = container.attrs.get("Config", {}).get("Cmd")
             if isinstance(command, list):
-                command = [
-                    str(cmd) for cmd in command
-                ]
+                command = [str(cmd) for cmd in command]
 
             return ContainerMetadata(
                 short_id=container.short_id,
                 name=container.name,
                 image=(
-                    container.image.tags[0]
-                    if container.image.tags
-                    else container.image.id[:12]
+                    container.image.tags[0] if container.image.tags else container.image.id[:12]
                 ),
                 created_at=datetime.fromisoformat(
                     container.attrs["Created"].replace("Z", "+00:00")
@@ -84,9 +78,7 @@ class DockerService:
                 ports=ports,
             )
         except Exception as e:
-            logger.error(
-                f"Error getting metadata for container {container.name}: {str(e)}"
-            )
+            logger.error(f"Error getting metadata for container {container.name}: {str(e)}")
             # minimal valid metadata if fail
             return ContainerMetadata(
                 short_id=container.short_id,
@@ -110,25 +102,18 @@ class DockerService:
                 restarts=container.attrs.get("RestartCount", 0),
                 exit_code=state.get("ExitCode"),
                 started_at=(
-                    datetime.fromisoformat(
-                        state.get("StartedAt", "").replace("Z", "+00:00")
-                    )
+                    datetime.fromisoformat(state.get("StartedAt", "").replace("Z", "+00:00"))
                     if state.get("StartedAt")
                     else None
                 ),
                 finished_at=(
-                    datetime.fromisoformat(
-                        state.get("FinishedAt", "").replace("Z", "+00:00")
-                    )
-                    if state.get("FinishedAt")
-                    and state.get("FinishedAt") != "0001-01-01T00:00:00Z"
+                    datetime.fromisoformat(state.get("FinishedAt", "").replace("Z", "+00:00"))
+                    if state.get("FinishedAt") and state.get("FinishedAt") != "0001-01-01T00:00:00Z"
                     else None
                 ),
             )
         except Exception as e:
-            logger.error(
-                f"Error getting health for container {container.name}: {str(e)}"
-            )
+            logger.error(f"Error getting health for container {container.name}: {str(e)}")
             return ContainerHealth(status=container.status or "unknown", restarts=0)
 
     def _get_container_cpu_stats(self, stats_data: Dict) -> CpuStats:
@@ -137,9 +122,9 @@ class DockerService:
             precpu_stats = stats_data.get("precpu_stats", {})
 
             # CPU usage percentage
-            cpu_delta = cpu_stats.get("cpu_usage", {}).get(
-                "total_usage", 0
-            ) - precpu_stats.get("cpu_usage", {}).get("total_usage", 0)
+            cpu_delta = cpu_stats.get("cpu_usage", {}).get("total_usage", 0) - precpu_stats.get(
+                "cpu_usage", {}
+            ).get("total_usage", 0)
 
             system_delta = cpu_stats.get("system_cpu_usage", 0) - precpu_stats.get(
                 "system_cpu_usage", 0
@@ -158,12 +143,8 @@ class DockerService:
                 percent=round(cpu_percent, 2),
                 system_cpu_usage=cpu_stats.get("system_cpu_usage", 0),
                 online_cpus=online_cpus,
-                usage_in_usermode=cpu_stats.get("cpu_usage", {}).get(
-                    "usage_in_usermode"
-                ),
-                usage_in_kernelmode=cpu_stats.get("cpu_usage", {}).get(
-                    "usage_in_kernelmode"
-                ),
+                usage_in_usermode=cpu_stats.get("cpu_usage", {}).get("usage_in_usermode"),
+                usage_in_kernelmode=cpu_stats.get("cpu_usage", {}).get("usage_in_kernelmode"),
                 cpu_usage=cpu_stats.get("cpu_usage"),
             )
         except Exception as e:
@@ -239,9 +220,7 @@ class DockerService:
                 write_bytes=write_bytes,
                 reads=reads,
                 writes=writes,
-                io_service_bytes_recursive=(
-                    io_service_bytes if io_service_bytes else None
-                ),
+                io_service_bytes_recursive=(io_service_bytes if io_service_bytes else None),
             )
         except Exception as e:
             logger.error(f"Error calculating disk stats: {str(e)}")
@@ -313,17 +292,13 @@ class DockerService:
                 disk=self._get_container_disk_stats(stats_data),
             )
         except NotFound:
-            logger.warning(
-                f"Container {container.name} not found, might have been removed"
-            )
+            logger.warning(f"Container {container.name} not found, might have been removed")
             return None
         except APIError as e:
             logger.error(f"Docker API error for container {container.name}: {str(e)}")
             return None
         except Exception as e:
-            logger.error(
-                f"Unexpected error getting stats for container {container.name}: {str(e)}"
-            )
+            logger.error(f"Unexpected error getting stats for container {container.name}: {str(e)}")
             return None
 
     def poll_all_container_stats(self) -> List[ContainerStats]:
@@ -340,13 +315,10 @@ class DockerService:
                 if container_stats:
                     stats.append(container_stats)
             except Exception as e:
-                logger.error(
-                    f"Error getting stats for container {container.name}: {str(e)}"
-                )
+                logger.error(f"Error getting stats for container {container.name}: {str(e)}")
                 continue
 
         return stats
 
     def get_socket_conenction(self):
         return self.client.events(decode=True)
-

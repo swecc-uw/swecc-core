@@ -1,9 +1,10 @@
 import asyncio
+
 import docker
+
 from ..events import Event
 from ..message import Message, MessageType
 from .base_handler import BaseHandler
-
 
 
 class ContainerLogsHandler(BaseHandler):
@@ -63,16 +64,12 @@ class ContainerLogsHandler(BaseHandler):
                 await self.safe_send(websocket, error_msg.dict())
                 return
             except docker.errors.APIError as e:
-                error_msg = Message(
-                    type=MessageType.ERROR, message=f"Docker API error: {str(e)}"
-                )
+                error_msg = Message(type=MessageType.ERROR, message=f"Docker API error: {str(e)}")
                 await self.safe_send(websocket, error_msg.dict())
                 return
 
             # Create a new task for streaming
-            stream_task = asyncio.create_task(
-                self._stream_logs(user_id, container, websocket)
-            )
+            stream_task = asyncio.create_task(self._stream_logs(user_id, container, websocket))
 
             self.running_streams[user_id] = {
                 "task": stream_task,
@@ -92,9 +89,7 @@ class ContainerLogsHandler(BaseHandler):
 
         except Exception as e:
             self.logger.error(f"Error starting logs: {str(e)}", exc_info=True)
-            error_msg = Message(
-                type=MessageType.ERROR, message=f"Error starting logs: {str(e)}"
-            )
+            error_msg = Message(type=MessageType.ERROR, message=f"Error starting logs: {str(e)}")
             await self.safe_send(websocket, error_msg.dict())
 
     async def _stop_logs(self, user_id: int) -> None:
@@ -116,18 +111,14 @@ class ContainerLogsHandler(BaseHandler):
 
     async def _stream_logs(self, user_id: int, container, websocket) -> None:
         try:
-            logs_generator = container.logs(
-                stream=True, follow=True, timestamps=True, tail=100
-            )
+            logs_generator = container.logs(stream=True, follow=True, timestamps=True, tail=100)
 
             async for log_chunk in self._async_log_generator(logs_generator):
                 if asyncio.current_task().cancelled():
                     break
 
                 try:
-                    log_message = Message(
-                        type=MessageType.LOG_LINE, message=log_chunk.strip()
-                    )
+                    log_message = Message(type=MessageType.LOG_LINE, message=log_chunk.strip())
                     await self.safe_send(websocket, log_message.dict())
                 except Exception as e:
                     self.logger.error(f"Error sending log line: {str(e)}")
@@ -153,9 +144,7 @@ class ContainerLogsHandler(BaseHandler):
         loop = asyncio.get_event_loop()
         line_buffer = ""
 
-        for log_chunk in iter(
-            lambda: loop.run_in_executor(None, next, logs_generator, None), None
-        ):
+        for log_chunk in iter(lambda: loop.run_in_executor(None, next, logs_generator, None), None):
             if asyncio.current_task().cancelled():
                 break
 

@@ -22,9 +22,7 @@ class Command(BaseCommand):
             default=10,  # high default timeout for rate limits
             help="Timeout between API requests in seconds",
         )
-        parser.add_argument(
-            "--username", type=str, help="Update stats for specific username only"
-        )
+        parser.add_argument("--username", type=str, help="Update stats for specific username only")
         parser.add_argument(
             "--force", action="store_true", help="Force update even if recently updated"
         )
@@ -71,9 +69,7 @@ class Command(BaseCommand):
                 pr_data = pr_response.json()
                 total_prs = pr_data.get("total_count", 0)
             else:
-                logger.warning(
-                    f"Failed to fetch PR data for {username}: {pr_response.status_code}"
-                )
+                logger.warning(f"Failed to fetch PR data for {username}: {pr_response.status_code}")
 
             return {
                 "total_prs": total_prs,
@@ -96,10 +92,7 @@ class Command(BaseCommand):
 
             try:
                 stats = GitHubStats.objects.get(user=user)
-                if (
-                    not force
-                    and (timezone.now() - stats.last_updated).total_seconds() < 3600
-                ):
+                if not force and (timezone.now() - stats.last_updated).total_seconds() < 3600:
                     return False
             except GitHubStats.DoesNotExist:
                 stats = GitHubStats(user=user)
@@ -116,9 +109,7 @@ class Command(BaseCommand):
                 stats.save()
                 return True
 
-        users = (
-            User.objects.filter(username=username) if username else User.objects.all()
-        )
+        users = User.objects.filter(username=username) if username else User.objects.all()
 
         for user in users:
             if not user.github or not user.github.get("username"):
@@ -130,9 +121,7 @@ class Command(BaseCommand):
                     )
                 else:
                     self.stdout.write(self.style.WARNING(f"Skipped {user.username}"))
-                time.sleep(
-                    timeout
-                )  # hopefully respect rate limits, needs to be run async though
+                time.sleep(timeout)  # hopefully respect rate limits, needs to be run async though
             except Exception as e:
                 logger.error(f"Failed to update stats for {user.username}: {str(e)}")
                 continue

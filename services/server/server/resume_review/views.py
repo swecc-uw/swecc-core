@@ -5,7 +5,6 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from resume_review.models import Resume
-
 from server.settings import AWS_BUCKET_NAME, DJANGO_DEBUG
 
 # Create your views here.
@@ -31,17 +30,13 @@ class ResumeUploadView(APIView):
             )
 
         if file_size > MAX_FILE_SIZE:
-            return Response(
-                {"error": "File size too large."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "File size too large."}, status=status.HTTP_400_BAD_REQUEST)
 
         resume_count = Resume.objects.filter(member=request.user).count()
 
         if resume_count >= MAX_RESUME_COUNT:
             oldest_resume = (
-                Resume.objects.filter(member=request.user)
-                .order_by("created_at")
-                .first()
+                Resume.objects.filter(member=request.user).order_by("created_at").first()
             )
             oldest_resume.delete()
 
@@ -51,9 +46,7 @@ class ResumeUploadView(APIView):
         added_resume.save()
 
         file_key = f"{request.user.id}-{added_resume.id}-{file_name}"
-        presigned_url = S3Client().get_presigned_url(
-            bucket=AWS_BUCKET_NAME, key=file_key
-        )
+        presigned_url = S3Client().get_presigned_url(bucket=AWS_BUCKET_NAME, key=file_key)
 
         return Response(
             {
@@ -83,9 +76,7 @@ class DevPublishToReview(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not file_key.startswith(f"{request.user.id}-"):
-            return Response(
-                {"error": "Invalid file key."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Invalid file key."}, status=status.HTTP_400_BAD_REQUEST)
 
         dev_publish_to_review_resume(file_key)
         return Response({"success": True}, status=status.HTTP_200_OK)

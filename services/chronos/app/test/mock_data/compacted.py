@@ -24,7 +24,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -51,7 +51,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "seaport-fastapi-app-1",
@@ -78,7 +78,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -105,7 +105,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -132,7 +132,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-server-db-1",
@@ -159,7 +159,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -186,7 +186,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -213,7 +213,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-server-web-1",
@@ -240,7 +240,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "pedantic_fermi",
@@ -267,7 +267,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "pedantic_fermi",
@@ -294,7 +294,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "pedantic_fermi",
@@ -321,7 +321,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "elegant_hellman",
@@ -348,7 +348,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "elegant_hellman",
@@ -375,7 +375,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "db",
@@ -402,7 +402,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "db",
@@ -429,7 +429,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "db",
@@ -456,7 +456,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -483,7 +483,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -510,7 +510,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "beautiful_mcclintock",
@@ -537,7 +537,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -564,7 +564,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -591,7 +591,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "swecc-chronos-chronos-1",
@@ -618,7 +618,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "silly_ganguly",
@@ -645,7 +645,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "silly_ganguly",
@@ -672,7 +672,7 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
+        "finished_at": null,
     },
     {
         "container_name": "silly_ganguly",
@@ -699,6 +699,6 @@ compacted_data = [
         "restarts": 0,
         "exit_code": null,
         "started_at": null,
-        "finished_at": null
-    }
+        "finished_at": null,
+    },
 ]

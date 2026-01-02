@@ -1,17 +1,19 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import router as api_router
-from app.utils.scheduler import lifespan
-
 import os
 
+from app.api.endpoints import router as api_router
+from app.utils.scheduler import lifespan
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 # echo environment variables
-print("AWS_ACCESS_KEY_ID:", os.getenv('AWS_ACCESS_KEY_ID'))
-print("AWS_SECRET_ACCESS_KEY:", os.getenv('AWS_SECRET_ACCESS_KEY'))
-print("AWS_DEFAULT_REGION:", os.getenv('AWS_DEFAULT_REGION'))
+print("AWS_ACCESS_KEY_ID:", os.getenv("AWS_ACCESS_KEY_ID"))
+print("AWS_SECRET_ACCESS_KEY:", os.getenv("AWS_SECRET_ACCESS_KEY"))
+print("AWS_DEFAULT_REGION:", os.getenv("AWS_DEFAULT_REGION"))
+
 
 def on_startup():
     print("Starting up")
+
 
 app = FastAPI(
     title="Docker Stats API",

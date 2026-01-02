@@ -1,11 +1,12 @@
 import json
-import mq
 import logging
+
+import mq
 from mq.events import (
-    MessageEvent,
     AttendanceEvent,
     ChannelSnapshot,
     CohortStatsUpdate,
+    MessageEvent,
     ReactionEvent,
 )
 
@@ -20,6 +21,7 @@ async def publish_message_event(event: MessageEvent):
 
     return json.dumps(event.__dict__)
 
+
 @mq.producer(routing_key="discord.attendance")
 async def publish_attend_event(event: AttendanceEvent):
     logging.info(
@@ -30,11 +32,13 @@ async def publish_attend_event(event: AttendanceEvent):
 
     return json.dumps(event.__dict__)
 
+
 @mq.producer(routing_key="discord.channels")
 async def publish_channel_snapshot(event: ChannelSnapshot):
     logging.info("Syncing channels with backend")
 
     return json.dumps(event.__dict__)
+
 
 @mq.producer(routing_key="discord.cohort_stats")
 async def publish_cohort_stats_update_event(event: CohortStatsUpdate):
@@ -44,6 +48,7 @@ async def publish_cohort_stats_update_event(event: CohortStatsUpdate):
 
     return json.dumps(event.__dict__)
 
+
 async def _process_reaction_event(event: ReactionEvent):
     logging.info(
         f"Processing reaction event for user {event.discord_id} in channel "
@@ -52,9 +57,11 @@ async def _process_reaction_event(event: ReactionEvent):
 
     return json.dumps(event.__dict__)
 
+
 @mq.producer(routing_key="discord.reactions.add")
 async def publish_reaction_add_event(event: ReactionEvent):
     return await _process_reaction_event(event)
+
 
 @mq.producer(routing_key="discord.reactions.remove")
 async def publish_reaction_remove_event(event: ReactionEvent):

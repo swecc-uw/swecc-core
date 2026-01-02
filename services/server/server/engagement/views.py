@@ -20,12 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .buffer import Message, MessageBuffer
-from .models import (
-    AttendanceSession,
-    AttendanceSessionStats,
-    CohortStats,
-    DiscordMessageStats,
-)
+from .models import AttendanceSession, AttendanceSessionStats, CohortStats, DiscordMessageStats
 from .serializers import AttendanceSessionSerializer, MemberSerializer
 
 logger = logging.getLogger(__name__)
@@ -131,16 +126,10 @@ class AttendSession(generics.CreateAPIView):
         try:
             # Since we sort by expires and active sesions must have a unique key,
             # the first result is the desired active session.
-            session = (
-                AttendanceSession.objects.filter(key=session_key)
-                .order_by("-expires")
-                .first()
-            )
+            session = AttendanceSession.objects.filter(key=session_key).order_by("-expires").first()
 
             if not session:
-                return Response(
-                    {"error": "Session not found"}, status=status.HTTP_404_NOT_FOUND
-                )
+                return Response({"error": "Session not found"}, status=status.HTTP_404_NOT_FOUND)
 
             if not session.is_active():
                 return Response(
@@ -153,9 +142,7 @@ class AttendSession(generics.CreateAPIView):
                 if user not in session.attendees.all():
                     session.attendees.add(user)
 
-                    stats, created = AttendanceSessionStats.objects.get_or_create(
-                        member=user
-                    )
+                    stats, created = AttendanceSessionStats.objects.get_or_create(member=user)
                     with transaction.atomic():
                         stats.sessions_attended += 1
                         stats.last_updated = timezone.now()
@@ -170,14 +157,10 @@ class AttendSession(generics.CreateAPIView):
                     )
 
             except User.DoesNotExist:
-                return Response(
-                    {"error": "Member not found"}, status=status.HTTP_404_NOT_FOUND
-                )
+                return Response({"error": "Member not found"}, status=status.HTTP_404_NOT_FOUND)
 
         except AttendanceSession.DoesNotExist:
-            return Response(
-                {"error": "Session not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Session not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class InjestMessageEventView(generics.CreateAPIView):
@@ -204,9 +187,7 @@ class InjestMessageEventView(generics.CreateAPIView):
 
         except pydantic.ValidationError as e:
             logger.error("Invalid message format: %s", e)
-            return Response(
-                {"error": "invalid message format"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "invalid message format"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.exception("Error processing message: %s", e)
             return Response(
@@ -223,12 +204,8 @@ class GetUserStats(APIView):
 
         return Response(
             {
-                "leetcode": LeetcodeStatsSerializer(
-                    LeetcodeStats.objects.get(user=user)
-                ).data,
-                "github": GitHubStatsSerializer(
-                    GitHubStats.objects.get(user=user)
-                ).data,
+                "leetcode": LeetcodeStatsSerializer(LeetcodeStats.objects.get(user=user)).data,
+                "github": GitHubStatsSerializer(GitHubStats.objects.get(user=user)).data,
             }
         )
 
@@ -236,9 +213,7 @@ class GetUserStats(APIView):
 class QueryDiscordMessageStats(generics.ListAPIView):
     permission_classes = [IsAdmin]
 
-    def _aggregate(
-        self, messages: List[DiscordMessageStats]
-    ) -> Dict[int, dict[str, int]]:
+    def _aggregate(self, messages: List[DiscordMessageStats]) -> Dict[int, dict[str, int]]:
         """member_id -> channel_id (+ total) -> message_count"""
 
         result = defaultdict(lambda: defaultdict(int))
@@ -280,9 +255,7 @@ class QueryDiscordMessageStats(generics.ListAPIView):
                 "stats": {
                     channel_id: count
                     for channel_id, count in stats.items()
-                    if channel_id != "total"
-                    and int(channel_id) in channel_ids
-                    or not channel_ids
+                    if channel_id != "total" and int(channel_id) in channel_ids or not channel_ids
                 },
             }
             for member_id, stats in aggregated.items()
@@ -320,9 +293,7 @@ class CohortStatsBase(APIView):
         )
 
         if cohort_name:
-            cohort_stats_queryset = cohort_stats_queryset.filter(
-                cohort__name=cohort_name
-            )
+            cohort_stats_queryset = cohort_stats_queryset.filter(cohort__name=cohort_name)
             if not cohort_stats_queryset.exists():
                 return JsonResponse(
                     {"error": "Active cohort not found with the provided name"},
@@ -332,9 +303,7 @@ class CohortStatsBase(APIView):
         cohort_stats_objects = list(cohort_stats_queryset)
 
         if not cohort_stats_objects:
-            return JsonResponse(
-                {"error": "No active cohort stats found for this user"}, status=404
-            )
+            return JsonResponse({"error": "No active cohort stats found for this user"}, status=404)
 
         updated_cohorts = []
         for stats_obj in cohort_stats_objects:
@@ -390,13 +359,9 @@ class UpdateDailyChecksView(CohortStatsBase):
         updated_to_the_nearest_day = cohort_stats_object.last_updated.replace(
             hour=7, minute=59, second=59, microsecond=0
         )
-        current_day = timezone.now().replace(
-            hour=7, minute=59, second=59, microsecond=0
-        )
+        current_day = timezone.now().replace(hour=7, minute=59, second=59, microsecond=0)
 
-        hour_difference = (
-            updated_to_the_nearest_day - current_day
-        ).total_seconds() // 3600
+        hour_difference = (updated_to_the_nearest_day - current_day).total_seconds() // 3600
 
         if hour_difference >= 24:
             cohort_stats_object.dailyChecks += 1

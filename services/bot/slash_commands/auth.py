@@ -1,5 +1,6 @@
-import discord
 import secrets
+
+import discord
 from APIs.SweccAPI import SweccAPI
 
 swecc = SweccAPI()
@@ -107,9 +108,7 @@ async def register(ctx: discord.Interaction):
     verified_rid = bot_context.verified_role_id
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
         usr_msg = f"You are already verified"
-        sys_msg = (
-            f"{ctx.user.display_name} has tried to register but is already verified."
-        )
+        sys_msg = f"{ctx.user.display_name} has tried to register but is already verified."
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
@@ -144,17 +143,13 @@ class VerifyModal(discord.ui.Modal, title="Verify Your Account"):
 
         response = swecc.auth(username, user_id, auth_code)
         if response == 200:
-            await interaction.response.send_message(
-                "Authentication successful!", ephemeral=True
-            )
+            await interaction.response.send_message("Authentication successful!", ephemeral=True)
             await self.bot_context.log(
                 interaction,
                 f"{interaction.user.display_name} has verified their account.",
             )
 
-            if (
-                role := interaction.guild.get_role(self.bot_context.verified_role_id)
-            ) is None:
+            if (role := interaction.guild.get_role(self.bot_context.verified_role_id)) is None:
                 await self.bot_context.log(
                     interaction,
                     f"ERROR: Role {self.bot_context.verified_role_id} not found for {interaction.user.display_name}",
@@ -174,9 +169,7 @@ class VerifyModal(discord.ui.Modal, title="Verify Your Account"):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
         if not interaction.response.is_done():
-            await interaction.response.send_message(
-                f"Something went wrong", ephemeral=True
-            )
+            await interaction.response.send_message(f"Something went wrong", ephemeral=True)
             await self.bot_context.log(
                 interaction,
                 f"{interaction.user.display_name} has failed to verified their account. - {error}",
@@ -205,9 +198,7 @@ async def reset_password(ctx: discord.Interaction):
         await ctx.response.send_message(embed=embed, ephemeral=True)
     except Exception as e:
         await ctx.response.send_message("Something went wrong", ephemeral=True)
-        await bot_context.log(
-            ctx, f"ERROR: Password reset failed for {ctx.user.display_name}: {e}"
-        )
+        await bot_context.log(ctx, f"ERROR: Password reset failed for {ctx.user.display_name}: {e}")
 
 
 def setup(client, context):

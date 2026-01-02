@@ -6,7 +6,6 @@ from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from server.settings import METRIC_SERVER_URL
 
 MAX_ALL_METRICS_LENGTH = 100
@@ -43,9 +42,7 @@ class MetricServerAPI:
             metric_url = METRIC_SERVER_URL
             response = requests.post(metric_url + endpoint, json={"id": job_id})
             if response.status_code == 404:
-                raise Exception(
-                    f"Job with ID '{job_id}' not found in the metric service."
-                )
+                raise Exception(f"Job with ID '{job_id}' not found in the metric service.")
             response.raise_for_status()  # Raise for other 4xx/5xx errors
         except requests.exceptions.RequestException as e:
             logger.error(f"Error posting data to metric service: {e}")
@@ -60,9 +57,7 @@ class GetAllContainerStatus(APIView, MetricServerAPI):
             data = self.get_from_metric_service("/status")
             return Response(status=status.HTTP_200_OK, data=data)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class GetRunningContainer(APIView, MetricServerAPI):
@@ -71,14 +66,10 @@ class GetRunningContainer(APIView, MetricServerAPI):
     def get(self, request: Request):
         try:
             data = self.get_from_metric_service("/status")
-            running_containers = [
-                key for key, value in data.items() if value == "running"
-            ]
+            running_containers = [key for key, value in data.items() if value == "running"]
             return Response(status=status.HTTP_200_OK, data=running_containers)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class GetChronosHealth(APIView, MetricServerAPI):
@@ -100,9 +91,7 @@ class GetContainerMetadata(APIView, MetricServerAPI):
             data = self.get_from_metric_service("/container/" + container_name)
             return Response(status=status.HTTP_200_OK, data=data)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class GetContainerRecentUsage(APIView, MetricServerAPI):
@@ -113,9 +102,7 @@ class GetContainerRecentUsage(APIView, MetricServerAPI):
             data = self.get_from_metric_service("/usage/" + container_name)
             return Response(status=status.HTTP_200_OK, data=data)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class GetContainerUsageHistory(APIView, MetricServerAPI):
@@ -126,9 +113,7 @@ class GetContainerUsageHistory(APIView, MetricServerAPI):
             data = self.get_from_metric_service("/usage/" + container_name + "/all")
             return Response(status=status.HTTP_200_OK, data=data)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class DisableMetricTask(APIView, MetricServerAPI):
@@ -149,12 +134,8 @@ class DisableMetricTask(APIView, MetricServerAPI):
             )
         except Exception as e:
             if "not found" in str(e).lower():
-                return Response(
-                    status=status.HTTP_404_NOT_FOUND, data={"error": str(e)}
-                )
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+                return Response(status=status.HTTP_404_NOT_FOUND, data={"error": str(e)})
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class EnableMetricCollection(APIView, MetricServerAPI):
@@ -168,9 +149,7 @@ class EnableMetricCollection(APIView, MetricServerAPI):
                 data={"message": "Successfully enable metric collection"},
             )
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class DisableMetricCollection(APIView, MetricServerAPI):
@@ -184,9 +163,7 @@ class DisableMetricCollection(APIView, MetricServerAPI):
                 data={"message": "Successfully disable metric collection"},
             )
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class GetMetricCollectionStatus(APIView, MetricServerAPI):
@@ -194,15 +171,11 @@ class GetMetricCollectionStatus(APIView, MetricServerAPI):
 
     def get(self, request: Request):
         try:
-            data = self.get_from_metric_service(
-                "/job/" + METRIC_COLLECT_JOB_ID + "/status"
-            )
+            data = self.get_from_metric_service("/job/" + METRIC_COLLECT_JOB_ID + "/status")
             res = data.get("status")[METRIC_COLLECT_JOB_ID]
             return Response(status=status.HTTP_200_OK, data={"status": res})
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class EnableMetricTask(APIView, MetricServerAPI):
@@ -223,12 +196,8 @@ class EnableMetricTask(APIView, MetricServerAPI):
             )
         except Exception as e:
             if "not found" in str(e).lower():
-                return Response(
-                    status=status.HTTP_404_NOT_FOUND, data={"error": str(e)}
-                )
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+                return Response(status=status.HTTP_404_NOT_FOUND, data={"error": str(e)})
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class GetMetricTaskStatus(APIView, MetricServerAPI):
@@ -239,9 +208,7 @@ class GetMetricTaskStatus(APIView, MetricServerAPI):
             data = self.get_from_metric_service("/job/" + job_id + "/status")
             return Response(status=status.HTTP_200_OK, data=data)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})
 
 
 class MetricViewAllRecent(APIView, MetricServerAPI):
@@ -254,6 +221,4 @@ class MetricViewAllRecent(APIView, MetricServerAPI):
                 data = data[:MAX_ALL_METRICS_LENGTH]
             return Response(status=status.HTTP_200_OK, data=data)
         except Exception as e:
-            return Response(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)}
-            )
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR, data={"error": str(e)})

@@ -98,4 +98,3 @@ case "$SERVICE" in
 esac
 
 log INFO "Build complete"
-

@@ -37,9 +37,7 @@ class Command(BaseCommand):
         """Get availability slots for all members."""
         return {
             member.member.id: (
-                InterviewAvailability.objects.get(
-                    member=member.member
-                ).interview_availability_slots
+                InterviewAvailability.objects.get(member=member.member).interview_availability_slots
                 if InterviewAvailability.objects.filter(member=member.member).exists()
                 else [[False] * 48 for _ in range(7)]
             )
@@ -53,9 +51,7 @@ class Command(BaseCommand):
         pool_members = self.get_pool_members()
 
         if len(pool_members) < 2:
-            self.stdout.write(
-                self.style.ERROR("Not enough members in the pool to pair interviews")
-            )
+            self.stdout.write(self.style.ERROR("Not enough members in the pool to pair interviews"))
             return
 
         self.stdout.write(f"Found {len(pool_members)} members in the pool")
@@ -129,9 +125,7 @@ class Command(BaseCommand):
                     InterviewPool.objects.filter(member__in=[p1, p2]).delete()
 
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"\nSuccessfully created {len(paired_interviews)} interviews"
-                )
+                self.style.SUCCESS(f"\nSuccessfully created {len(paired_interviews)} interviews")
             )
 
             # display remaining unpaired members

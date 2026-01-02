@@ -1,8 +1,10 @@
 import logging
 from typing import Callable
+
 from pika.exchange_type import ExchangeType
-from .core.manager import RabbitMQManager
+
 from .core.connection_manager import ConnectionManager
+from .core.manager import RabbitMQManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,9 +21,7 @@ def consumer(
     declare_exchange=True,
 ) -> Callable:
     """decorator for registering consumers"""
-    return _manager.register_callback(
-        exchange, declare_exchange, queue, routing_key, exchange_type
-    )
+    return _manager.register_callback(exchange, declare_exchange, queue, routing_key, exchange_type)
 
 
 def producer(

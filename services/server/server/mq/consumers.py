@@ -21,9 +21,7 @@ async def verified_email_callback(
     logger.info(f"Received verified email message: {body}")
 
 
-@mq.consumer(
-    queue="server.reviewed-resume", exchange="swecc-ai-exchange", routing_key="reviewed"
-)
+@mq.consumer(queue="server.reviewed-resume", exchange="swecc-ai-exchange", routing_key="reviewed")
 async def reviewed_feedback(
     body: bytes,
     properties: BasicProperties,
@@ -52,15 +50,11 @@ async def reviewed_feedback(
             return False
 
         if resume_object.member.id != int(user_id):
-            logger.error(
-                f"Resume with ID {resume_id} does not belong to user {user_id}"
-            )
+            logger.error(f"Resume with ID {resume_id} does not belong to user {user_id}")
             return False
 
         if resume_object.file_name != file_name:
-            logger.error(
-                f"Resume with ID {resume_id} does not have file name {file_name}"
-            )
+            logger.error(f"Resume with ID {resume_id} does not have file name {file_name}")
             return False
 
         resume_object.feedback = feedback

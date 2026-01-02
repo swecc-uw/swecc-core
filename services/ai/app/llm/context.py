@@ -1,8 +1,9 @@
-from dataclasses import dataclass
-from collections import deque
-from .message import Message
 import logging
+from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
+
+from .message import Message
 
 logger = logging.getLogger(__name__)
 

@@ -15,9 +15,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "channel_id",
-                    models.BigIntegerField(
-                        db_index=True, primary_key=True, serialize=False
-                    ),
+                    models.BigIntegerField(db_index=True, primary_key=True, serialize=False),
                 ),
                 ("channel_name", models.CharField(max_length=255)),
                 (

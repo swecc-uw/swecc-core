@@ -43,13 +43,9 @@ class Command(BaseCommand):
         cohort_stats = CohortStats.objects.get_or_create(cohort=cohort, member=user)[0]
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Cohort Stats {CohortStatsSerializer(cohort_stats).data} created"
-            )
+            self.style.SUCCESS(f"Cohort Stats {CohortStatsSerializer(cohort_stats).data} created")
         )
 
         cohort.save()
 
-        self.stdout.write(
-            self.style.SUCCESS(f"Added {user.username} to cohort {cohort.name}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Added {user.username} to cohort {cohort.name}"))

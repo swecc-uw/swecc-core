@@ -79,6 +79,4 @@ class SynchronousRabbitProducer:
                     body=body,
                 )
             except Exception as retry_e:
-                raise Exception(
-                    f"Failed to publish message after retry: {retry_e}"
-                ) from e
+                raise Exception(f"Failed to publish message after retry: {retry_e}") from e

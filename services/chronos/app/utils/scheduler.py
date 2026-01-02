@@ -1,16 +1,21 @@
-from contextlib import asynccontextmanager
 import asyncio
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
+
+from app.core.config import settings
+from app.services.docker_service import DockerService
+from app.utils.docker import callback_from_docker_events
+from app.utils.task import (
+    MAPPING_TASKS_TO_ID,
+    clean_up_docker_events_task,
+    compact_data_task,
+    update_to_db_task,
+)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from datetime import datetime
 from fastapi import FastAPI
-from app.services.docker_service import DockerService
-from app.utils.docker import callback_from_docker_events
-from app.core.config import settings
-import logging
-
-from app.utils.task import update_to_db_task, MAPPING_TASKS_TO_ID, compact_data_task, clean_up_docker_events_task
 
 mapping = {
     "s": "second",
@@ -21,8 +26,10 @@ mapping = {
 
 ALLOWED_JOBS = [settings.POLL_DATA_JOB_ID, settings.COMPACT_DATA_JOB_ID]
 
+
 class Scheduler:
     """Scheduler class for running periodic or one-time tasks."""
+
     _instance = None
     _paused_job = []
 
@@ -32,7 +39,7 @@ class Scheduler:
         return cls._instance
 
     def __init__(self):
-       if not hasattr(self, "_initialized"):
+        if not hasattr(self, "_initialized"):
             self.logger = logging.getLogger("Scheduler")
             self.logger.setLevel(logging.INFO)
             logging.basicConfig(level=logging.INFO)
@@ -84,27 +91,27 @@ class Scheduler:
         """List all active jobs."""
         jobs = self.scheduler.get_jobs()
         for job in jobs:
-            if(job.id not in ALLOWED_JOBS):
+            if job.id not in ALLOWED_JOBS:
                 jobs.remove(job)
         return [job.id for job in jobs]
 
     def pause_job(self, job_id):
         """Pause a scheduled job."""
         # preliminary hide jobs from the list
-        if(job_id in ALLOWED_JOBS):
+        if job_id in ALLOWED_JOBS:
             self.scheduler.pause_job(job_id)
             self._paused_job.append(job_id)
 
     def resume_job(self, job_id):
         """Resume a paused job."""
-        if(job_id in ALLOWED_JOBS):
+        if job_id in ALLOWED_JOBS:
             self.scheduler.resume_job(job_id)
             self._paused_job.remove(job_id)
 
     def get_job_status(self, job_id):
         """Get the status of a job."""
-        if(job_id in ALLOWED_JOBS):
-            if(job_id in self._paused_job):
+        if job_id in ALLOWED_JOBS:
+            if job_id in self._paused_job:
                 return {job_id: "paused"}
             else:
                 return {job_id: "running"}
@@ -124,6 +131,7 @@ class Scheduler:
 scheduler = Scheduler()
 docker_service = DockerService()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting Docker event listener...")  # Debug
@@ -134,12 +142,20 @@ async def lifespan(app: FastAPI):
     task.cancel()
     scheduler.shutdown()
 
+
 scheduler.add_job_every(update_to_db_task, "m", 10, MAPPING_TASKS_TO_ID[update_to_db_task])
 scheduler.add_job_every(compact_data_task, "w", 2, MAPPING_TASKS_TO_ID[compact_data_task])
-scheduler.add_job_every(clean_up_docker_events_task, "w", 1, MAPPING_TASKS_TO_ID[clean_up_docker_events_task])
+scheduler.add_job_every(
+    clean_up_docker_events_task,
+    "w",
+    1,
+    MAPPING_TASKS_TO_ID[clean_up_docker_events_task],
+)
+
 
 async def listen_to_docker_events():
     """Background task to listen for Docker events asynchronously."""
+
     def read_events():
         for event in docker_service.get_socket_conenction():
             callback_from_docker_events(event)

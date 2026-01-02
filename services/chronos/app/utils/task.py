@@ -1,17 +1,18 @@
+import logging
+from datetime import datetime, timedelta
+
 from app.core.config import settings
 from app.models.container import convert_health_metric_to_dynamo
-from app.services.docker_service import DockerService
-from app.services.dynamodb_service import db
 from app.services.data.data_compact import DataCompactManager
 from app.services.data.prune_exited import PruneExitedAfterDays
 from app.services.data.reduce_by_ten import ReduceByTenForEachContainer
-
-import logging
-from datetime import datetime, timedelta
+from app.services.docker_service import DockerService
+from app.services.dynamodb_service import db
 
 docker_service = DockerService()
 logger = logging.getLogger(__name__)
 compact_manager = DataCompactManager([PruneExitedAfterDays(), ReduceByTenForEachContainer()])
+
 
 def clean_up_docker_events_task():
     logger.info("Running clean up docker events task")
@@ -20,6 +21,7 @@ def clean_up_docker_events_task():
     logger.info(f"Found {len(old_items)} items older than two weeks")
     db.delete_bulk_items("docker_events", old_items)
     logger.info(f"Deleted {len(old_items)} items")
+
 
 def compact_data_task():
     logger.info("Running compacting data task")
@@ -46,8 +48,10 @@ def update_to_db_task():
         except Exception as e:
             logger.info(f"Error adding item to table: {e}")
 
+
 def hidden_task():
     print("This is a hidden task")
+
 
 def expose_tasks():
     print("This is an exposed task")

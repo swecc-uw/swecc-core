@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from .connection_manager import ConnectionManager
 
 LOGGER = logging.getLogger(__name__)
@@ -66,18 +67,14 @@ class AsyncRabbitProducer:
                 callback=self.on_exchange_declareok,
             )
         else:
-            LOGGER.warning(
-                f"Channel is not open for exchange declaration: {self._exchange}"
-            )
+            LOGGER.warning(f"Channel is not open for exchange declaration: {self._exchange}")
 
     def on_exchange_declareok(self, _unused_frame):
         LOGGER.info(f"Exchange declared: {self._exchange}")
         # signal ready to publish
         self._ready.set()
 
-    async def publish(
-        self, message, routing_key=None, properties=None, mandatory=False
-    ):
+    async def publish(self, message, routing_key=None, properties=None, mandatory=False):
         retry_count = 0
 
         while not self._connected and retry_count < MAX_RETRIES:
@@ -97,9 +94,7 @@ class AsyncRabbitProducer:
                 await asyncio.sleep(1)
 
         if not self._connected or not self._channel:
-            LOGGER.error(
-                f"No connection or channel available for publishing to {self._exchange}"
-            )
+            LOGGER.error(f"No connection or channel available for publishing to {self._exchange}")
             return False
 
         await self._ready.wait()

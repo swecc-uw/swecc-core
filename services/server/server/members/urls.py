@@ -20,9 +20,7 @@ urlpatterns = [
         views.ProfilePictureUploadView.as_view(),
         name="upload_profile_picture",
     ),
-    path(
-        "reset-password/", views.PasswordResetRequest.as_view(), name="reset-password"
-    ),
+    path("reset-password/", views.PasswordResetRequest.as_view(), name="reset-password"),
     path("admin/", views.AdminList.as_view(), name="admin-list"),
     path(
         "update-discord-username",

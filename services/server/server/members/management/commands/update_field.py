@@ -31,12 +31,8 @@ class Command(BaseCommand):
     help = f"Command to set a particular field (defaults to `username`) of a user to a given value. Disallowed fields include: {', '.join(map(output_info, disallowed_fields))}."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--username", type=str, help="SWECC Interview Website Username"
-        )
-        parser.add_argument(
-            "--field", type=str, help="Field to update", default="username"
-        )
+        parser.add_argument("--username", type=str, help="SWECC Interview Website Username")
+        parser.add_argument("--field", type=str, help="Field to update", default="username")
         parser.add_argument("--value", type=str, help="Value to set field to")
 
     def handle(self, *args, **options):
@@ -46,9 +42,7 @@ class Command(BaseCommand):
 
         if field in self.disallowed_fields:
             self.stdout.write(
-                self.style.ERROR(
-                    f"Disallowed from modifying field {Command.output_info(field)}."
-                )
+                self.style.ERROR(f"Disallowed from modifying field {Command.output_info(field)}.")
             )
             return
 
@@ -70,9 +64,7 @@ class Command(BaseCommand):
 
         if field_type not in self.allowed_types:
             self.stdout.write(
-                self.style.ERROR(
-                    f"Cannot write to type {Command.output_info(field_type)}."
-                )
+                self.style.ERROR(f"Cannot write to type {Command.output_info(field_type)}.")
             )
             return
 

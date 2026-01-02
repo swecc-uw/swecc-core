@@ -68,9 +68,7 @@ class CommonAvailabilityStableMatching(PairingAlgorithm):
         """
         return np.sum(np.logical_and(availability1, availability2))
 
-    def _validate_input(
-        self, pool_member_ids: List[int], require_even: bool = True
-    ) -> None:
+    def _validate_input(self, pool_member_ids: List[int], require_even: bool = True) -> None:
         """
         validate input parameters for the pairing algorithm.
 
@@ -106,13 +104,9 @@ class CommonAvailabilityStableMatching(PairingAlgorithm):
         preferences = self._calculate_preferences(pool_member_ids, common_slots)
         pairs = self._stable_matching(preferences)
 
-        return MatchingResult(
-            pairs=pairs, common_slots=common_slots, preference_scores=preferences
-        )
+        return MatchingResult(pairs=pairs, common_slots=common_slots, preference_scores=preferences)
 
-    def _calculate_common_slots_matrix(
-        self, pool_member_ids: List[int]
-    ) -> NDArray[np.int_]:
+    def _calculate_common_slots_matrix(self, pool_member_ids: List[int]) -> NDArray[np.int_]:
         num_members = len(pool_member_ids)
         common_slots = np.zeros((num_members, num_members), dtype=np.int_)
 
@@ -121,9 +115,7 @@ class CommonAvailabilityStableMatching(PairingAlgorithm):
 
             for j in range(i + 1, num_members):
                 availability2 = self._availabilities[pool_member_ids[j]]
-                common_count = self.calculate_common_slots_numpy(
-                    availability1, availability2
-                )
+                common_count = self.calculate_common_slots_numpy(availability1, availability2)
                 common_slots[i, j] = common_count
                 common_slots[j, i] = common_count
 
@@ -153,9 +145,7 @@ class CommonAvailabilityStableMatching(PairingAlgorithm):
 
         return preferences
 
-    def _stable_matching(
-        self, preferences: Dict[int, List[Tuple[int, int]]]
-    ) -> List[int]:
+    def _stable_matching(self, preferences: Dict[int, List[Tuple[int, int]]]) -> List[int]:
         """
         Gale-Shapley algorithm for stable matching.
         """
@@ -181,9 +171,9 @@ class CommonAvailabilityStableMatching(PairingAlgorithm):
                     break
                 else:
                     current_partner = paired[partner]
-                    if preference_indices[partner].get(
-                        member, float("inf")
-                    ) < preference_indices[partner].get(current_partner, float("inf")):
+                    if preference_indices[partner].get(member, float("inf")) < preference_indices[
+                        partner
+                    ].get(current_partner, float("inf")):
                         paired[partner] = member
                         free_members.append(current_partner)
                         break

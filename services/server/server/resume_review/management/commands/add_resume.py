@@ -12,12 +12,7 @@ class Command(BaseCommand):
         file_name = options.get("file_name")
         file_size = options.get("file_size")
 
-        if (
-            feedback is None
-            or username is None
-            or file_name is None
-            or file_size is None
-        ):
+        if feedback is None or username is None or file_name is None or file_size is None:
             self.stdout.write("Error processing parameters")
             return
         member = User.objects.filter(username=username).first()
@@ -35,17 +30,11 @@ class Command(BaseCommand):
         self.stdout.write("Successfully created resume")
 
     def add_arguments(self, parser: CommandParser) -> None:
-        parser.add_argument(
-            "--feedback", type=str, help="The feedback on this particular resume"
-        )
+        parser.add_argument("--feedback", type=str, help="The feedback on this particular resume")
         parser.add_argument(
             "--username",
             type=str,
             help="The username associated with this particular resume",
         )
-        parser.add_argument(
-            "--file_name", type=str, help="The file name of this particular resume"
-        )
-        parser.add_argument(
-            "--file_size", type=int, help="The file size of this particular resume"
-        )
+        parser.add_argument("--file_name", type=str, help="The file name of this particular resume")
+        parser.add_argument("--file_size", type=int, help="The file size of this particular resume")

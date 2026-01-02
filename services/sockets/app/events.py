@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
 class EventType(str, Enum):

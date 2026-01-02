@@ -30,9 +30,7 @@ class AsyncRabbitProducer:
 
         self._ready.clear()
 
-        self._connection = await ConnectionManager().connect(
-            loop=loop or asyncio.get_event_loop()
-        )
+        self._connection = await ConnectionManager().connect(loop=loop or asyncio.get_event_loop())
 
         LOGGER.info(f"Producer connecting to {self._url} for exchange {self._exchange}")
         if not self._connection:
@@ -69,18 +67,14 @@ class AsyncRabbitProducer:
                 callback=self.on_exchange_declareok,
             )
         else:
-            LOGGER.warning(
-                f"Channel is not open for exchange declaration: {self._exchange}"
-            )
+            LOGGER.warning(f"Channel is not open for exchange declaration: {self._exchange}")
 
     def on_exchange_declareok(self, _unused_frame):
         LOGGER.info(f"Exchange declared: {self._exchange}")
         # signal ready to publish
         self._ready.set()
 
-    async def publish(
-        self, message, routing_key=None, properties=None, mandatory=False
-    ):
+    async def publish(self, message, routing_key=None, properties=None, mandatory=False):
         retry_count = 0
 
         while not self._connected and retry_count < MAX_RETRIES:
@@ -100,9 +94,7 @@ class AsyncRabbitProducer:
                 await asyncio.sleep(1)
 
         if not self._connected or not self._channel:
-            LOGGER.error(
-                f"No connection or channel available for publishing to {self._exchange}"
-            )
+            LOGGER.error(f"No connection or channel available for publishing to {self._exchange}")
             return False
 
         await self._ready.wait()

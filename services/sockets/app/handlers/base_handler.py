@@ -1,8 +1,10 @@
+import json
+import logging
+
 from ..event_emitter import EventEmitter
 from ..events import Event, EventType
 from ..message import Message, MessageType
-import logging
-import json
+
 
 class BaseHandler:
     def __init__(self, event_emitter: EventEmitter, service_name: str):
@@ -15,7 +17,6 @@ class BaseHandler:
 
         self.logger = logging.getLogger(f"{self.service_name}Handler")
 
-
     async def handle_connect(self, event: Event) -> None:
         try:
             message = Message(
@@ -27,7 +28,10 @@ class BaseHandler:
                 f"{self.service_name} service: User {event.username} (ID: {event.user_id}) connected"
             )
         except Exception as e:
-            self.logger.error(f"Error in handle_connect for {self.service_name} service: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Error in handle_connect for {self.service_name} service: {str(e)}",
+                exc_info=True,
+            )
 
     async def handle_message(self, event: Event) -> None:
         self.logger.info(
@@ -41,7 +45,10 @@ class BaseHandler:
                 f"{self.service_name} service: User {event.username} (ID: {user_id}) disconnected"
             )
         except Exception as e:
-            self.logger.error(f"Error in handle_disconnect for {self.service_name} service: {str(e)}", exc_info=True)
+            self.logger.error(
+                f"Error in handle_disconnect for {self.service_name} service: {str(e)}",
+                exc_info=True,
+            )
 
     async def safe_send(self, websocket, data):
         """Safely send a message, handling potential disconnection gracefully"""

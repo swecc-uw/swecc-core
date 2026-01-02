@@ -74,14 +74,10 @@ class MessageBuffer:
                     return
 
                 discord_ids = {
-                    discord_id
-                    for counts in aggregated.values()
-                    for discord_id in counts
+                    discord_id for counts in aggregated.values() for discord_id in counts
                 }
 
-                users = User.objects.filter(discord_id__in=discord_ids).values(
-                    "id", "discord_id"
-                )
+                users = User.objects.filter(discord_id__in=discord_ids).values("id", "discord_id")
                 user_map = {u["discord_id"]: u["id"] for u in users}
 
                 missing = discord_ids - user_map.keys()
@@ -106,9 +102,7 @@ class MessageBuffer:
                         if discord_id in user_map
                     ]
 
-                    DiscordMessageStats.objects.bulk_create(
-                        create_batch, ignore_conflicts=True
-                    )
+                    DiscordMessageStats.objects.bulk_create(create_batch, ignore_conflicts=True)
 
                     stats = DiscordMessageStats.objects.filter(
                         member_id__in=[m.member_id for m in create_batch],
@@ -116,8 +110,7 @@ class MessageBuffer:
                     ).values("channel_id", "member_id", "id")
 
                     stats_map = {
-                        (int(s["member_id"]), int(s["channel_id"])): int(s["id"])
-                        for s in stats
+                        (int(s["member_id"]), int(s["channel_id"])): int(s["id"]) for s in stats
                     }
 
                     update_batch = [
@@ -129,13 +122,10 @@ class MessageBuffer:
                         )
                         for discord_id, count in channel_counts.items()
                         if discord_id in user_map
-                        and ((member_id := user_map[discord_id]), channel_id)
-                        in stats_map
+                        and ((member_id := user_map[discord_id]), channel_id) in stats_map
                     ]
 
-                    DiscordMessageStats.objects.bulk_update(
-                        update_batch, ["message_count"]
-                    )
+                    DiscordMessageStats.objects.bulk_update(update_batch, ["message_count"])
                     stats_count += len(update_batch)
 
                 logger.info(

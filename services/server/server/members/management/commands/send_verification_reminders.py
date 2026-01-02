@@ -123,18 +123,10 @@ class Command(BaseCommand):
     help = "Command to send a reminder email to all unverified users"
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--all", action="store_true", help="Send reminder to all users"
-        )
-        parser.add_argument(
-            "--username", type=str, help="SWECC Interview Website Username"
-        )
-        parser.add_argument(
-            "--dry-run", action="store_true", help="Dry run, do not send emails"
-        )
-        parser.add_argument(
-            "--preview", action="store_true", help="Preview email content"
-        )
+        parser.add_argument("--all", action="store_true", help="Send reminder to all users")
+        parser.add_argument("--username", type=str, help="SWECC Interview Website Username")
+        parser.add_argument("--dry-run", action="store_true", help="Dry run, do not send emails")
+        parser.add_argument("--preview", action="store_true", help="Preview email content")
 
     def is_verified(self, user):
         return user.groups.filter(name="is_verified").exists()
@@ -174,9 +166,7 @@ class Command(BaseCommand):
 
     def preview_email(self, user):
         html_content = email_template(user)
-        self.stdout.write(
-            self.style.SUCCESS(f"\nPreview of email for {user.username}:\n")
-        )
+        self.stdout.write(self.style.SUCCESS(f"\nPreview of email for {user.username}:\n"))
         self.stdout.write(html_content)
         self.stdout.write("\n")
 
@@ -206,17 +196,13 @@ class Command(BaseCommand):
             return
 
         if options["dry_run"]:
-            self.stdout.write(
-                self.style.SUCCESS("Dry run completed. No emails were sent.")
-            )
+            self.stdout.write(self.style.SUCCESS("Dry run completed. No emails were sent."))
             return
 
         sent_count, error_count = 0, 0
         for user in users:
             success, message = self.send_reminder_email(user)
-            self.stdout.write(
-                self.style.SUCCESS(message) if success else self.style.ERROR(message)
-            )
+            self.stdout.write(self.style.SUCCESS(message) if success else self.style.ERROR(message))
 
             if success:
                 sent_count += 1

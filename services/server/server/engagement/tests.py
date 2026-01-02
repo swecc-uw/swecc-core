@@ -52,9 +52,7 @@ class AttendanceAPITests(AuthenticatedTestCase):
         super().setUp()
         self.client = APIClient()
         # Create test user
-        self.user = User.objects.create(
-            discord_id="123456789", discord_username="test_user"
-        )
+        self.user = User.objects.create(discord_id="123456789", discord_username="test_user")
         self.user2 = User.objects.create(
             username="2", discord_id="987654321", discord_username="test_user2"
         )
@@ -62,16 +60,12 @@ class AttendanceAPITests(AuthenticatedTestCase):
         self.session = AttendanceSession.objects.create(
             title="Test Session",
             key="test-key",
-            expires=(timezone.now() + timedelta(hours=1))
-            .isoformat()
-            .replace("+00:00", "Z"),
+            expires=(timezone.now() + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
         )
         self.expired_session = AttendanceSession.objects.create(
             title="Expired Session",
             key="expired-key",
-            expires=(timezone.now() - timedelta(hours=1))
-            .isoformat()
-            .replace("+00:00", "Z"),
+            expires=(timezone.now() - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
         )
 
     def test_create_session(self):
@@ -80,9 +74,7 @@ class AttendanceAPITests(AuthenticatedTestCase):
             {
                 "title": "New Session",
                 "key": "new-key",
-                "expires": (timezone.now() + timedelta(hours=1))
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "expires": (timezone.now() + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
             },
         )
         self.assertResponse(response, 201)
@@ -97,9 +89,7 @@ class AttendanceAPITests(AuthenticatedTestCase):
             {
                 "title": "New Session",
                 "key": "test-key",
-                "expires": (timezone.now() + timedelta(hours=1))
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "expires": (timezone.now() + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
             },
         )
         self.assertResponse(response, 400)
@@ -110,9 +100,7 @@ class AttendanceAPITests(AuthenticatedTestCase):
             {
                 "title": "New Session",
                 "key": "expired-key",
-                "expires": (timezone.now() - timedelta(hours=1))
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "expires": (timezone.now() - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
             },
         )
         self.assertResponse(response, 201)
@@ -134,9 +122,7 @@ class AttendanceAPITests(AuthenticatedTestCase):
 
     def test_get_session_attendees(self):
         self.session.attendees.add(self.user)
-        response = self.client.get(
-            f"/engagement/attendance/session/{self.session.session_id}/"
-        )
+        response = self.client.get(f"/engagement/attendance/session/{self.session.session_id}/")
         self.assertResponse(response, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id"], self.user.id)

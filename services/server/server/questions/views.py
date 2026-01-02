@@ -168,9 +168,7 @@ class QuestionQueueUpdateView(generics.GenericAPIView):
                         question = QuestionModel.objects.get(question_id=question_id)
                         questions.append(question)
                     except QuestionModel.DoesNotExist:
-                        logger.error(
-                            "Question not found during queue update: %s", question_id
-                        )
+                        logger.error("Question not found during queue update: %s", question_id)
                         return Response(
                             {"error": f"Question with ID {question_id} does not exist"},
                             status=status.HTTP_400_BAD_REQUEST,

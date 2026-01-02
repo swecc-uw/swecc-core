@@ -26,9 +26,7 @@ class ConnectionManager:
         logger.info(f"Connecting to {self._url}.")
 
         try:
-            if self._connection and not (
-                self._connection.is_closed or self._connection.is_closing
-            ):
+            if self._connection and not (self._connection.is_closed or self._connection.is_closing):
                 logger.info("Using existing connection.")
                 return self._connection
 
@@ -81,9 +79,7 @@ class ConnectionManager:
     async def close(self):
         self._closing = True
         logger.info("Closing connection...")
-        if self._connection and not (
-            self._connection.is_closing or self._connection.is_closed
-        ):
+        if self._connection and not (self._connection.is_closing or self._connection.is_closed):
             self._connection.close()
         self._connected = False
 

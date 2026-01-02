@@ -36,9 +36,7 @@ class Report(models.Model):
     )
 
     type = models.CharField(max_length=50, choices=REPORT_TYPE_CHOICES)
-    reporter_user_id = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="reporter"
-    )
+    reporter_user_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reporter")
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     updated = models.DateTimeField(auto_now=True)
@@ -55,16 +53,10 @@ class Report(models.Model):
     def get_associated_id(self):
         if self.type == "interview":
             return (
-                str(self.associated_interview.interview_id)
-                if self.associated_interview
-                else None
+                str(self.associated_interview.interview_id) if self.associated_interview else None
             )
         elif self.type == "question":
-            return (
-                str(self.associated_question.question_id)
-                if self.associated_question
-                else None
-            )
+            return str(self.associated_question.question_id) if self.associated_question else None
         elif self.type == "member":
             return str(self.associated_member.id) if self.associated_member else None
         return None

@@ -1,7 +1,9 @@
 import unittest
 from datetime import datetime, timedelta
+
 from app.models.container import DynamoHealthMetric
 from app.services.data.prune_exited import PruneExitedAfterDays
+
 
 class TestPruneExitedAfterDays(unittest.TestCase):
 
@@ -36,10 +38,38 @@ class TestPruneExitedAfterDays(unittest.TestCase):
         }
 
         self.test_data = [
-            DynamoHealthMetric(timestamp=old_timestamp, container_name="container_1", status="exited", started_at=None, finished_at=None, **junk),  # Should be pruned
-            DynamoHealthMetric(timestamp=old_timestamp, container_name="container_2", status="running", started_at=old_timestamp, finished_at=None, **junk),  # Should NOT be pruned
-            DynamoHealthMetric(timestamp=recent_timestamp, container_name="container_3", status="exited", started_at=None, finished_at=None, **junk),  # Should NOT be pruned
-            DynamoHealthMetric(timestamp=old_timestamp, container_name="container_4", status="exited", started_at="2023-01-01T00:00:00", finished_at=None, **junk),  # Should NOT be pruned
+            DynamoHealthMetric(
+                timestamp=old_timestamp,
+                container_name="container_1",
+                status="exited",
+                started_at=None,
+                finished_at=None,
+                **junk,
+            ),  # Should be pruned
+            DynamoHealthMetric(
+                timestamp=old_timestamp,
+                container_name="container_2",
+                status="running",
+                started_at=old_timestamp,
+                finished_at=None,
+                **junk,
+            ),  # Should NOT be pruned
+            DynamoHealthMetric(
+                timestamp=recent_timestamp,
+                container_name="container_3",
+                status="exited",
+                started_at=None,
+                finished_at=None,
+                **junk,
+            ),  # Should NOT be pruned
+            DynamoHealthMetric(
+                timestamp=old_timestamp,
+                container_name="container_4",
+                status="exited",
+                started_at="2023-01-01T00:00:00",
+                finished_at=None,
+                **junk,
+            ),  # Should NOT be pruned
         ]
 
     def test_compact(self):
@@ -49,7 +79,12 @@ class TestPruneExitedAfterDays(unittest.TestCase):
         expected_containers = {"container_2", "container_3", "container_4"}
         result_containers = {entry.container_name for entry in pruned_data}
 
-        self.assertSetEqual(result_containers, expected_containers, f"Expected {expected_containers}, got {result_containers}")
+        self.assertSetEqual(
+            result_containers,
+            expected_containers,
+            f"Expected {expected_containers}, got {result_containers}",
+        )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -1,16 +1,18 @@
-import discord
-from discord import app_commands
-from APIs.UselessAPIs import UselessAPIs
-from APIs.CalendarAPI import CalendarAPI
-from APIs.AdventOfCodeAPI import AdventOfCodeAPI
-from APIs.SweccAPI import SweccAPI
-from APIs.GeminiAPI import GeminiAPI
 import os
+from typing import Optional
+
+import discord
+import mq.producers
+from APIs.AdventOfCodeAPI import AdventOfCodeAPI
+from APIs.CalendarAPI import CalendarAPI
+from APIs.GeminiAPI import GeminiAPI
+from APIs.SweccAPI import SweccAPI
+from APIs.UselessAPIs import UselessAPIs
+from discord import app_commands
 from dotenv import load_dotenv
 from mq.events import AttendanceEvent, CohortStatsUpdate
+
 from .utils import handle_cohort_stat_update, is_valid_school_email
-from typing import Optional
-import mq.producers
 
 useless = UselessAPIs()
 calendar = CalendarAPI()
@@ -19,7 +21,8 @@ swecc_api = SweccAPI()
 gemini_api = GeminiAPI()
 
 LEADERBOARD_KEY = os.getenv("AOC_LEADERBOARD_KEY")
-TIMELINE_CHANNEL = int(os.getenv("TIMELINE_CHANNEL"))
+TIMELINE_CHANNEL = int(os.getenv("TIMELINE_CHANNEL", "0")) or None
+
 
 async def bold_key_parts(ctx: discord.Interaction):
     message = (
@@ -27,7 +30,6 @@ async def bold_key_parts(ctx: discord.Interaction):
         "This draws attention without overloading your resume, keeping the focus on the most relevant skills.\n\n"
         "Example:\n"
         "- 'Designed a ticketing dashboard in **React** and **Node.js**, reducing support resolution time by 28%.'"
-
     )
     await ctx.response.send_message(message)
 
@@ -49,7 +51,6 @@ async def jakes_resume(ctx: discord.Interaction):
     message = (
         "Switch to Jake’s Resume format for a cleaner layout that’s easy for recruiters and ATS to scan: "
         "https://www.overleaf.com/latex/templates/jakes-resume/syzfjbzwjncs. "
-
         "\n\n If you use your UW email, you also get access to the student version of Overleaf for free."
     )
     await ctx.response.send_message(message)
@@ -97,9 +98,7 @@ async def say_hi(ctx: discord.Interaction):
 async def aoc_leaderboard(ctx: discord.Interaction):
     leaderboard_data = await aoc_api.get_leaderboard()
 
-    embed = discord.Embed(
-        title=f"🎄 Current Leaderboard 🎄", description=f"", color=0x1F8B4C
-    )
+    embed = discord.Embed(title=f"🎄 Current Leaderboard 🎄", description=f"", color=0x1F8B4C)
 
     if leaderboard_data:
         leaderboard_text = "\n".join(
@@ -149,9 +148,7 @@ async def leetcode_leaderboard(ctx: discord.Interaction, order: str = "total"):
             f"🔴 Hard: {user['hard_solved']}"
             for i, user in enumerate(leaderboard_data["results"][:10])
         ]
-        embed.add_field(
-            name="Top 10", value="\n\n".join(leaderboard_text[:5]), inline=False
-        )
+        embed.add_field(name="Top 10", value="\n\n".join(leaderboard_text[:5]), inline=False)
         embed.add_field(name="", value="\n\n".join(leaderboard_text[5:]), inline=False)
 
     embed.add_field(
@@ -190,9 +187,7 @@ async def github_leaderboard(ctx: discord.Interaction, order: str = "commits"):
             f"👥 Followers: {user['followers']}"
             for i, user in enumerate(leaderboard_data["results"][:10])
         ]
-        embed.add_field(
-            name="Top 10", value="\n\n".join(leaderboard_text[:5]), inline=False
-        )
+        embed.add_field(name="Top 10", value="\n\n".join(leaderboard_text[:5]), inline=False)
         embed.add_field(name="", value="\n\n".join(leaderboard_text[5:]), inline=False)
 
     embed.add_field(
@@ -246,9 +241,7 @@ async def attend(ctx: discord.Interaction, session_key: str):
         )
     else:
 
-        embed = discord.Embed(
-            title="Error", description=data["error"], color=discord.Color.red()
-        )
+        embed = discord.Embed(title="Error", description=data["error"], color=discord.Color.red())
 
         await ctx.response.send_message(embed=embed, ephemeral=bot_context.ephemeral)
 
@@ -256,9 +249,7 @@ async def attend(ctx: discord.Interaction, session_key: str):
 async def cohort(ctx: discord.Interaction, show_all: bool = False):
     try:
         await ctx.response.defer(ephemeral=bot_context.ephemeral)
-        cohorts = await swecc_api.get_cohort_stats(
-            ctx.user.id if not show_all else None
-        )
+        cohorts = await swecc_api.get_cohort_stats(ctx.user.id if not show_all else None)
 
         if not cohorts:
             embed = discord.Embed(
@@ -321,9 +312,7 @@ async def cohort(ctx: discord.Interaction, show_all: bool = False):
 @app_commands.describe(cohort_name="The cohort name (optional)")
 async def daily_check(ctx: discord.Interaction, cohort_name: Optional[str] = None):
     stat_url = "dailycheck"
-    data, error = await swecc_api.update_cohort_stats(
-        ctx.user.id, stat_url, cohort_name
-    )
+    data, error = await swecc_api.update_cohort_stats(ctx.user.id, stat_url, cohort_name)
     await mq.producers.publish_cohort_stats_update_event(
         CohortStatsUpdate(ctx.user.id, stat_url, cohort_name=cohort_name)
     )
@@ -339,13 +328,9 @@ async def daily_check(ctx: discord.Interaction, cohort_name: Optional[str] = Non
 
 
 @app_commands.describe(cohort_name="The cohort name (optional)")
-async def online_assessment(
-    ctx: discord.Interaction, cohort_name: Optional[str] = None
-):
+async def online_assessment(ctx: discord.Interaction, cohort_name: Optional[str] = None):
     stat_url = "oa"
-    data, error = await swecc_api.update_cohort_stats(
-        ctx.user.id, stat_url, cohort_name
-    )
+    data, error = await swecc_api.update_cohort_stats(ctx.user.id, stat_url, cohort_name)
     await mq.producers.publish_cohort_stats_update_event(
         CohortStatsUpdate(ctx.user.id, stat_url, cohort_name=cohort_name)
     )
@@ -469,6 +454,7 @@ async def request_verify_school_email(ctx: discord.Interaction, email: str):
         ephemeral=bot_context.ephemeral,
     )
 
+
 class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
     def __init__(self, bot_context, is_authorized, username, bot):
         super().__init__(timeout=None)
@@ -509,38 +495,36 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         role = self.role.value
         timeline = self.timeline.value
 
-        processed_timeline = await gemini_api.process_timeline_message(timeline, self.is_authorized, self.username) # pass only the timeline
+        processed_timeline = await gemini_api.process_timeline_message(
+            timeline, self.is_authorized, self.username
+        )  # pass only the timeline
+
+        if not TIMELINE_CHANNEL:
+            await interaction.followup.send(
+                "Timeline feature is not configured.", ephemeral=True
+            )
+            return
 
         channel = self.bot.get_channel(TIMELINE_CHANNEL)
 
         if processed_timeline == "Not relevant":
-            await interaction.followup.send(
-                "Your description was not relevant!",
-                ephemeral=True
-            )
+            await interaction.followup.send("Your description was not relevant!", ephemeral=True)
             return
 
-        embed = discord.Embed(
-            title=f"Process for {company_name}",
-            color=discord.Color.blue()
-        )
+        embed = discord.Embed(title=f"Process for {company_name}", color=discord.Color.blue())
         embed.add_field(name="Company:", value=company_name, inline=True)
         embed.add_field(name="Role:", value=role, inline=True)
         embed.add_field(name="Timeline:", value=processed_timeline, inline=False)
 
         await channel.send(embed=embed)
 
-        await interaction.followup.send(
-            "Your process timeline was submitted!",
-            ephemeral=True
-        )
+        await interaction.followup.send("Your process timeline was submitted!", ephemeral=True)
+
 
 async def process(ctx: discord.Interaction):
     verified_rid = bot_context.verified_role_id
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
-        sys_msg = (
-            f"{ctx.user.display_name} has tried to add a process timeline for a company."
-        )
+        sys_msg = f"{ctx.user.display_name} has tried to add a process timeline for a company."
         await ctx.response.send_modal(
             ProcessModal(
                 bot_context,
@@ -552,10 +536,13 @@ async def process(ctx: discord.Interaction):
         await bot_context.log(ctx, sys_msg)
     else:
         usr_msg = f"You are not verified. Please use /verify to be able to add a process timeline."
-        sys_msg = f"ERROR: {ctx.user.display_name} not verified and tried to add a process timeline."
+        sys_msg = (
+            f"ERROR: {ctx.user.display_name} not verified and tried to add a process timeline."
+        )
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
+
 
 def setup(client, context):
     global bot_context

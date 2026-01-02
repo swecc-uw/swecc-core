@@ -1,16 +1,22 @@
-import requests, os, logging, pytz
+import logging
+import os
 import re
-from dateutil.rrule import rrulestr
 from datetime import datetime
+
+import pytz
+import requests
+from dateutil.rrule import rrulestr
 from dotenv import load_dotenv
 
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s"
+)
 
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
 
 class CalendarAPI:
     def __init__(self):
         load_dotenv()
-        self.url = os.getenv('CALENDAR_URL')
+        self.url = os.getenv("CALENDAR_URL")
 
     def get_url(self):
         return self.url
@@ -23,21 +29,20 @@ class CalendarAPI:
         return str(day) + suffix
 
     def format_date(self, local_start, local_end):
-        formatted_date = local_start.strftime('%a, %b ')
+        formatted_date = local_start.strftime("%a, %b ")
         day_with_suffix = self.get_suffix(local_start.day)
 
-        formatted_start_time = local_start.strftime('%I:%M %p').lstrip("0")
-        formatted_end_time = local_end.strftime('%I:%M %p').lstrip("0")
+        formatted_start_time = local_start.strftime("%I:%M %p").lstrip("0")
+        formatted_end_time = local_end.strftime("%I:%M %p").lstrip("0")
 
         return f"{formatted_date}{day_with_suffix} {formatted_start_time} - {formatted_end_time}"
 
-
     def create_return_format(self, event):
         return {
-                "name": event.name,
-                "date": self.format_date(event.begin.datetime, event.end.datetime),
-                "location": event.location,
-                "description": event.description,
+            "name": event.name,
+            "date": self.format_date(event.begin.datetime, event.end.datetime),
+            "location": event.location,
+            "description": event.description,
         }
 
     async def get_next_meeting(self):

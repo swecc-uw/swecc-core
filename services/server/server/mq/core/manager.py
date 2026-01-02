@@ -65,9 +65,7 @@ class RabbitMQManager:
         def decorator(func):
             producer_name = f"{func.__module__}.{func.__name__}"
 
-            async def producer_factory(
-                message, routing_key_override=None, properties=None
-            ):
+            async def producer_factory(message, routing_key_override=None, properties=None):
                 producer = self.get_or_create_producer(
                     producer_name, exchange, exchange_type, routing_key
                 )
@@ -186,9 +184,7 @@ class RabbitMQManager:
             while True:
                 try:
                     if not ConnectionManager().is_connected():
-                        LOGGER.warning(
-                            "RabbitMQ connection lost, attempting to reconnect"
-                        )
+                        LOGGER.warning("RabbitMQ connection lost, attempting to reconnect")
                         try:
                             await ConnectionManager().connect(loop=loop)
                         except Exception as e:
@@ -198,27 +194,19 @@ class RabbitMQManager:
 
                     for name, consumer in list(self.consumers.items()):
                         if not consumer._connection or not consumer._channel:
-                            LOGGER.warning(
-                                f"Consumer {name} disconnected, attempting to reconnect"
-                            )
+                            LOGGER.warning(f"Consumer {name} disconnected, attempting to reconnect")
                             try:
                                 await consumer.connect(loop=loop)
                             except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to reconnect consumer {name}: {str(e)}"
-                                )
+                                LOGGER.error(f"Failed to reconnect consumer {name}: {str(e)}")
 
                     for name, producer in list(self.producers.items()):
                         if not producer._connected or not producer._channel:
-                            LOGGER.warning(
-                                f"Producer {name} disconnected, attempting to reconnect"
-                            )
+                            LOGGER.warning(f"Producer {name} disconnected, attempting to reconnect")
                             try:
                                 await producer.connect(loop=loop)
                             except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to reconnect producer {name}: {str(e)}"
-                                )
+                                LOGGER.error(f"Failed to reconnect producer {name}: {str(e)}")
 
                     await asyncio.sleep(30)
                 except Exception as e:

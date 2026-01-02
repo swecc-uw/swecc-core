@@ -34,9 +34,7 @@ urlpatterns = [
         views.MetricViewAllRecent.as_view(),
         name="metrics-view-all-recent",
     ),
-    path(
-        "task/disable/", views.DisableMetricTask.as_view(), name="disable-metrics-poll"
-    ),
+    path("task/disable/", views.DisableMetricTask.as_view(), name="disable-metrics-poll"),
     path("task/enable/", views.EnableMetricTask.as_view(), name="enable-metrics-poll"),
     path(
         "task/<job_id>/",

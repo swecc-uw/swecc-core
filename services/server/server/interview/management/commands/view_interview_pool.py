@@ -11,6 +11,4 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         print("Viewing the interview pool...")
         for pool_member in list(InterviewPool.objects.all()):
-            self.stdout.write(
-                self.style.SUCCESS(f"Member: {pool_member.member.username}")
-            )
+            self.stdout.write(self.style.SUCCESS(f"Member: {pool_member.member.username}"))

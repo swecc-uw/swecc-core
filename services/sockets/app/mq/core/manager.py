@@ -1,13 +1,13 @@
 import asyncio
 import logging
-from typing import Dict, Optional, Callable, Any, Coroutine
-import pydantic
+from typing import Any, Callable, Coroutine, Dict, Optional
 
+import pydantic
 from pika.exchange_type import ExchangeType
 
+from .connection_manager import ConnectionManager
 from .consumer import AsyncRabbitConsumer
 from .producer import AsyncRabbitProducer
-from .connection_manager import ConnectionManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class RabbitMQManager:
         queue,
         routing_key,
         exchange_type=ExchangeType.topic,
-        schema: Optional[pydantic.BaseModel]=None
+        schema: Optional[pydantic.BaseModel] = None,
     ):
         def decorator(callback):
             name = f"{callback.__module__}.{callback.__name__}"
@@ -40,7 +40,7 @@ class RabbitMQManager:
                 "routing_key": routing_key,
                 "exchange_type": exchange_type,
                 "declare_exchange": declare_exchange,
-                "schema": schema
+                "schema": schema,
             }
 
             return callback
@@ -56,9 +56,7 @@ class RabbitMQManager:
         def decorator(func):
             producer_name = f"{func.__module__}.{func.__name__}"
 
-            async def producer_factory(
-                message, routing_key_override=None, properties=None
-            ):
+            async def producer_factory(message, routing_key_override=None, properties=None):
                 loop = asyncio.get_event_loop()
                 producer = self.get_or_create_producer(
                     producer_name, exchange, exchange_type, routing_key, loop=loop
@@ -79,9 +77,7 @@ class RabbitMQManager:
 
         return decorator
 
-    def get_or_create_producer(
-        self, name, exchange, exchange_type, routing_key=None, loop=None
-    ):
+    def get_or_create_producer(self, name, exchange, exchange_type, routing_key=None, loop=None):
         if name not in self.producers:
             producer = AsyncRabbitProducer(
                 amqp_url=self.default_amqp_url,
@@ -108,7 +104,7 @@ class RabbitMQManager:
                 routing_key=config["routing_key"],
                 exchange_type=config["exchange_type"],
                 declare_exchange=config["declare_exchange"],
-                schema=config["schema"]
+                schema=config["schema"],
             )
 
     def add_consumer(
@@ -134,7 +130,7 @@ class RabbitMQManager:
             callback=callback,
             prefetch_count=prefetch_count,
             declare_exchange=declare_exchange,
-            schema=schema
+            schema=schema,
         )
 
         self.consumers[name] = consumer
@@ -185,9 +181,7 @@ class RabbitMQManager:
                 try:
 
                     if not ConnectionManager(loop=loop).is_connected():
-                        LOGGER.warning(
-                            "RabbitMQ connection lost, attempting to reconnect"
-                        )
+                        LOGGER.warning("RabbitMQ connection lost, attempting to reconnect")
                         try:
                             await ConnectionManager(loop=loop).connect()
                         except Exception as e:
@@ -197,27 +191,19 @@ class RabbitMQManager:
 
                     for name, consumer in list(self.consumers.items()):
                         if not consumer._connection or not consumer._channel:
-                            LOGGER.warning(
-                                f"Consumer {name} disconnected, attempting to reconnect"
-                            )
+                            LOGGER.warning(f"Consumer {name} disconnected, attempting to reconnect")
                             try:
                                 await consumer.connect(loop=loop)
                             except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to reconnect consumer {name}: {str(e)}"
-                                )
+                                LOGGER.error(f"Failed to reconnect consumer {name}: {str(e)}")
 
                     for name, producer in list(self.producers.items()):
                         if not producer._connected or not producer._channel:
-                            LOGGER.warning(
-                                f"Producer {name} disconnected, attempting to reconnect"
-                            )
+                            LOGGER.warning(f"Producer {name} disconnected, attempting to reconnect")
                             try:
                                 await producer.connect(loop=loop)
                             except Exception as e:
-                                LOGGER.error(
-                                    f"Failed to reconnect producer {name}: {str(e)}"
-                                )
+                                LOGGER.error(f"Failed to reconnect producer {name}: {str(e)}")
 
                     await asyncio.sleep(30)
                 except Exception as e:

@@ -1,8 +1,9 @@
-from fastapi import WebSocket
-from typing import Dict, Set
 import logging
+from typing import Dict, Optional, Set
+
+from fastapi import WebSocket
+
 from .handlers import HandlerKind
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +43,11 @@ class ConnectionManager:
         )
         return websocket
 
-    def get_websocket_connection(
-        self, kind: HandlerKind, user_id: int
-    ) -> Optional[WebSocket]:
+    def get_websocket_connection(self, kind: HandlerKind, user_id: int) -> Optional[WebSocket]:
         websocket = self.user_connections.get((kind, user_id))
 
         if not websocket:
-            logger.warning(
-                f"No active connection found for user {user_id} and handler {kind}."
-            )
+            logger.warning(f"No active connection found for user {user_id} and handler {kind}.")
             return None
 
         if self.is_connection_closing(websocket):
@@ -63,9 +60,7 @@ class ConnectionManager:
         websocket = self.user_connections.get((kind, user_id))
 
         if not websocket:
-            logger.warning(
-                f"No active connection found for user {user_id} and handler {kind}."
-            )
+            logger.warning(f"No active connection found for user {user_id} and handler {kind}.")
             return
 
         connection_id = id(websocket)
@@ -79,9 +74,7 @@ class ConnectionManager:
         if (kind, user_id) in self.user_connections:
             del self.user_connections[(kind, user_id)]
 
-        logger.info(
-            f"WebSocket disconnected. Total connections: {len(self.ws_connections)}"
-        )
+        logger.info(f"WebSocket disconnected. Total connections: {len(self.ws_connections)}")
 
     def __new__(cls):
         if cls.instance is None:

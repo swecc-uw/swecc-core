@@ -152,4 +152,3 @@ case "$SERVICE" in
 esac
 
 log INFO "Deployment complete"
-

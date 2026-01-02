@@ -134,4 +134,3 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
 fi
 
 log INFO "Linting complete - all checks passed"
-

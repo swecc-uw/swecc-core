@@ -120,4 +120,3 @@ wait_for_service() {
 
   die "Service $svc failed to become healthy after $max_attempts attempts"
 }
-

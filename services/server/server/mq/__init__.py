@@ -20,9 +20,7 @@ def consumer(
     declare_exchange=True,
 ) -> Callable:
     """decorator for registering consumers"""
-    return _manager.register_callback(
-        exchange, declare_exchange, queue, routing_key, exchange_type
-    )
+    return _manager.register_callback(exchange, declare_exchange, queue, routing_key, exchange_type)
 
 
 def producer(

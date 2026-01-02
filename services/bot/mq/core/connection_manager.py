@@ -1,10 +1,10 @@
 import asyncio
+import logging
 import os
 import urllib
-import logging
-from pika.adapters.asyncio_connection import AsyncioConnection
-import pika
 
+import pika
+from pika.adapters.asyncio_connection import AsyncioConnection
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +30,7 @@ class ConnectionManager:
         logger.info(f"Connecting to {self._url}.")
 
         try:
-            if self._connection and not (
-                self._connection.is_closed or self._connection.is_closing
-            ):
+            if self._connection and not (self._connection.is_closed or self._connection.is_closing):
                 logger.info(f"Using existing connection.")
                 return self._connection
 
@@ -84,9 +82,7 @@ class ConnectionManager:
     async def close(self):
         self._closing = True
         logger.info(f"Closing connection...")
-        if self._connection and not (
-            self._connection.is_closing or self._connection.is_closed
-        ):
+        if self._connection and not (self._connection.is_closing or self._connection.is_closed):
             self._connection.close()
         self._connected = False
 

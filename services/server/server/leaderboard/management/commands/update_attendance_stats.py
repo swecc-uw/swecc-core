@@ -18,9 +18,7 @@ class Command(BaseCommand):
             session_counts[user["id"]] += 1 if user["attendance_sessions"] else 0
 
         for user_id, attended_sessions in session_counts.items():
-            user_stats, _ = AttendanceSessionStats.objects.get_or_create(
-                member_id=user_id
-            )
+            user_stats, _ = AttendanceSessionStats.objects.get_or_create(member_id=user_id)
 
             with transaction.atomic():
                 user_stats.sessions_attended = attended_sessions

@@ -31,9 +31,7 @@ def _get_serializer_class(req):
         raise PermissionError("You do not have permission to perform this action")
 
     if is_readonly:
-        return (
-            CohortHydratedPublicSerializer if not is_admin else CohortHydratedSerializer
-        )
+        return CohortHydratedPublicSerializer if not is_admin else CohortHydratedSerializer
 
     return CohortSerializer
 
@@ -57,9 +55,7 @@ class CohortListCreateView(generics.ListCreateAPIView):
         queryset = self.get_queryset()
 
         is_admin = request.user.groups.filter(name="is_admin").exists()
-        serializer = (
-            CohortHydratedSerializer if is_admin else CohortHydratedPublicSerializer
-        )
+        serializer = CohortHydratedSerializer if is_admin else CohortHydratedPublicSerializer
 
         return Response(
             serializer(queryset, many=True).data,
@@ -78,9 +74,7 @@ class CohortListCreateView(generics.ListCreateAPIView):
 
         cohort = Cohort.objects.get(name=cohort_name)
 
-        cohort_stats_objects = [
-            CohortStats(cohort=cohort, member=member) for member in members
-        ]
+        cohort_stats_objects = [CohortStats(cohort=cohort, member=member) for member in members]
 
         CohortStats.objects.bulk_create(cohort_stats_objects, ignore_conflicts=True)
 
@@ -148,11 +142,7 @@ class CohortStatsView(APIView):
 
     def get_member_id_from_discord_id(self, discord_id: str) -> Optional[int]:
         try:
-            return (
-                User.objects.filter(discord_id=discord_id)
-                .values_list("id", flat=True)
-                .first()
-            )
+            return User.objects.filter(discord_id=discord_id).values_list("id", flat=True).first()
         except ValueError:
             raise ValueError("Invalid discord_id format")
 
@@ -163,19 +153,13 @@ class CohortStatsView(APIView):
             queryset = queryset.filter(member_id=member_id)
 
         stats = queryset.values("cohort_id").annotate(
-            applications_sum=Coalesce(
-                Sum("applications"), Value(0), output_field=IntegerField()
-            ),
+            applications_sum=Coalesce(Sum("applications"), Value(0), output_field=IntegerField()),
             online_assessments_sum=Coalesce(
                 Sum("onlineAssessments"), Value(0), output_field=IntegerField()
             ),
-            interviews_sum=Coalesce(
-                Sum("interviews"), Value(0), output_field=IntegerField()
-            ),
+            interviews_sum=Coalesce(Sum("interviews"), Value(0), output_field=IntegerField()),
             offers_sum=Coalesce(Sum("offers"), Value(0), output_field=IntegerField()),
-            daily_checks_sum=Coalesce(
-                Sum("dailyChecks"), Value(0), output_field=IntegerField()
-            ),
+            daily_checks_sum=Coalesce(Sum("dailyChecks"), Value(0), output_field=IntegerField()),
             streak_max=Coalesce(Max("streak"), Value(0), output_field=IntegerField()),
         )
 
@@ -281,9 +265,7 @@ class CohortTransferView(APIView):
             to_cohort_id = request.data.get("to_cohort_id")
         except KeyError:
             return Response(
-                {
-                    "error": "Please provide 'member_id', 'from_cohort_id', and 'to_cohort_id'"
-                },
+                {"error": "Please provide 'member_id', 'from_cohort_id', and 'to_cohort_id'"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -405,9 +387,7 @@ class LinkCohortsWithDiscordView(APIView):
         cohorts = Cohort.objects.all().prefetch_related(
             Prefetch(
                 "members",
-                queryset=User.objects.filter(discord_id__isnull=False).only(
-                    "id", "discord_id"
-                ),
+                queryset=User.objects.filter(discord_id__isnull=False).only("id", "discord_id"),
             ),
         )
 

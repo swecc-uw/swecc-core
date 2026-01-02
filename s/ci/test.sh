@@ -127,4 +127,3 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
 fi
 
 log INFO "All tests passed"
-

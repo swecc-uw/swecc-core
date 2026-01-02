@@ -20,9 +20,7 @@ def validate_availability(value):
 
 # Create your models here.
 class InterviewAvailability(models.Model):
-    member = models.OneToOneField(
-        "members.User", on_delete=models.CASCADE, primary_key=True
-    )
+    member = models.OneToOneField("members.User", on_delete=models.CASCADE, primary_key=True)
     interview_availability_slots = models.JSONField(
         default=default_availability, validators=[validate_availability]
     )
@@ -43,9 +41,7 @@ class InterviewAvailability(models.Model):
 
 
 class InterviewPool(models.Model):
-    member = models.OneToOneField(
-        "members.User", on_delete=models.CASCADE, primary_key=True
-    )
+    member = models.OneToOneField("members.User", on_delete=models.CASCADE, primary_key=True)
     timestamp = models.DateTimeField(auto_now_add=True, null=True)
 
     def __str__(self):
@@ -61,9 +57,7 @@ class Interview(models.Model):
         ("inactive_incomplete", "Inactive Incomplete"),
     ]
 
-    interview_id = models.UUIDField(
-        primary_key=True, default=uuid.uuid4, editable=False
-    )
+    interview_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     interviewer = models.ForeignKey(
         "members.User",
         on_delete=models.CASCADE,

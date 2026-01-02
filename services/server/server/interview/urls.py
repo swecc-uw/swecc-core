@@ -15,9 +15,7 @@ urlpatterns = [
         views.AuthenticatedMemberSignupForInterview.as_view(),
         name="interview-pool",
     ),
-    path(
-        "status/", views.GetInterviewPoolStatus.as_view(), name="interview-pool-status"
-    ),
+    path("status/", views.GetInterviewPoolStatus.as_view(), name="interview-pool-status"),
     path("interviews/", views.MemberInterviewsView.as_view(), name="member-interviews"),
     path(
         "interviews/interviewer/",

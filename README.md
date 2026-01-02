@@ -50,4 +50,3 @@ Managed via GitHub repository secrets. To update:
 ```bash
 gh secret set SECRET_NAME --body "value"
 ```
-

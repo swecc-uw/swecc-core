@@ -4,9 +4,7 @@ from members.models import User
 
 
 class LeetcodeStats(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="leetcode_stats"
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="leetcode_stats")
     total_solved = models.IntegerField(default=0)
     easy_solved = models.IntegerField(default=0)
     medium_solved = models.IntegerField(default=0)
@@ -22,9 +20,7 @@ class LeetcodeStats(models.Model):
 
 
 class GitHubStats(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="github_stats"
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="github_stats")
     total_prs = models.IntegerField(default=0)
     total_commits = models.IntegerField(default=0)
     followers = models.IntegerField(default=0)
@@ -39,9 +35,7 @@ class GitHubStats(models.Model):
 
 
 class InternshipApplicationStats(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="internship_stats"
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="internship_stats")
     applied = models.IntegerField(default=0)
     last_updated = models.DateTimeField(default=timezone.now)
 
@@ -54,9 +48,7 @@ class InternshipApplicationStats(models.Model):
 
 
 class NewGradApplicationStats(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="new_grad_stats"
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="new_grad_stats")
     applied = models.IntegerField(default=0)
     last_updated = models.DateTimeField(default=timezone.now)
 

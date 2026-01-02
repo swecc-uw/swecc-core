@@ -1,8 +1,10 @@
-from jose import jwt, JWTError
-from fastapi import WebSocket, status
-from pydantic import ValidationError, BaseModel
 from datetime import datetime, timezone
-from typing import Optional, List, Union
+from typing import List, Optional, Union
+
+from fastapi import WebSocket, status
+from jose import JWTError, jwt
+from pydantic import BaseModel, ValidationError
+
 from .config import settings
 
 
@@ -36,9 +38,7 @@ class Auth:
 
     @staticmethod
     async def authenticate_ws(
-        websocket: WebSocket,
-        token: str,
-        required_groups: Union[List[str], None] = None
+        websocket: WebSocket, token: str, required_groups: Union[List[str], None] = None
     ) -> Optional[dict]:
         user = await Auth.validate_token(token)
 

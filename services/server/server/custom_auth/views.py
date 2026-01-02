@@ -18,7 +18,6 @@ from members.permissions import IsApiKey
 from rest_framework import generics, views
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
-
 from server.settings import JWT_SECRET
 
 from .serializers import UserSerializer
@@ -46,9 +45,7 @@ def login_view(request):
 
     if username is None or password is None:
         logger.error("Error logging in: username or password not provided")
-        return JsonResponse(
-            {"detail": "Please provide username and password."}, status=400
-        )
+        return JsonResponse({"detail": "Please provide username and password."}, status=400)
 
     user = authenticate(request, username=username, password=password)
 
@@ -74,9 +71,7 @@ def password_reset_confirm(request, uidb64, token):
         if default_token_generator.check_token(user, token):
             user.set_password(new_password)
             user.save()
-            return JsonResponse(
-                {"detail": "Password has been reset successfully."}, status=200
-            )
+            return JsonResponse({"detail": "Password has been reset successfully."}, status=200)
         else:
             return JsonResponse({"detail": "Invalid token."}, status=400)
 
@@ -179,9 +174,7 @@ def register_view(request):
             )
 
             logger.info("User %s registered", field_values["username"])
-            return JsonResponse(
-                {"detail": "Successfully registered.", "id": user.id}, status=201
-            )
+            return JsonResponse({"detail": "Successfully registered.", "id": user.id}, status=201)
 
     except Exception as e:
         logger.error("Error registering: %s", str(e))

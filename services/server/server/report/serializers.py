@@ -67,9 +67,7 @@ class ReportSerializer(serializers.ModelSerializer):
         member = data.get("associated_member", None)
 
         #  only one object
-        associated_objects = [
-            obj for obj in [interview, question, member] if obj is not None
-        ]
+        associated_objects = [obj for obj in [interview, question, member] if obj is not None]
         if len(associated_objects) > 1:
             raise ValidationError(
                 "Only one of associated_interview, associated_question, or associated_member should be provided"

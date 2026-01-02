@@ -1,8 +1,9 @@
 import logging
 from typing import Callable
-from pika.exchange_type import ExchangeType
-from mq.core.manager import RabbitMQManager
+
 from mq.core.connection_manager import ConnectionManager
+from mq.core.manager import RabbitMQManager
+from pika.exchange_type import ExchangeType
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,9 +34,7 @@ def producer(
     needs_context=False,
 ) -> Callable:
     """decorator for registering producers"""
-    return _manager.register_producer(
-        exchange, exchange_type, routing_key, needs_context
-    )
+    return _manager.register_producer(exchange, exchange_type, routing_key, needs_context)
 
 
 async def publish_raw(exchange, routing_key, message, properties=None):
