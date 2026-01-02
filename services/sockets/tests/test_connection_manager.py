@@ -47,7 +47,7 @@ class TestConnectionManager:
         assert id(mock_websocket) in connection_manager.ws_connections
 
     async def test_register_connection_existing_user(self, connection_manager, mock_websocket):
-        """Test registering connection for already connected user."""
+        """Test registering connection for already connected user closes old and accepts new."""
         # Arrange
         user_id = 1
         kind = HandlerKind.Echo
@@ -58,8 +58,9 @@ class TestConnectionManager:
         result = await connection_manager.register_connection(kind, user_id, new_websocket)
 
         # Assert
-        assert result == mock_websocket  # Returns existing connection
-        new_websocket.accept.assert_not_called()
+        assert result == new_websocket  # Returns new connection
+        new_websocket.accept.assert_called_once()  # New websocket is accepted
+        mock_websocket.close.assert_called_once()  # Old websocket is closed
 
     async def test_register_connection_same_user_different_handlers(
         self, connection_manager, mock_websocket

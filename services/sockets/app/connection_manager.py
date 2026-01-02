@@ -28,11 +28,23 @@ class ConnectionManager:
     async def register_connection(
         self, kind: HandlerKind, user_id: int, websocket: WebSocket
     ) -> WebSocket:
-        if (kind, user_id) in self.user_connections:
-            logger.warning(f"User {user_id} already connected for handler {kind}.")
-            return self.user_connections[(kind, user_id)]
-
+        # Always accept the new websocket first
         await websocket.accept()
+
+        if (kind, user_id) in self.user_connections:
+            logger.warning(
+                f"User {user_id} already connected for handler {kind}. Closing old connection."
+            )
+            old_websocket = self.user_connections[(kind, user_id)]
+            old_connection_id = id(old_websocket)
+            # Clean up old connection
+            if old_connection_id in self.ws_connections:
+                del self.ws_connections[old_connection_id]
+            self.closing_connections.add(old_connection_id)
+            try:
+                await old_websocket.close()
+            except Exception:
+                pass  # Old websocket may already be closed
 
         connection_id = id(websocket)
         self.user_connections[(kind, user_id)] = websocket

@@ -26,6 +26,13 @@ EVENT_EMITTERS: dict[HandlerKind, EventEmitter] = {
     HandlerKind.Resume: EventEmitter(),
 }
 
+# Create handlers once at module level to avoid listener leaks
+HANDLERS = {
+    HandlerKind.Echo: EchoHandler(EVENT_EMITTERS[HandlerKind.Echo]),
+    HandlerKind.Logs: ContainerLogsHandler(EVENT_EMITTERS[HandlerKind.Logs]),
+    HandlerKind.Resume: ResumeHandler(EVENT_EMITTERS[HandlerKind.Resume]),
+}
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -114,10 +121,9 @@ async def ping():
 # Echo endpoint
 @app.websocket("/ws/echo/{token}")
 async def echo_endpoint(websocket: WebSocket, token: str):
-    # Create endpoint-specific instances
     connection_manager = ConnectionManager()
     event_emitter = EVENT_EMITTERS[HandlerKind.Echo]
-    echo_handler = EchoHandler(event_emitter)
+    echo_handler = HANDLERS[HandlerKind.Echo]
 
     user = None
 
@@ -166,10 +172,9 @@ async def echo_endpoint(websocket: WebSocket, token: str):
 # Logs endpoint
 @app.websocket("/ws/logs/{token}")
 async def logs_endpoint(websocket: WebSocket, token: str):
-    # Create endpoint-specific instances
     connection_manager = ConnectionManager()
     event_emitter = EVENT_EMITTERS[HandlerKind.Logs]
-    logs_handler = ContainerLogsHandler(event_emitter)
+    logs_handler = HANDLERS[HandlerKind.Logs]
 
     user = None
 
@@ -221,8 +226,8 @@ async def logs_endpoint(websocket: WebSocket, token: str):
 @app.websocket("/ws/resume/{token}")
 async def resume_endpoint(websocket: WebSocket, token: str):
     event_emitter = EVENT_EMITTERS[HandlerKind.Resume]
-    # Unused, but necessary so events are subscribed to
-    resume_handler = ResumeHandler(event_emitter)
+    # Handler is used for event subscriptions (created once at module level)
+    _ = HANDLERS[HandlerKind.Resume]
 
     user = None
 
