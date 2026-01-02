@@ -49,7 +49,7 @@ class TestGeminiAPI:
             {
                 "OFF_TOPIC_CHANNEL_ID": "123456",
                 "OFFICER_ROLE_ID": "789012",
-                "AI_API_URL": "http://test-ai-server:8008",
+                "AI_API_URL": "http://test-ai:8008",
             },
         ):
             return GeminiAPI()
@@ -60,7 +60,7 @@ class TestGeminiAPI:
         # Assert
         assert api.OFF_TOPIC_CHANNEL_ID == 123456
         assert api.allowlisted_roles_id == [789012]
-        assert api.url == "http://test-ai-server:8008"
+        assert api.url == "http://test-ai:8008"
         assert api.max_context_length == 2000
         assert api.context_invalidation_time_seconds == 600
         assert isinstance(api.session, requests.Session)
