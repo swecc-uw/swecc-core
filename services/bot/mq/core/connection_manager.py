@@ -19,7 +19,7 @@ class ConnectionManager:
 
         self._connection = None
         self._closing = False
-        self._ready = asyncio.Event(loop=loop)
+        self._ready = asyncio.Event()
         self._connected = False
         self._loop = None
         self._url = self._build_amqp_url()

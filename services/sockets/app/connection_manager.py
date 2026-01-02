@@ -13,7 +13,7 @@ class ConnectionManager:
     instance = None
 
     def __init__(self):
-        if not self.initialized:
+        if not hasattr(self, "initialized") or not self.initialized:
             self.closing_connections = set()
             self.user_connections: dict[(HandlerKind, int), WebSocket] = {}
             self.ws_connections: dict[int, WebSocket] = {}
@@ -46,7 +46,7 @@ class ConnectionManager:
     def get_websocket_connection(self, kind: HandlerKind, user_id: int) -> Optional[WebSocket]:
         websocket = self.user_connections.get((kind, user_id))
 
-        if not websocket:
+        if websocket is None:
             logger.warning(f"No active connection found for user {user_id} and handler {kind}.")
             return None
 
@@ -59,7 +59,7 @@ class ConnectionManager:
     def disconnect(self, kind: HandlerKind, user_id: int) -> None:
         websocket = self.user_connections.get((kind, user_id))
 
-        if not websocket:
+        if websocket is None:
             logger.warning(f"No active connection found for user {user_id} and handler {kind}.")
             return
 

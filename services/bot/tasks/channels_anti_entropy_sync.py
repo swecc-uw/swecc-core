@@ -44,7 +44,7 @@ async def sync(guild):
     await mq.producers.publish_channel_snapshot(ChannelSnapshot(channels=channels))
 
 
-SWECC_SERVER_ID = int(os.getenv("SWECC_SERVER"))
+SWECC_SERVER_ID = int(os.getenv("SWECC_SERVER", "0"))
 
 
 def start_scheduled_task(client):

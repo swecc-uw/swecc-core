@@ -21,7 +21,7 @@ class AsyncRabbitProducer:
         self._connection = None
         self._channel = None
         self._connected = False
-        self._ready = asyncio.Event(loop=loop)
+        self._ready = asyncio.Event()
 
     async def connect(self, loop=None):
 

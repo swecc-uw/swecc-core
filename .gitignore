@@ -32,3 +32,20 @@ Thumbs.db
 
 # Docker
 *.log
+
+# Testing
+.coverage
+*.coverage
+htmlcov/
+.pytest_cache/
+*.pyc
+.tox/
+coverage.xml
+*.cover
+
+# Test artifacts
+*.backup
+services/server/components/images/test*.png
+
+# Django migrations created during tests
+services/server/server/contentManage/migrations/

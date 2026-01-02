@@ -160,4 +160,5 @@ async def main():
 
 mq.setup(client, bot_context)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

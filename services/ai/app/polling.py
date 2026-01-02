@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import Union
@@ -19,6 +20,4 @@ class PollingRequest:
 
 
 def generate_request_id():
-    import uuid
-
     return str(uuid.uuid4())

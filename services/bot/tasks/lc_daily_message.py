@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 lc = LeetcodeAPI()
 load_dotenv()
-LC_CHANNEL_ID = int(os.getenv("LC_CHANNEL_ID"))
+LC_CHANNEL_ID = int(os.getenv("LC_CHANNEL_ID", "0"))
 
 
 async def send_daily_message(client, ADMIN_CHANNEL):

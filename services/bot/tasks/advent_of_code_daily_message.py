@@ -9,8 +9,8 @@ from pytz import timezone
 
 load_dotenv()
 
-AOC_CHANNEL_ID = int(os.getenv("LC_CHANNEL_ID"))
-ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL"))
+AOC_CHANNEL_ID = int(os.getenv("LC_CHANNEL_ID", "0"))
+ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL", "0"))
 LEADERBOARD_KEY = os.getenv("AOC_LEADERBOARD_KEY")
 LEADERBOARD_ID = os.getenv("AOC_LEADERBOARD_ID")
 

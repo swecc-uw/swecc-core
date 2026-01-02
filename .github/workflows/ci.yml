@@ -74,6 +74,84 @@ jobs:
           echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
           echo "Changed services: $CHANGED_SERVICES"
 
+  test:
+    name: Test Python Services
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ai, bot, sockets, server]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install test dependencies - AI
+        if: matrix.service == 'ai'
+        working-directory: ./services/ai
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Install test dependencies - Bot
+        if: matrix.service == 'bot'
+        working-directory: ./services/bot
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Install test dependencies - Sockets
+        if: matrix.service == 'sockets'
+        working-directory: ./services/sockets
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Install test dependencies - Server
+        if: matrix.service == 'server'
+        working-directory: ./services/server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests - AI
+        if: matrix.service == 'ai'
+        working-directory: ./services/ai
+        run: |
+          pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Run tests - Bot
+        if: matrix.service == 'bot'
+        working-directory: ./services/bot
+        run: |
+          pytest tests/ -v --cov=. --cov-report=term-missing --cov-report=xml --cov-branch
+
+      - name: Run tests - Sockets
+        if: matrix.service == 'sockets'
+        working-directory: ./services/sockets
+        run: |
+          pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Run tests - Server
+        if: matrix.service == 'server'
+        working-directory: ./services/server
+        run: |
+          python run_tests.py
+
+      - name: Upload coverage to Codecov
+        if: matrix.service != 'server'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./services/${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+          name: ${{ matrix.service }}-coverage
+          fail_ci_if_error: false
+
   build:
     name: Build Docker Images
     needs: detect-changes

@@ -123,6 +123,9 @@ async def echo_endpoint(websocket: WebSocket, token: str):
 
     try:
         user, websocket = await authenticate_and_connect(HandlerKind.Echo, websocket, token)
+        if user is None:
+            # Authentication failed, websocket already closed
+            return
         user_id = user["user_id"]
         username = user["username"]
         # Message loop
@@ -173,6 +176,9 @@ async def logs_endpoint(websocket: WebSocket, token: str):
     try:
         # Authenticate and check for admin rights
         user, websocket = await authenticate_and_connect(HandlerKind.Logs, websocket, token)
+        if user is None:
+            # Authentication failed, websocket already closed
+            return
         user_id = user["user_id"]
         username = user["username"]
         # Message loop
@@ -222,6 +228,9 @@ async def resume_endpoint(websocket: WebSocket, token: str):
 
     try:
         user, websocket = await authenticate_and_connect(HandlerKind.Resume, websocket, token)
+        if user is None:
+            # Authentication failed, websocket already closed
+            return
         user_id = user["user_id"]
         username = user["username"]
         # Message loop
