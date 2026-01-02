@@ -124,21 +124,29 @@ class ContainerLogsHandler(BaseHandler):
         await super().handle_disconnect(event)
 
     async def _stream_logs(self, user_id: int, container, websocket) -> None:
+        self.logger.info(f"_stream_logs task started for user {user_id}")
         try:
             logs_generator = container.logs(stream=True, follow=True, timestamps=True, tail=100)
+            self.logger.info(f"Created logs generator for user {user_id}")
 
+            line_count = 0
             async for log_chunk in self._async_log_generator(logs_generator):
                 if asyncio.current_task().cancelled():
+                    self.logger.info(f"Task cancelled for user {user_id}")
                     break
 
                 try:
                     log_message = Message(type=MessageType.LOG_LINE, message=log_chunk.strip())
                     await self.safe_send(websocket, log_message.dict())
+                    line_count += 1
+                    if line_count <= 3:
+                        self.logger.info(f"Sent log line #{line_count} for user {user_id}")
                 except Exception as e:
                     self.logger.error(f"Error sending log line: {str(e)}")
                     break
 
         except asyncio.CancelledError:
+            self.logger.info(f"CancelledError in _stream_logs for user {user_id}")
             raise
         except Exception as e:
             self.logger.error(f"Error in log streaming: {str(e)}", exc_info=True)
@@ -150,6 +158,7 @@ class ContainerLogsHandler(BaseHandler):
             except:
                 pass
         finally:
+            self.logger.info(f"_stream_logs finally block for user {user_id}")
             # Ensure we clean up
             if user_id in self.running_streams:
                 await self._stop_logs(user_id)
