@@ -31,7 +31,7 @@ log() {
   local msg="$*"
   local timestamp
   timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
-  
+
   case "$level" in
     INFO)  echo -e "${BLUE}[${timestamp}]${NC} ${GREEN}INFO${NC}  $msg" ;;
     WARN)  echo -e "${BLUE}[${timestamp}]${NC} ${YELLOW}WARN${NC}  $msg" >&2 ;;
@@ -107,7 +107,7 @@ wait_for_service() {
   local svc="$1"
   local max_attempts="${2:-30}"
   local attempt=0
-  
+
   log INFO "Waiting for service $svc to be healthy..."
   while [[ $attempt -lt $max_attempts ]]; do
     if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" | grep -q "Running"; then
@@ -117,7 +117,7 @@ wait_for_service() {
     attempt=$((attempt + 1))
     sleep 2
   done
-  
+
   die "Service $svc failed to become healthy after $max_attempts attempts"
 }
 

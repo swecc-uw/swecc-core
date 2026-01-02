@@ -27,7 +27,7 @@ jobs:
       - name: Create RabbitMQ user(s)
         run: |
           chmod +x ./s/ops/rabbitmq.sh ./s/lib.sh
-          
+
           if [ "${{ inputs.service }}" == "all" ]; then
             for svc in server bot ai sockets; do
               echo "Creating user for $svc"

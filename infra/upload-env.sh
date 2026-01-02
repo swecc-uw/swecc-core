@@ -20,10 +20,10 @@ while IFS= read -r line || [ -n "$line" ]; do
   if [[ -z "$line" || "$line" == \#* ]]; then
     continue
   fi
-  
+
   key=$(echo "$line" | cut -d= -f1)
   value=$(echo "$line" | cut -d= -f2-)
-  
+
   echo "Setting variable: $key, value: $value"
   gh secret set "$key" --body "$value" --repo swecc-uw/swecc-infra
 done < ./.env.prod

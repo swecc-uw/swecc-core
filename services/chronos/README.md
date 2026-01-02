@@ -55,7 +55,7 @@ export AWS_SECRET_ACCESS_KEY=your_secret_access_key
 export AWS_DEFAULT_REGION=your_aws_region
 ```
 
-*Note: Ensure that your Docker daemon is running before executing the following commands.*  
+*Note: Ensure that your Docker daemon is running before executing the following commands.*
 
 ## Quick start
 
@@ -84,7 +84,7 @@ python -m app.test.<test>
 
 For deployments outside the SWECC club, you can modify the Docker Compose file to use a different network:
 
-1. **Open `docker-compose.yml`.**  
+1. **Open `docker-compose.yml`.**
 2. Replace `swecc-default` with your preferred network name:
 
 ```yaml

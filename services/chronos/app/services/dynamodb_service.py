@@ -8,7 +8,7 @@ class DynamoDBService:
     def __init__(self):
         self.client = boto3.resource('dynamodb')
 
-    
+
     def create_docker_events_table(self):
         table_name = "docker_events"
         tables = self.client.tables.all()
@@ -16,7 +16,7 @@ class DynamoDBService:
         if table_name in table_names:
             print(f"Table '{table_name}' already exists.")
             return
-        
+
         try:
             table = self.client.create_table(
                 TableName=table_name,
@@ -40,7 +40,7 @@ class DynamoDBService:
     def create_health_metric_table(self):
         table_name = "health_metrics"
 
-    
+
         tables = self.client.tables.all()
         table_names = [table.name for table in tables]
         if table_name in table_names:
@@ -66,7 +66,7 @@ class DynamoDBService:
                 )
                 table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
                 print(f"Table '{table.table_name}' created successfully.")
-     
+
             except ClientError as e:
                 print(f"Error creating table: {e}")
 
@@ -97,7 +97,7 @@ class DynamoDBService:
         except ClientError as e:
             print(f"Failed to get items from table '{table_name}': {e}")
             return []
-        
+
     def get_recent_dockers_events(self):
         table = self.client.Table("docker_events")
         two_week_ago = datetime.now() - timedelta(weeks=2)
@@ -131,7 +131,7 @@ class DynamoDBService:
         except ClientError as e:
             print(f"Failed to get recent items from table '{table_name}': {e}")
             return []
-        
+
     def get_time_range_items_from_table(self, table_name, start_time, end_time):
         table = self.client.Table(table_name)
         try:
@@ -145,7 +145,7 @@ class DynamoDBService:
         except ClientError as e:
             print(f"Failed to get items from table '{table_name}': {e}")
             return []
-        
+
     def get_items_older_than(self, table_name, time, timeformat="str"):
         table = self.client.Table(table_name)
         if timeformat == "str":
@@ -162,8 +162,8 @@ class DynamoDBService:
             return items
         except ClientError as e:
             print(f"Failed to get items from table '{table_name}': {e}")
-        
-        
+
+
     def get_recent_items_by_container_name(self, table_name, container_name):
         table = self.client.Table(table_name)
         one_week_ago = datetime.now() - timedelta(weeks=1)
@@ -180,7 +180,7 @@ class DynamoDBService:
         except ClientError as e:
             print(f"Failed to get recent items from table '{table_name}': {e}")
             return []
-        
+
     def get_all_items_by_container_name(self, table_name, container_name):
         table = self.client.Table(table_name)
         try:
@@ -194,7 +194,7 @@ class DynamoDBService:
         except ClientError as e:
             print(f"Failed to get items from table '{table_name}': {e}")
             return []
-        
+
     def delete_bulk_items(self, table_name, items):
         table = self.client.Table(table_name)
         with table.batch_writer() as batch:

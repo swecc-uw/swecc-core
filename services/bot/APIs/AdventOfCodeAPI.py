@@ -23,7 +23,7 @@ class AdventOfCodeAPI:
             "last_accessed": None,
             "data": None,
         }
-    
+
 
     def get_leaderboard_url(self):
         return self.leaderboard_url
@@ -47,9 +47,9 @@ class AdventOfCodeAPI:
             logging.info("Fetching new leaderboard data from Advent of Code")
             response = requests.get(self.url, headers=self.headers)
             response.raise_for_status()
-            
+
             leaderboard_data = self.parse_leaderboard(response.json())
             self.cache["data"] = leaderboard_data
             self.cache["last_accessed"] = now
-            
+
             return leaderboard_data

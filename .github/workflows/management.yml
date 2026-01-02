@@ -18,9 +18,9 @@ jobs:
         uses: actions/stale@v9
         with:
           stale-pr-message: |
-            This PR has been automatically marked as stale because it has not had 
+            This PR has been automatically marked as stale because it has not had
             recent activity. It will be closed in 7 days if no further activity occurs.
-            
+
             If this PR is still relevant, please:
             - Add a comment explaining the status
             - Push new changes
@@ -44,10 +44,10 @@ jobs:
       - name: Cleanup caches for closed branches
         run: |
           gh extension install actions/gh-actions-cache || true
-          
+
           echo "Fetching list of cache keys"
           cacheKeysForPR=$(gh actions-cache list -R ${{ github.repository }} -L 100 | cut -f 1)
-          
+
           openBranches=$(git ls-remote --heads origin | awk '{print $2}' | sed 's|refs/heads/||')
 
           for cacheKey in $cacheKeysForPR; do

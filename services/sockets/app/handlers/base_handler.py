@@ -15,7 +15,7 @@ class BaseHandler:
 
         self.logger = logging.getLogger(f"{self.service_name}Handler")
 
-    
+
     async def handle_connect(self, event: Event) -> None:
         try:
             message = Message(

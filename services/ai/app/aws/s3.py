@@ -32,7 +32,7 @@ class S3Client:
             cls.instance = super(S3Client, cls).__new__(cls)
             cls.instance._initialized = False
         return cls.instance
-    
+
     def retrieve_object(self, key: str):
         response = self.client.get_object(Bucket=self.bucket_name, Key=key)
         return response["Body"].read()

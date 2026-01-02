@@ -31,27 +31,27 @@ build_service() {
   local svc="$1"
   local svc_dir
   svc_dir="$(service_dir "$svc")"
-  
+
   log INFO "Building Docker image for $svc"
-  
+
   [[ -d "$svc_dir" ]] || die "Service directory not found: $svc_dir"
   [[ -f "$svc_dir/Dockerfile" ]] || die "Dockerfile not found in $svc_dir"
-  
+
   local image
   image="$(docker_image "$svc" "$TAG")"
   local image_sha
   image_sha="$(docker_image "$svc" "$(git_sha_full)")"
-  
+
   log INFO "Image: $image"
-  
+
   docker build -t "$image" -t "$image_sha" "$svc_dir"
-  
+
   if [[ "$PUSH" == "true" ]]; then
     log INFO "Pushing $image to Docker Hub"
     docker push "$image"
     docker push "$image_sha"
   fi
-  
+
   log INFO "Successfully built $svc"
 }
 

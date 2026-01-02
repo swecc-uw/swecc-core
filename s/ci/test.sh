@@ -29,11 +29,11 @@ test_python_service() {
   local svc="$1"
   local svc_dir
   svc_dir="$(service_dir "$svc")"
-  
+
   log INFO "Testing Python service: $svc"
-  
+
   cd "$svc_dir" || die "Cannot cd to $svc_dir"
-  
+
   if [[ -f "requirements-dev.txt" ]]; then
     log INFO "Installing dev dependencies"
     pip install -q -r requirements-dev.txt 2>/dev/null || true
@@ -41,10 +41,10 @@ test_python_service() {
     log INFO "Installing dependencies"
     pip install -q -r requirements.txt 2>/dev/null || true
   fi
-  
+
   if [[ "$svc" == "server" ]] && [[ -d "server" ]]; then
     cd server || die "Cannot cd to server subdirectory"
-    
+
     log INFO "Running Django tests"
     if [[ "$COVERAGE" == "true" ]] && command -v coverage &>/dev/null; then
       coverage run manage.py test
@@ -69,9 +69,9 @@ test_service() {
   local svc="$1"
   local svc_dir
   svc_dir="$(service_dir "$svc")"
-  
+
   [[ -d "$svc_dir" ]] || die "Service directory not found: $svc_dir"
-  
+
   if [[ -f "$svc_dir/requirements.txt" ]] || [[ -f "$svc_dir/requirements-server.txt" ]]; then
     test_python_service "$svc"
   else

@@ -58,7 +58,7 @@ async def on_message(message):
     member = message.author
     if member == client.user:
         return
-    
+
     await mq.producers.publish_message_event(MessageEvent(
         discord_id=member.id,
         channel_id=message.channel.id,
@@ -67,13 +67,13 @@ async def on_message(message):
     await filter.filter_message(message, bot_context)
     await swecc.process_message_event(message)
     await gemini.process_message_event(message)
-        
+
 @client.event
 async def on_thread_create(thread):
     if thread.guild.id == bot_context.swecc_server:
 
         if thread.parent_id == bot_context.resume_channel:
-            await asyncio.sleep(5) 
+            await asyncio.sleep(5)
             message = await thread.fetch_message(thread.id)
             if not message.attachments or not message.attachments[0].content_type.startswith("image"):
                 try:

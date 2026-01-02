@@ -346,7 +346,7 @@ class DockerService:
                 continue
 
         return stats
-    
+
     def get_socket_conenction(self):
         return self.client.events(decode=True)
 

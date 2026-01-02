@@ -28,8 +28,8 @@ async def filter_message(message, bot_context):
                     if pattern.search(message.content):
                         log_message = f"Deleted message from {member.mention} for containing the word '{word}'. Full message: {message.content}"
                         await message.delete()
-                        await member.timeout(timedelta(hours=12), reason=f"Suspected spammer")                        
-                        
+                        await member.timeout(timedelta(hours=12), reason=f"Suspected spammer")
+
                         view = TimeoutActionView(member, bot_context)
                         channel = message.guild.get_channel(bot_context.transcripts_channel)
                         await channel.send(log_message)

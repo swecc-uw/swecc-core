@@ -17,10 +17,10 @@ for task in $TASKS; do
     log_info "Registering task '$task'..."
     schedule_var="${task}_schedule"
     command_var="${task}_command"
-    
+
     schedule="${!schedule_var}"
     command="${!command_var}"
-    
+
     if [[ -z "$schedule" || -z "$command" ]]; then
         log_info "Error: Missing schedule or command for task '$task'"
         continue
@@ -30,7 +30,7 @@ for task in $TASKS; do
         log_info "Error: Invalid cron schedule for task '$task': $schedule"
         continue
     fi
-    
+
     task_file=$(create_task_file "$task" "$command")
     register_task "$schedule" "$task_file" "$task"
     log_info "Registered task '$task' with schedule '$schedule'"

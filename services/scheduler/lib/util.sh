@@ -25,7 +25,7 @@ create_task_file() {
 
     mkdir -p "$TASK_TEMP_DIR"
     local tmp_file="$TASK_TEMP_DIR/${task_name}.sh"
-    
+
     {
         echo "#!/bin/bash"
         echo "set -euo pipefail"
@@ -42,7 +42,7 @@ register_task() {
     local schedule="$1"
     local task_file="$2"
     local task_name="$3"
-    
+
     local task_marker="# SCHEDULER_TASK: $task_name"
     local log_file="$LOG_DIR/${task_name}.log"
 

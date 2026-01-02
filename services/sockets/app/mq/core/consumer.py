@@ -176,7 +176,7 @@ class AsyncRabbitConsumer:
                 LOGGER.error(f"Failed to parse schema for {self._queue}")
         else:
             await self.message_callback(body, properties)
-        
+
     async def shutdown(self):
         LOGGER.info(f"Shutting down consumer for {self._queue}")
         try:

@@ -25,30 +25,30 @@ EOF
 
 get_rabbitmq_container() {
   log INFO "Finding RabbitMQ container"
-  
+
   local container_id
   container_id=$(docker ps --filter "name=${RABBITMQ_SERVICE}" --format "{{.ID}}" | head -1)
-  
+
   [[ -n "$container_id" ]] || die "RabbitMQ container not found"
-  
+
   echo "$container_id"
 }
 
 create_user() {
   local svc="$1"
   validate_service "$svc"
-  
+
   log INFO "Creating RabbitMQ user for service: $svc"
-  
+
   local config_name="${svc}_env"
   local container_id
   container_id=$(get_rabbitmq_container)
-  
+
   log INFO "Loading credentials from Docker config: $config_name"
   docker config inspect "$config_name" --format '{{.Spec.Data}}' | base64 -d > /tmp/${svc}_env.tmp
-  
+
   local rabbit_user rabbit_pass rabbit_vhost
-  
+
   case "$svc" in
     bot)
       rabbit_user=$(grep "BOT_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
@@ -71,31 +71,31 @@ create_user() {
       die "Service $svc does not use RabbitMQ"
       ;;
   esac
-  
+
   rabbit_vhost=$(grep "RABBIT_VHOST" /tmp/${svc}_env.tmp | cut -d= -f2)
   rabbit_vhost="${rabbit_vhost:-/}"
-  
+
   rm -f /tmp/${svc}_env.tmp
-  
+
   [[ -n "$rabbit_user" ]] || die "Could not find RabbitMQ user in config"
   [[ -n "$rabbit_pass" ]] || die "Could not find RabbitMQ password in config"
-  
+
   log INFO "Creating/updating user: $rabbit_user"
-  
+
   docker exec "$container_id" rabbitmqctl add_user "$rabbit_user" "$rabbit_pass" 2>/dev/null || \
     docker exec "$container_id" rabbitmqctl change_password "$rabbit_user" "$rabbit_pass"
-  
+
   docker exec "$container_id" rabbitmqctl set_permissions -p "$rabbit_vhost" "$rabbit_user" ".*" ".*" ".*"
-  
+
   log INFO "Successfully created/updated RabbitMQ user: $rabbit_user"
 }
 
 list_users() {
   log INFO "Listing RabbitMQ users"
-  
+
   local container_id
   container_id=$(get_rabbitmq_container)
-  
+
   docker exec "$container_id" rabbitmqctl list_users
 }
 

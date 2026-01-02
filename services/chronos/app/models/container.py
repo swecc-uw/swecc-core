@@ -174,7 +174,7 @@ class DockerEvent(BaseModel):
             "id": self.id,
             "action": self.action.value,  # Convert Enum to string
         }
-    
+
     @classmethod
     def from_dynamo_item(cls, item: dict) -> 'DockerEvent':
         """Convert a DynamoDB item back to a DockerEvent."""
@@ -195,7 +195,7 @@ def convert_raw_event_to_docker_event(raw_event: Dict) -> DockerEvent:
     event_id = raw_event.get('id', '')
 
     target_name = raw_event.get('Actor', {}).get('Attributes', {}).get('name', '')
-    
+
     return DockerEvent(
         id=event_id,
         action=event_action,

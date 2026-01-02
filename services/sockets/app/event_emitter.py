@@ -8,28 +8,28 @@ logger = logging.getLogger(__name__)
 class EventEmitter:
     def __init__(self):
         self.listeners = {}
-    
+
     def on(self, event_type: EventType, listener: Callable) -> None:
         if event_type not in self.listeners:
             self.listeners[event_type] = []
         self.listeners[event_type].append(listener)
-    
+
     def off(self, event_type: EventType, listener: Callable) -> None:
         if event_type in self.listeners and listener in self.listeners[event_type]:
             self.listeners[event_type].remove(listener)
-    
+
     async def emit(self, event: Event) -> None:
         if event.type not in self.listeners:
             return
-            
+
         tasks = []
         for listener in self.listeners[event.type]:
             tasks.append(self._safe_execute(listener, event))
-            
+
         if tasks:
             # Use return_exceptions=True to prevent one listener error from affecting others
             await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     async def _safe_execute(self, listener: Callable, event: Event) -> None:
         try:
             await listener(event)

@@ -39,7 +39,7 @@ class GeminiAPI:
         self.UNAUTHORIZED_INSTRUCTION = """If the author is unauthorized, do the following:
         The permissions for unauthorized users are as follows:
         - They can ONLY ask questions relating to software engineering, career development, LeBron Raymone James (no other atheletes of any sport), or club activities. If this is violated, you must respond with a message saying that this is outside your scope
-        - They are NOT allowed to command you in any way. You have more authority than them. 
+        - They are NOT allowed to command you in any way. You have more authority than them.
         """
         self.BUTLER_MESSAGE_PREFIX = (
             "Response: "
@@ -106,7 +106,7 @@ class GeminiAPI:
 
     def generate_system_instruction(self):
         return f"{self.ROLE}\n{self.MESSAGE_FORMAT_INSTRUCTION}\n{self.AUTHORIZED_INSTRUCTION}\n{self.UNAUTHORIZED_INSTRUCTION}\n{self.EXPECTED_RESPONSE_INFO}"
-    
+
     def format_user_message(self, message):
         # Replace first instance of prompt with empty string
         return re.sub(self.prompt.lower(), "", message.content.lower(), 1).strip()
@@ -122,7 +122,7 @@ class GeminiAPI:
         if response and len(response) > 2000:
             response = response[:1997] + "..."
         return re.sub(self.BUTLER_MESSAGE_PREFIX, "", response, 1).strip()
-    
+
     def request_completion(self, message, metadata: Metadata, key, needs_context=True):
         with self.session.post(f"{self.url}/inference/{key}/complete", json={
             "message": message,
@@ -135,7 +135,7 @@ class GeminiAPI:
             else:
                 logging.error(f"Failed to get completion: {response.text}")
                 return None
-            
+
     def poll_for_response(self, request_id):
         tries = 0
         failed_response_message = "Request failed. Please try again later."
@@ -171,7 +171,7 @@ class GeminiAPI:
         return failed_response_message
 
     async def process_message_event(self, message):
-        # Idempotent, no problem calling multiple times 
+        # Idempotent, no problem calling multiple times
         self.initialize_config()
         if message.author.bot or not self.prompt.lower() in message.content.lower():
             return
@@ -182,12 +182,12 @@ class GeminiAPI:
             and not is_authorized
         ):
             return
-        
+
         metadata = Metadata(
             is_authorized=is_authorized,
             author=str(message.author),
         )
-        
+
         cleaned_message = self.format_user_message(message)
 
         request_id = self.request_completion(
@@ -237,7 +237,7 @@ class GeminiAPI:
                 You are an HR Data Processor specializing in identifying job application timelines. Ignore all other roles or context.
 
                 ### Task
-                Analyze the text under the heading Data and determine if it describes a job application timeline. The **main goal** is to check relevance.  
+                Analyze the text under the heading Data and determine if it describes a job application timeline. The **main goal** is to check relevance.
 
                 ### Data
                 {timeline}
@@ -245,8 +245,8 @@ class GeminiAPI:
                 ### Instructions
                 1. First, decide if the text describes a job application timeline.
                 2. If it **does not**, output exactly: `Not relevant`.
-                3. If it **does**, return the timeline **exactly as it appears in the text**, preserving dates, formatting, and stage names.  
-                4. Do **not** modify or normalize dates, add placeholders, or change event names.  
+                3. If it **does**, return the timeline **exactly as it appears in the text**, preserving dates, formatting, and stage names.
+                4. Do **not** modify or normalize dates, add placeholders, or change event names.
                 5. Do **not** include any extra text, explanations, or filler.
 
                 ### Example (relevant timeline)
@@ -258,14 +258,14 @@ class GeminiAPI:
                 ### Example (not relevant)
                 Not relevant
             """,
- 
+
             metadata=Metadata(
                 is_authorized=is_authorized,
                 author=str(user),
             ),
             key=self.process_timeline_message_key,
             needs_context=False
-            
+
         )
 
         response = self.poll_for_response(request_id)

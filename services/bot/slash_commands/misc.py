@@ -501,7 +501,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         self.add_item(self.company_name)
         self.add_item(self.role)
         self.add_item(self.timeline)
-    
+
     async def on_submit(self, interaction):
         await interaction.response.defer(ephemeral=True)
 
@@ -534,7 +534,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
             "Your process timeline was submitted!",
             ephemeral=True
         )
-        
+
 async def process(ctx: discord.Interaction):
     verified_rid = bot_context.verified_role_id
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:

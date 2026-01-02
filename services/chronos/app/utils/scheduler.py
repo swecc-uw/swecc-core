@@ -50,12 +50,12 @@ class Scheduler:
             raise ValueError(f"Invalid interval type: {type}")
         trigger = CronTrigger(**{mapping[type]: f"*/{interval}"})
         self.scheduler.add_job(func, trigger, id=job_id)
-    
+
     def add_job_every_second(self, func, interval: int = 1, job_id=None):
         """Schedule a job to run every specified number of seconds."""
         trigger = CronTrigger(second=f"*/{interval}")
         self.scheduler.add_job(func, trigger, id=job_id)
-    
+
     def add_job_every_minute(self, func, interval: int = 1, job_id=None):
         """Schedule a job to run every specified number of minutes."""
         trigger = CronTrigger(minute=f"*/{interval}")
@@ -79,7 +79,7 @@ class Scheduler:
     def remove_job(self, job_id):
         """Remove a scheduled job by its ID."""
         self.scheduler.remove_job(id=job_id)
-    
+
     def list_jobs(self):
         """List all active jobs."""
         jobs = self.scheduler.get_jobs()

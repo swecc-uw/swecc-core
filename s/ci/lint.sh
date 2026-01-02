@@ -29,18 +29,18 @@ lint_python_service() {
   local svc="$1"
   local svc_dir
   svc_dir="$(service_dir "$svc")"
-  
+
   log INFO "Linting Python service: $svc"
-  
+
   cd "$svc_dir" || die "Cannot cd to $svc_dir"
-  
+
   if [[ -f "requirements-dev.txt" ]]; then
     log INFO "Installing dev dependencies"
     pip install -q -r requirements-dev.txt 2>/dev/null || true
   fi
-  
+
   local exit_code=0
-  
+
   if command -v black &>/dev/null; then
     log INFO "Running black"
     if [[ "$FIX" == "true" ]]; then
@@ -49,7 +49,7 @@ lint_python_service() {
       black --check . || exit_code=$?
     fi
   fi
-  
+
   if command -v isort &>/dev/null; then
     log INFO "Running isort"
     if [[ "$FIX" == "true" ]]; then
@@ -58,17 +58,17 @@ lint_python_service() {
       isort --check-only . || exit_code=$?
     fi
   fi
-  
+
   if command -v flake8 &>/dev/null; then
     log INFO "Running flake8"
     flake8 . || exit_code=$?
   fi
-  
+
   if command -v mypy &>/dev/null && [[ -f "setup.cfg" || -f "mypy.ini" || -f "pyproject.toml" ]]; then
     log INFO "Running mypy"
     mypy . || exit_code=$?
   fi
-  
+
   return $exit_code
 }
 
@@ -76,9 +76,9 @@ lint_service() {
   local svc="$1"
   local svc_dir
   svc_dir="$(service_dir "$svc")"
-  
+
   [[ -d "$svc_dir" ]] || die "Service directory not found: $svc_dir"
-  
+
   if [[ -f "$svc_dir/requirements.txt" ]] || [[ -f "$svc_dir/requirements-server.txt" ]]; then
     lint_python_service "$svc"
   else

@@ -67,14 +67,14 @@ jobs:
             BASE=${{ github.event.before }}
             HEAD=${{ github.sha }}
           fi
-          
+
           CHANGED_SERVICES="[]"
           for svc in server bot ai chronos sockets scheduler; do
             if git diff --name-only $BASE $HEAD | grep -q "^services/$svc/"; then
               CHANGED_SERVICES=$(echo $CHANGED_SERVICES | jq -c ". + [\"$svc\"]")
             fi
           done
-          
+
           echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
           echo "Changed services: $CHANGED_SERVICES"
 

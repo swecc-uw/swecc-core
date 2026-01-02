@@ -34,8 +34,8 @@ async def send_daily_aoc_message(client):
                 title=f"🎄 Day {day} of Advent of Code {year} is here! 🎄",
                 url=puzzle_url,
                 description=f"",
-                color=0x1f8b4c 
-            )        
+                color=0x1f8b4c
+            )
 
             if leaderboard_data:
                 leaderboard_text = "\n".join(

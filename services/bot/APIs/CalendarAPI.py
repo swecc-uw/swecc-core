@@ -11,7 +11,7 @@ class CalendarAPI:
     def __init__(self):
         load_dotenv()
         self.url = os.getenv('CALENDAR_URL')
-    
+
     def get_url(self):
         return self.url
 
@@ -21,13 +21,13 @@ class CalendarAPI:
         else:
             suffix = ["st", "nd", "rd"][day % 10 - 1]
         return str(day) + suffix
-    
-    def format_date(self, local_start, local_end):
-        formatted_date = local_start.strftime('%a, %b ')  
-        day_with_suffix = self.get_suffix(local_start.day) 
 
-        formatted_start_time = local_start.strftime('%I:%M %p').lstrip("0") 
-        formatted_end_time = local_end.strftime('%I:%M %p').lstrip("0")  
+    def format_date(self, local_start, local_end):
+        formatted_date = local_start.strftime('%a, %b ')
+        day_with_suffix = self.get_suffix(local_start.day)
+
+        formatted_start_time = local_start.strftime('%I:%M %p').lstrip("0")
+        formatted_end_time = local_end.strftime('%I:%M %p').lstrip("0")
 
         return f"{formatted_date}{day_with_suffix} {formatted_start_time} - {formatted_end_time}"
 
@@ -39,7 +39,7 @@ class CalendarAPI:
                 "location": event.location,
                 "description": event.description,
         }
-    
+
     async def get_next_meeting(self):
         response = requests.get(self.url)
         response.raise_for_status()

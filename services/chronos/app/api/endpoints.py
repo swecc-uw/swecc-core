@@ -11,7 +11,7 @@ docker_service = DockerService()
 
 @router.get("/health", tags=["health"])
 async def health_check():
-    return {"status": "ok"}     
+    return {"status": "ok"}
 
 @router.get("/raw-usage", response_model=List[ContainerStats], tags=["containers"])
 async def get_container_usage():
@@ -19,7 +19,7 @@ async def get_container_usage():
         return docker_service.poll_all_container_stats()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 @router.get("/status", tags=["containers"])
 async def get_container_status():
     return docker_service.get_all_containers_live_status()
@@ -30,7 +30,7 @@ async def get_container_metadata_by_name(container_name: str):
         return docker_service.get_container_metadata(container_name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 @router.get("/usage", tags=["containers"])
 async def get_recent_usage():
     try:
@@ -44,7 +44,7 @@ async def get_recent_usage_by_container_name(container_name: str):
         return db.get_recent_items_by_container_name(settings.HEALTH_METRICS_TABLE, container_name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 @router.get("/usage/{container_name}/all", tags=["containers"])
 async def get_all_usage_by_container_name(container_name: str):
     try:
@@ -71,7 +71,7 @@ async def resume_polling(job_item: JobItem):
         return {"message": f"Job {job_item.id} resumed"}
     else:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
 @router.get("/job/{job_id}/status", tags=["scheduler"])
 async def get_job_status(job_id: str):
     scheduler = Scheduler()
@@ -100,15 +100,15 @@ async def get_docker_events(type: Optional[str] = Query(None, description="Filte
             filters["name"] = name
         if action:
             filters["action"] = action
-        
+
         items = db.get_recent_dockers_events()
-        
+
         docker_events = [DockerEvent.from_dynamo_item(item) for item in items]
-        
+
         if filters:
             docker_events = [event for event in docker_events if all(getattr(event, key) == value for key, value in filters.items())]
 
         return {"events": docker_events}
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
