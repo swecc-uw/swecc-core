@@ -65,8 +65,9 @@ class Gemini:
         prompt: str, the prompt to give to the model
         returns: Dictionary containing the filename and the corresponding response
         """
-        results = await asyncio.gather(
+        tasks = [
             self.prompt_file(file_bytes, prompt, mime_type)
             for (_, mime_type), file_bytes in files.items()
-        )
+        ]
+        results = await asyncio.gather(*tasks)
         return dict(zip(files.keys(), results))

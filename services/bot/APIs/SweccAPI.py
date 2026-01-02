@@ -25,8 +25,8 @@ class SweccAPI:
             "Content-Type": "application/json",
         }
         self.reaction_channel_subscriptions = {
-            int(os.getenv("NEW_GRAD_CHANNEL_ID")),
-            int(os.getenv("INTERNSHIP_CHANNEL_ID")),
+            int(os.getenv("NEW_GRAD_CHANNEL_ID", "0")),
+            int(os.getenv("INTERNSHIP_CHANNEL_ID", "0")),
         }
         self.COMPLETED_EMOJI = "✅"
         self.session = requests.Session()
@@ -293,7 +293,7 @@ class SweccAPI:
             ) as response:
                 if response.status != 200:
                     logging.error(
-                        "Failed to get verification URL",
+                        "Failed to get verification URL, status code: %s, json: %s",
                         response.status,
                         await response.json(),
                     )

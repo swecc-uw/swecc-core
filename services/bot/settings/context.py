@@ -5,18 +5,18 @@ class BotContext:
     def __init__(self):
         self.ephemeral = True
         self.token = os.getenv("DISCORD_TOKEN")
-        self.swecc_server = int(os.getenv("SWECC_SERVER"))
+        self.swecc_server = int(os.getenv("SWECC_SERVER", "0"))
 
-        self.admin_channel = int(os.getenv("ADMIN_CHANNEL"))
-        self.transcripts_channel = int(os.getenv("TRANSCRIPTS_CHANNEL"))
-        self.resume_channel = int(os.getenv("SWECC_RESUME_CHANNEL"))
-        self.reading_group_channel = int(os.getenv("READING_GROUP_CHANNEL"))
+        self.admin_channel = int(os.getenv("ADMIN_CHANNEL", "0"))
+        self.transcripts_channel = int(os.getenv("TRANSCRIPTS_CHANNEL", "0"))
+        self.resume_channel = int(os.getenv("SWECC_RESUME_CHANNEL", "0"))
+        self.reading_group_channel = int(os.getenv("READING_GROUP_CHANNEL", "0"))
 
-        self.cohort_category_id = int(os.getenv("COHORT_CATEGORY_ID"))
+        self.cohort_category_id = int(os.getenv("COHORT_CATEGORY_ID", "0"))
 
-        self.verified_role_id = int(os.getenv("VERIFIED_ROLE_ID"))
-        self.officer_role_id = int(os.getenv("OFFICER_ROLE_ID"))
-        self.verified_email_role_id = int(os.getenv("VERIFIED_EMAIL_ROLE_ID"))
+        self.verified_role_id = int(os.getenv("VERIFIED_ROLE_ID", "0"))
+        self.officer_role_id = int(os.getenv("OFFICER_ROLE_ID", "0"))
+        self.verified_email_role_id = int(os.getenv("VERIFIED_EMAIL_ROLE_ID", "0"))
 
         self.prefix = os.getenv("PREFIX_COMMAND")
         self.badwords = [

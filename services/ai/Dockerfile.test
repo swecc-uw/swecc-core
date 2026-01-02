@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Install test dependencies
+COPY requirements.txt .
+COPY requirements-test.txt .
+RUN pip install --no-cache-dir -r requirements-test.txt
+
+# Copy application code
+COPY ./app/ /app/app/
+COPY ./tests/ /app/tests/
+COPY pytest.ini /app/
+
+# Run tests by default
+CMD ["pytest", "tests/", "-v", "--cov=app.mq", "--cov-report=term-missing"]

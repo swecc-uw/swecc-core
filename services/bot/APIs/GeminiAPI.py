@@ -14,8 +14,8 @@ logging.basicConfig(
 
 @dataclass(frozen=True)
 class Metadata:
-    is_authorized: Optional[bool]
-    author: Optional[str]
+    is_authorized: Optional[bool] = None
+    author: Optional[str] = None
 
 
 class GeminiAPI:
@@ -25,9 +25,9 @@ class GeminiAPI:
         max_context_length=2000,
         context_invalidation_time_seconds=10 * 60,  # 10 minutes
     ):
-        self.OFF_TOPIC_CHANNEL_ID = int(os.getenv("OFF_TOPIC_CHANNEL_ID"))
+        self.OFF_TOPIC_CHANNEL_ID = int(os.getenv("OFF_TOPIC_CHANNEL_ID", "0"))
         self.allowed_channels = [self.OFF_TOPIC_CHANNEL_ID]
-        self.allowlisted_roles_id = [int(os.getenv("OFFICER_ROLE_ID"))]
+        self.allowlisted_roles_id = [int(os.getenv("OFFICER_ROLE_ID", "0"))]
 
         self.prompt = "Gemini"
         self.max_context_length = max_context_length
