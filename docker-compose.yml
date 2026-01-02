@@ -1,0 +1,200 @@
+services:
+  # =============================================================================
+  # Infrastructure Services
+  # =============================================================================
+  db:
+    image: postgres:13
+    container_name: swecc-db-instance
+    networks:
+      - swecc-network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-swecc}
+      POSTGRES_USER: ${DB_USER:-swecc}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-swecc_dev_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-swecc} -d ${DB_NAME:-swecc}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    build: ./infra/redis
+    container_name: swecc-redis-instance
+    networks:
+      - swecc-network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: swecc-rabbitmq-instance
+    networks:
+      - swecc-network
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # Application Services
+  # =============================================================================
+  server:
+    build:
+      context: ./services/server
+      target: development
+    container_name: swecc-server
+    networks:
+      - swecc-network
+    volumes:
+      - ./services/server:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=swecc-db-instance
+      - REDIS_HOST=swecc-redis-instance
+      - RABBIT_HOST=swecc-rabbitmq-instance
+    command: >
+      bash -c "cd server && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+
+  sockets:
+    build: ./services/sockets
+    container_name: swecc-sockets
+    networks:
+      - swecc-network
+    volumes:
+      - ./services/sockets/app:/app/app
+    ports:
+      - "8004:8004"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=swecc-db-instance
+      - REDIS_HOST=swecc-redis-instance
+      - RABBIT_HOST=swecc-rabbitmq-instance
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004 --reload
+
+  chronos:
+    build: ./services/chronos
+    container_name: swecc-chronos
+    networks:
+      - swecc-network
+    volumes:
+      - ./services/chronos:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
+  ai:
+    build: ./services/ai
+    container_name: swecc-ai
+    networks:
+      - swecc-network
+    volumes:
+      - ./services/ai/app:/app/app
+    ports:
+      - "8008:8008"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - RABBIT_HOST=swecc-rabbitmq-instance
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload
+
+  bot:
+    build: ./services/bot
+    container_name: swecc-bot
+    networks:
+      - swecc-network
+    volumes:
+      - ./services/bot:/app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      server:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - RABBIT_HOST=swecc-rabbitmq-instance
+      - SWECC_URL=http://swecc-server:8000
+
+  # Scheduler is optional for local dev (uncomment if needed)
+  # scheduler:
+  #   build:
+  #     context: ./services/scheduler
+  #     args:
+  #       ENV: local
+  #   container_name: swecc-scheduler
+  #   networks:
+  #     - swecc-network
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - DOCKER_NETWORK=swecc-network
+  #     - SCHEDULER_BASE_URL=http://swecc-server:8000
+
+  # =============================================================================
+  # Reverse Proxy (optional for local dev)
+  # =============================================================================
+  nginx:
+    image: nginx:stable-alpine
+    container_name: swecc-nginx
+    networks:
+      - swecc-network
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - server
+      - sockets
+    profiles:
+      - with-nginx
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  swecc-network:
+    name: swecc-network
+    driver: bridge
+
