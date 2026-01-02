@@ -48,8 +48,9 @@ def mock_docker_client():
 @pytest.fixture
 def logs_handler(event_emitter, mock_docker_client):
     """Create a ContainerLogsHandler instance with mocked Docker client."""
-    with patch("app.handlers.logs_handler.docker.from_env", return_value=mock_docker_client):
-        handler = ContainerLogsHandler(event_emitter)
+    handler = ContainerLogsHandler(event_emitter)
+    # Directly set the lazy-initialized docker client to the mock
+    handler._docker_client = mock_docker_client
     return handler
 
 
@@ -58,8 +59,8 @@ class TestContainerLogsHandlerInitialization:
 
     def test_initialization_sets_service_name(self, event_emitter, mock_docker_client):
         # Arrange & Act
-        with patch("app.handlers.logs_handler.docker.from_env", return_value=mock_docker_client):
-            handler = ContainerLogsHandler(event_emitter)
+        handler = ContainerLogsHandler(event_emitter)
+        handler._docker_client = mock_docker_client
 
         # Assert
         assert handler.service_name == "Logs"
@@ -67,14 +68,20 @@ class TestContainerLogsHandlerInitialization:
         assert handler.docker_client is mock_docker_client
         assert handler.running_streams == {}
 
-    def test_initialization_creates_docker_client(self, event_emitter):
+    def test_initialization_creates_docker_client_lazily(self, event_emitter):
         # Arrange & Act
         with patch("app.handlers.logs_handler.docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_from_env.return_value = mock_client
             handler = ContainerLogsHandler(event_emitter)
 
-        # Assert
+            # docker client should not be created yet
+            mock_from_env.assert_not_called()
+
+            # Access docker_client property to trigger lazy initialization
+            _ = handler.docker_client
+
+        # Assert - now it should be called
         mock_from_env.assert_called_once()
         assert handler.docker_client is mock_client
 

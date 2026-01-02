@@ -11,8 +11,15 @@ class ContainerLogsHandler(BaseHandler):
     def __init__(self, event_emitter):
         super().__init__(event_emitter, "Logs")
         self.running_streams = {}
-        # Initialize Docker client
-        self.docker_client = docker.from_env()
+        # Lazy-initialize Docker client (only when needed)
+        self._docker_client = None
+
+    @property
+    def docker_client(self):
+        """Lazy initialization of Docker client to avoid startup failures."""
+        if self._docker_client is None:
+            self._docker_client = docker.from_env()
+        return self._docker_client
 
     async def handle_message(self, event: Event) -> None:
         try:
