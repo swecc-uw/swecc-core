@@ -49,7 +49,7 @@ jobs:
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest"
 
-          if docker service ls | grep -q "${{ env.SERVICE_NAME }}"; then
+          if docker service inspect ${{ env.SERVICE_NAME }} &>/dev/null; then
             echo "Updating existing RabbitMQ service..."
             docker service update \
               --image "$IMAGE" \
