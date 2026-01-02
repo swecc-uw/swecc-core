@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  SERVICE_NAME: rabbitmq
+  SERVICE_NAME: rabbitmq-host
   IMAGE_NAME: swecc-rabbit
   NETWORK: prod_swecc-network
 
@@ -105,4 +105,3 @@ jobs:
           echo "❌ Deployment verification timed out"
           docker service ps ${{ env.SERVICE_NAME }} --no-trunc
           exit 1
-
