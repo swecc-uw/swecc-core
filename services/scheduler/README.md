@@ -42,3 +42,4 @@ docker run --name scheduler --network swecc-server_default task-scheduler
 ```bash
 docker build -t task-scheduler .
 docker run --name scheduler --network swag-network task-scheduler
+# CI check
