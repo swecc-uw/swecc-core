@@ -93,21 +93,28 @@ class ContainerLogsHandler(BaseHandler):
             await self.safe_send(websocket, error_msg.dict())
 
     async def _stop_logs(self, user_id: int) -> None:
-        if user_id in self.running_streams:
-            stream_info = self.running_streams[user_id]
+        if user_id not in self.running_streams:
+            return
 
-            # Cancel the streaming task
-            if "task" in stream_info and not stream_info["task"].done():
-                stream_info["task"].cancel()
+        stream_info = self.running_streams.pop(user_id, None)
+        if stream_info is None:
+            return
 
-                try:
-                    await stream_info["task"]
-                except asyncio.CancelledError:
-                    pass
+        # Cancel the streaming task
+        if "task" in stream_info and not stream_info["task"].done():
+            stream_info["task"].cancel()
 
-            # Remove from tracking
-            del self.running_streams[user_id]
-            self.logger.info(f"Stopped log streaming for user {user_id}")
+            try:
+                await stream_info["task"]
+            except asyncio.CancelledError:
+                pass
+
+        self.logger.info(f"Stopped log streaming for user {user_id}")
+
+    async def handle_disconnect(self, event: Event) -> None:
+        """Override to clean up log streams when user disconnects."""
+        await self._stop_logs(event.user_id)
+        await super().handle_disconnect(event)
 
     async def _stream_logs(self, user_id: int, container, websocket) -> None:
         try:
