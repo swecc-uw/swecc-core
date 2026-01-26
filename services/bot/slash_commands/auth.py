@@ -2,7 +2,6 @@ import secrets
 
 import discord
 from APIs.SweccAPI import SweccAPI
-import logging
 
 swecc = SweccAPI()
 
@@ -180,12 +179,18 @@ class VerifyModal(discord.ui.Modal, title="Verify Your Account"):
 async def auth(ctx: discord.Interaction):
     verified_rid = bot_context.verified_role_id
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
-        logging.info("Verified user")        
         usr_msg = f"You are already verified"
-        sys_msg = f"{ctx.user.display_name} has tried to register but is already verified."
+        sys_msg = f"{ctx.user.display_name} has tried to verify but is already verified."
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
+    elif role is None:
+        usr_msg = f"Something went wrong. Please contact an admin."
+        sys_msg = f"ERROR: Role {verified_rid} not found, skipping verification for {ctx.user.display_name}"
+
+        await ctx.response.send_message(usr_msg, ephemeral=True)
+        await bot_context.log(ctx, sys_msg)
+
     else:
         await ctx.response.send_modal(
             VerifyModal(
