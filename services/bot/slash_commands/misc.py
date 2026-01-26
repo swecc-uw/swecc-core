@@ -497,7 +497,10 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
 
         processed_timeline = await gemini_api.process_timeline_message(
             timeline, self.is_authorized, self.username
-        )  # pass only the timeline
+        )
+
+        not_relevant = "Not relevant"
+        failed_request = "Request failed. Please try again later."
 
         if not TIMELINE_CHANNEL:
             await interaction.followup.send("Timeline feature is not configured.", ephemeral=True)
@@ -505,13 +508,13 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
 
         channel = self.bot.get_channel(TIMELINE_CHANNEL)
 
-        if processed_timeline == "Not relevant":
+        if processed_timeline == not_relevant:
             await interaction.followup.send("Your description was not relevant!", ephemeral=True)
             sys_msg = f"{self.username} has tried to add a process timeline for a company but the description was not relevant."
             await self.bot_context.log(interaction, sys_msg)
             return
 
-        if processed_timeline == "Request failed. Please try again later.":
+        if processed_timeline == failed_request:
             await interaction.followup.send(
                 "Request failed. Please try again later.", ephemeral=True
             )
