@@ -2,6 +2,7 @@ import secrets
 
 import discord
 from APIs.SweccAPI import SweccAPI
+import logging
 
 swecc = SweccAPI()
 
@@ -177,11 +178,20 @@ class VerifyModal(discord.ui.Modal, title="Verify Your Account"):
 
 
 async def auth(ctx: discord.Interaction):
-    await ctx.response.send_modal(
-        VerifyModal(
-            bot_context,
+    verified_rid = bot_context.verified_role_id
+    if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
+        logging.info("Verified user")        
+        usr_msg = f"You are already verified"
+        sys_msg = f"{ctx.user.display_name} has tried to register but is already verified."
+
+        await ctx.response.send_message(usr_msg, ephemeral=True)
+        await bot_context.log(ctx, sys_msg)
+    else:
+        await ctx.response.send_modal(
+            VerifyModal(
+                bot_context,
+            )
         )
-    )
 
 
 async def reset_password(ctx: discord.Interaction):
