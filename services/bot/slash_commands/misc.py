@@ -543,7 +543,7 @@ async def process(ctx: discord.Interaction):
     else:
         usr_msg = f"You are not verified. Please use /verify to be able to add a process timeline."
         sys_msg = (
-            f"ERROR: {ctx.user.display_name} not verified and tried to add a process timeline."
+            f"ERROR: {ctx.user.display_name} is not verified and tried to add a process timeline."
         )
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
