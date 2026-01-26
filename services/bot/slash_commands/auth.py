@@ -181,7 +181,6 @@ async def auth(ctx: discord.Interaction):
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
         usr_msg = f"You are already verified"
         sys_msg = f"{ctx.user.display_name} has tried to verify but is already verified."
-
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
     elif role is None:
@@ -190,8 +189,8 @@ async def auth(ctx: discord.Interaction):
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
-
     else:
+        await ctx.user.add_roles(role)
         await ctx.response.send_modal(
             VerifyModal(
                 bot_context,
