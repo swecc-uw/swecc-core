@@ -113,7 +113,7 @@ async def register(ctx: discord.Interaction):
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
     elif role is None:
-        usr_msg = f"Something went wrong. Please contact an admin."
+        usr_msg = f"Something went wrong. Please contact an officer."
         sys_msg = f"ERROR: Role {verified_rid} not found, skipping registration for {ctx.user.display_name}"
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
@@ -184,7 +184,7 @@ async def auth(ctx: discord.Interaction):
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
     elif role is None:
-        usr_msg = f"Something went wrong. Please contact an admin."
+        usr_msg = f"Something went wrong. Please contact an officer."
         sys_msg = f"ERROR: Role {verified_rid} not found, skipping verification for {ctx.user.display_name}"
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
