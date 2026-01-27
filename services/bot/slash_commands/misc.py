@@ -522,23 +522,22 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
             sys_msg = f"{self.username} has tried to add a process timeline for a company but the Gemini request failed."
             await self.bot_context.log(interaction, sys_msg)
             return
-        
+
         if processed_timeline == error:
             await interaction.followup.send(
                 "Error occurred. Please try again later.", ephemeral=True
             )
             sys_msg = f"{self.username} has tried to add a process timeline for a company but an error occurred."
             await self.bot_context.log(interaction, sys_msg)
-            return    
-        
+            return
+
         if processed_timeline != timeline:
             await interaction.followup.send(
                 "Processing failed. Please try again later.", ephemeral=True
             )
             sys_msg = f"{self.username} has tried to add a process timeline for a company but the processed output was not the timeline."
             await self.bot_context.log(interaction, sys_msg)
-            return    
-
+            return
 
         embed = discord.Embed(title=f"Process for {company_name}", color=discord.Color.blue())
         embed.add_field(name="Company:", value=company_name, inline=True)
@@ -548,7 +547,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         await channel.send(embed=embed)
 
         await interaction.followup.send("Your process timeline was submitted!", ephemeral=True)
-       
+
         sys_msg = f"{self.username} has tried to add a process timeline for a company."
         await self.bot_context.log(interaction, sys_msg)
 
