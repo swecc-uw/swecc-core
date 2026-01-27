@@ -250,6 +250,7 @@ class GeminiAPI:
                 3. If it **does**, return the timeline **exactly as it appears in the text**, preserving dates, formatting, and stage names.
                 4. Do **not** modify or normalize dates, add placeholders, or change event names.
                 5. Do **not** include any extra text, explanations, or filler.
+                6. A valid job application timeline must list each stage on its own line with the date. Sentences or paragraphs do NOT count as valid timelines.
 
                 ### Example (relevant timeline)
                 Got reachout 10/10
