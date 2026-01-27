@@ -480,7 +480,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         self.timeline = discord.ui.TextInput(
             label="Timeline",
             style=discord.TextStyle.long,
-            placeholder="Enter process timeline",
+            placeholder="Enter timeline: Reachout 10/10, R1 11/10, R2 15/10, Offer 25/10",
             required=True,
         )
 
