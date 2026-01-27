@@ -501,6 +501,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
 
         not_relevant = "Not relevant"
         failed_request = "Request failed. Please try again later."
+        error = "Error occurred Please try again later."
 
         if not TIMELINE_CHANNEL:
             await interaction.followup.send("Timeline feature is not configured.", ephemeral=True)
@@ -521,6 +522,23 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
             sys_msg = f"{self.username} has tried to add a process timeline for a company but the Gemini request failed."
             await self.bot_context.log(interaction, sys_msg)
             return
+        
+        if processed_timeline == error:
+            await interaction.followup.send(
+                "Error occurred. Please try again later.", ephemeral=True
+            )
+            sys_msg = f"{self.username} has tried to add a process timeline for a company but an error occurred."
+            await self.bot_context.log(interaction, sys_msg)
+            return    
+        
+        if processed_timeline != timeline:
+            await interaction.followup.send(
+                "Processing failed. Please try again later.", ephemeral=True
+            )
+            sys_msg = f"{self.username} has tried to add a process timeline for a company but the processed output was not the timeline."
+            await self.bot_context.log(interaction, sys_msg)
+            return    
+
 
         embed = discord.Embed(title=f"Process for {company_name}", color=discord.Color.blue())
         embed.add_field(name="Company:", value=company_name, inline=True)
@@ -530,12 +548,14 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         await channel.send(embed=embed)
 
         await interaction.followup.send("Your process timeline was submitted!", ephemeral=True)
+       
+        sys_msg = f"{self.username} has tried to add a process timeline for a company."
+        await self.bot_context.log(interaction, sys_msg)
 
 
 async def process(ctx: discord.Interaction):
     verified_rid = bot_context.verified_role_id
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
-        sys_msg = f"{ctx.user.display_name} has tried to add a process timeline for a company."
         await ctx.response.send_modal(
             ProcessModal(
                 bot_context,
@@ -544,7 +564,6 @@ async def process(ctx: discord.Interaction):
                 bot=ctx.client,
             )
         )
-        await bot_context.log(ctx, sys_msg)
     else:
         usr_msg = f"You are not verified. Please use /verify to be able to add a process timeline."
         sys_msg = (
