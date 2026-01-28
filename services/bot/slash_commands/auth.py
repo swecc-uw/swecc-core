@@ -113,7 +113,7 @@ async def register(ctx: discord.Interaction):
         await ctx.response.send_message(usr_msg, ephemeral=True)
         await bot_context.log(ctx, sys_msg)
     elif role is None:
-        usr_msg = f"Something went wrong. Please contact an admin."
+        usr_msg = f"Something went wrong. Please contact an officer."
         sys_msg = f"ERROR: Role {verified_rid} not found, skipping registration for {ctx.user.display_name}"
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
@@ -177,11 +177,25 @@ class VerifyModal(discord.ui.Modal, title="Verify Your Account"):
 
 
 async def auth(ctx: discord.Interaction):
-    await ctx.response.send_modal(
-        VerifyModal(
-            bot_context,
+    verified_rid = bot_context.verified_role_id
+    if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
+        usr_msg = f"You are already verified"
+        sys_msg = f"{ctx.user.display_name} has tried to verify but is already verified."
+        await ctx.response.send_message(usr_msg, ephemeral=True)
+        await bot_context.log(ctx, sys_msg)
+    elif role is None:
+        usr_msg = f"Something went wrong. Please contact an officer."
+        sys_msg = f"ERROR: Role {verified_rid} not found, skipping verification for {ctx.user.display_name}"
+
+        await ctx.response.send_message(usr_msg, ephemeral=True)
+        await bot_context.log(ctx, sys_msg)
+    else:
+        await ctx.user.add_roles(role)
+        await ctx.response.send_modal(
+            VerifyModal(
+                bot_context,
+            )
         )
-    )
 
 
 async def reset_password(ctx: discord.Interaction):

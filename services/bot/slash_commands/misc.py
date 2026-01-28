@@ -480,7 +480,7 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
         self.timeline = discord.ui.TextInput(
             label="Timeline",
             style=discord.TextStyle.long,
-            placeholder="Enter process timeline",
+            placeholder="Enter timeline: Reachout 10/10, R1 11/10, R2 15/10, Offer 25/10",
             required=True,
         )
 
@@ -497,7 +497,11 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
 
         processed_timeline = await gemini_api.process_timeline_message(
             timeline, self.is_authorized, self.username
-        )  # pass only the timeline
+        )
+
+        not_relevant = "Not relevant"
+        failed_request = "Request failed. Please try again later."
+        error = "Error occurred Please try again later."
 
         if not TIMELINE_CHANNEL:
             await interaction.followup.send("Timeline feature is not configured.", ephemeral=True)
@@ -505,8 +509,36 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
 
         channel = self.bot.get_channel(TIMELINE_CHANNEL)
 
-        if processed_timeline == "Not relevant":
-            await interaction.followup.send("Your description was not relevant!", ephemeral=True)
+        sys_msg = None
+
+        if processed_timeline == not_relevant:
+            await interaction.followup.send(
+                "Your description was not relevant!",
+                ephemeral=True,
+            )
+            sys_msg = f"{self.username} has tried to add a process timeline for a company but the description was not relevant. Original timeline: {timeline}."
+        elif processed_timeline == failed_request:
+            await interaction.followup.send(
+                "Request failed. Please try again later.",
+                ephemeral=True,
+            )
+            sys_msg = f"{self.username} has tried to add a process timeline for a company but the Gemini request failed. Oringinal timeline: {timeline}. Processed timeline: {processed_timeline}."
+
+        elif processed_timeline == error:
+            await interaction.followup.send(
+                "Error occurred. Please try again later.",
+                ephemeral=True,
+            )
+            sys_msg = f"{self.username} has tried to add a process timeline for a company but an error occurred. Original timeline: {timeline}. Processed timeline: {processed_timeline}."
+
+        elif processed_timeline != timeline:
+            await interaction.followup.send(
+                "Processing failed. Please try again later.", ephemeral=True
+            )
+            sys_msg = f"{self.username} has tried to add a process timeline for a company but the processed output was not the timeline. Original timeline: {timeline}. Processed timeline: {processed_timeline}."
+
+        if sys_msg:
+            await self.bot_context.log(interaction, sys_msg)
             return
 
         embed = discord.Embed(title=f"Process for {company_name}", color=discord.Color.blue())
@@ -518,11 +550,13 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
 
         await interaction.followup.send("Your process timeline was submitted!", ephemeral=True)
 
+        sys_msg = f"{self.username} has added a process timeline for a company. Processed timeline: {processed_timeline}, Original timeline: {timeline}."
+        await self.bot_context.log(interaction, sys_msg)
+
 
 async def process(ctx: discord.Interaction):
     verified_rid = bot_context.verified_role_id
     if (role := ctx.guild.get_role(verified_rid)) and role in ctx.user.roles:
-        sys_msg = f"{ctx.user.display_name} has tried to add a process timeline for a company."
         await ctx.response.send_modal(
             ProcessModal(
                 bot_context,
@@ -531,11 +565,10 @@ async def process(ctx: discord.Interaction):
                 bot=ctx.client,
             )
         )
-        await bot_context.log(ctx, sys_msg)
     else:
         usr_msg = f"You are not verified. Please use /verify to be able to add a process timeline."
         sys_msg = (
-            f"ERROR: {ctx.user.display_name} not verified and tried to add a process timeline."
+            f"ERROR: {ctx.user.display_name} is not verified and tried to add a process timeline."
         )
 
         await ctx.response.send_message(usr_msg, ephemeral=True)
