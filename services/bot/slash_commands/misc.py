@@ -523,14 +523,14 @@ class ProcessModal(discord.ui.Modal, title="Submit Process Timeline"):
                 ephemeral=True,
             )
             sys_msg = f"{self.username} has tried to add a process timeline for a company but the Gemini request failed. Oringinal timeline: {timeline}. Processed timeline: {processed_timeline}."
-    
+
         elif processed_timeline == error:
             await interaction.followup.send(
                 "Error occurred. Please try again later.",
                 ephemeral=True,
             )
             sys_msg = f"{self.username} has tried to add a process timeline for a company but an error occurred. Original timeline: {timeline}. Processed timeline: {processed_timeline}."
-            
+
         elif processed_timeline != timeline:
             await interaction.followup.send(
                 "Processing failed. Please try again later.", ephemeral=True
