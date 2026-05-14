@@ -1,6 +1,6 @@
 # swecc-mesocosm
 
-CLI and Python client for the BenchAnything benchmark/eval platform.
+CLI and Python client for SWECC's benchmark and eval platform.
 
 A *mesocosm* is a small, enclosed environment used for controlled experiments — which is exactly what this tool helps you build, register, and run evals against.
 
@@ -66,10 +66,10 @@ mesocosm list --status published | jq '.benchmarks[].id'
 
 ```python
 import asyncio
-from swecc_mesocosm import BenchAnythingClient
+from swecc_mesocosm import BenchClient
 
 async def main():
-    c = BenchAnythingClient(base_url="http://127.0.0.1:8000")
+    c = BenchClient(base_url="http://127.0.0.1:8000")
     try:
         domains = await c.list_domains(published_only=True)
         print(len(domains), "published")

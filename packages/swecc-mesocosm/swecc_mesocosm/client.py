@@ -7,7 +7,9 @@ import httpx
 from swecc_mesocosm.settings import settings
 
 
-class BenchAnythingClient:
+class BenchClient:
+    """Async HTTP client for bench-api (`/v1/...`)."""
+
     def __init__(self, base_url: str | None = None) -> None:
         self._base = (base_url or settings.base_url).rstrip("/")
         self._client = httpx.AsyncClient(

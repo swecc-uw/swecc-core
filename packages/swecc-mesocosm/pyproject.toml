@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "swecc-mesocosm"
 version = "0.1.0"
-description = "CLI and Python client for the BenchAnything benchmark/eval platform."
+description = "CLI and Python client for SWECC's benchmark and eval platform."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

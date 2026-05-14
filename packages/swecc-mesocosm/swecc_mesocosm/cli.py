@@ -1,4 +1,4 @@
-"""mesocosm CLI — talks to the BenchAnything HTTP API.
+"""mesocosm CLI — talks to the bench API.
 
 Run `mesocosm --help` for the command surface.
 """
@@ -19,7 +19,7 @@ from rich.table import Table
 
 from swecc_mesocosm import validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
-from swecc_mesocosm.client import BenchAnythingClient
+from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
 from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
 from swecc_mesocosm.settings import settings
@@ -27,7 +27,7 @@ from swecc_mesocosm.settings import settings
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="CLI for the BenchAnything benchmark/eval platform.",
+    help="CLI for SWECC's benchmark and eval platform.",
 )
 eval_app = typer.Typer(no_args_is_help=True, help="Run dev or private evaluations.")
 run_app = typer.Typer(no_args_is_help=True, help="Inspect existing runs.")
@@ -94,15 +94,15 @@ def _run_with_http_errors(coro: Any) -> Any:
         raise typer.Exit(1) from e
 
 
-def _client(base_url: str | None) -> BenchAnythingClient:
-    return BenchAnythingClient(base_url=base_url) if base_url else BenchAnythingClient()
+def _client(base_url: str | None) -> BenchClient:
+    return BenchClient(base_url=base_url) if base_url else BenchClient()
 
 
 BaseUrlOpt = typer.Option(
     None,
     "--base-url",
     envvar="MESOCOSM_BASE_URL",
-    help=f"BenchAnything API URL (default: {settings.base_url}).",
+    help=f"bench API URL (default: {settings.base_url}).",
 )
 
 

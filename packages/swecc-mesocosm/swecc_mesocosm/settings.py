@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     base_url: str = Field(
         default="http://127.0.0.1:8000",
-        description="BenchAnything API base URL",
+        description="bench API base URL",
     )
     request_timeout_s: float = 120.0
     policy_dir: Path = Field(default_factory=_default_policy_dir)

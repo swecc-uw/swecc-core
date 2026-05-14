@@ -93,7 +93,7 @@ def build_domain_payload(
     max_steps_override: int | None = None,
     scoring_source_override: ScoringSource | None = None,
 ) -> dict[str, Any]:
-    """Assemble a POST /v1/domains body consistent with the BenchAnything contract."""
+    """Assemble a POST /v1/domains body consistent with the bench API contract."""
     s = shape or suggest_benchmark_shape(description)
     scoring_source: ScoringSource = scoring_source_override or s.scoring_source
     max_steps = max_steps_override if max_steps_override is not None else s.max_steps
