@@ -19,6 +19,14 @@ from bench_common.runtime.env_client import Observation
 
 log = structlog.get_logger()
 
+# Disable LiteLLM's default internal retries on rate-limit errors. The default
+# (3 retries with exponential backoff) burns through free-tier per-minute quotas
+# in seconds when a 429 surfaces, turning a single failed call into ~3-10 wasted
+# calls against the daily cap. We surface the 429 immediately instead, and let
+# the orchestrator / worker decide what to do (e.g. mark the episode failed,
+# back off the run, etc).
+litellm.num_retries = 0
+
 
 class InferenceRouter:
     """Model-agnostic inference via LiteLLM."""
@@ -39,9 +47,10 @@ class InferenceRouter:
         )
 
         model_name = agent_config.model
-        if model_name not in settings.supported_models:
+        allowed_models = settings.supported_models + settings.accepted_model_aliases
+        if model_name not in allowed_models:
             raise ValueError(
-                f"Model {model_name!r} is not supported. " f"Allowed: {settings.supported_models}"
+                f"Model {model_name!r} is not supported. " f"Allowed: {allowed_models}"
             )
         is_ollama = model_name.startswith("ollama/")
 
