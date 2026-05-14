@@ -79,9 +79,45 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
+  deploy-bench-api:
+    name: Deploy Bench API
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bench-api
+      context: ./services/bench
+      dockerfile: api/Dockerfile
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-bench-sandbox:
+    name: Deploy Bench Sandbox
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bench-sandbox
+      context: ./services/bench
+      dockerfile: sandbox/Dockerfile
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-bench-worker:
+    name: Deploy Bench Worker
+    needs: validate
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bench-worker
+      context: ./services/bench
+      dockerfile: worker/Dockerfile
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
   summary:
     name: Deployment Summary
-    needs: [deploy-server, deploy-bot, deploy-ai, deploy-chronos, deploy-sockets, deploy-scheduler]
+    needs: [deploy-server, deploy-bot, deploy-ai, deploy-chronos, deploy-sockets, deploy-scheduler, deploy-bench-api, deploy-bench-sandbox, deploy-bench-worker]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -97,3 +133,6 @@ jobs:
           echo "| Chronos | ${{ needs.deploy-chronos.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Sockets | ${{ needs.deploy-sockets.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Scheduler | ${{ needs.deploy-scheduler.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bench API | ${{ needs.deploy-bench-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bench Sandbox | ${{ needs.deploy-bench-sandbox.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bench Worker | ${{ needs.deploy-bench-worker.result }} |" >> $GITHUB_STEP_SUMMARY

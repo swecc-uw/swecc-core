@@ -6,12 +6,17 @@ on:
       service:
         required: true
         type: string
-        description: "Service to deploy (server, bot, ai, chronos, sockets, scheduler)"
+        description: "Service name (server, bot, ai, chronos, sockets, scheduler, bench-api, bench-sandbox, bench-worker, mcp-host). Used as the image tag and swarm service name."
+      context:
+        required: false
+        type: string
+        default: ""
+        description: "Docker build context. Defaults to ./services/<service>. Override for grouped services (e.g. ./services/bench)."
       dockerfile:
         required: false
         type: string
         default: "Dockerfile"
-        description: "Dockerfile to use for build"
+        description: "Dockerfile path, relative to context. Defaults to 'Dockerfile'."
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -38,11 +43,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Resolve build context
+        id: ctx
+        run: |
+          if [ -n "${{ inputs.context }}" ]; then
+            echo "context=${{ inputs.context }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "context=./services/${{ inputs.service }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./services/${{ inputs.service }}
-          file: ./services/${{ inputs.service }}/${{ inputs.dockerfile }}
+          context: ${{ steps.ctx.outputs.context }}
+          file: ${{ steps.ctx.outputs.context }}/${{ inputs.dockerfile }}
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE }}:latest

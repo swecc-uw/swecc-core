@@ -1,0 +1,28 @@
+name: Deploy Bench API
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'services/bench/api/**'
+      - 'services/bench/common/**'
+      # bench-api ships the Django bench app (services/server/server/bench/)
+      # in its image so it can import the models in standalone mode. Rebuild
+      # whenever those models change.
+      - 'services/server/server/bench/**'
+      - 's/ops/**'
+      - 's/lib.sh'
+      - '.github/workflows/deploy-bench-api.yml'
+      - '.github/workflows/reusable-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bench-api
+      context: ./services
+      dockerfile: bench/api/Dockerfile
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
