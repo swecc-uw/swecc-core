@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "metrics.apps.MetricsConfig",
     "cohort.apps.CohortConfig",
     "resume_review.apps.ResumeReviewConfig",
+    "bench.apps.BenchConfig",
     "corsheaders",
     "rest_framework_api_key",
 ]
