@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
 
-from swecc_mesocosm import validation
+from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
@@ -33,6 +33,26 @@ eval_app = typer.Typer(no_args_is_help=True, help="Run dev or private evaluation
 run_app = typer.Typer(no_args_is_help=True, help="Inspect existing runs.")
 app.add_typer(eval_app, name="eval")
 app.add_typer(run_app, name="run")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"mesocosm {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main_options(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
+    """mesocosm CLI options (root)."""
 
 console = Console()
 err_console = Console(stderr=True)
@@ -156,11 +176,15 @@ def cmd_validate(
 
 @app.command("register")
 def cmd_register(
-    benchmark_id: str = typer.Option(..., "--id", help="Domain id (slug)."),
-    name: str = typer.Option(..., "--name", help="Human-readable name."),
-    owner_id: str = typer.Option(..., "--owner-id", help="Owning user/team id."),
-    description: str = typer.Option(..., "--description", help="Plain-text description."),
-    env_url: str = typer.Option(..., "--env-url", help="Stable HTTP URL of the eval environment."),
+    benchmark_id: str | None = typer.Option(None, "--id", help="Domain id (slug)."),
+    name: str | None = typer.Option(None, "--name", help="Human-readable name."),
+    owner_id: str | None = typer.Option(None, "--owner-id", help="Owning user/team id."),
+    description: str | None = typer.Option(
+        None, "--description", help="Plain-text description."
+    ),
+    env_url: str | None = typer.Option(
+        None, "--env-url", help="Stable HTTP URL of the eval environment."
+    ),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override inferred max_steps."),
     scoring_source: str | None = typer.Option(
         None,
@@ -175,7 +199,9 @@ def cmd_register(
         "--from-json",
         exists=True,
         readable=True,
-        help="Send this JSON file as the request body, skipping inference.",
+        help="Send this JSON file as the request body. With this set, per-field "
+        "flags (--id/--name/--owner-id/--description/--env-url) become optional "
+        "overrides; without it, all five are required and the body is inferred.",
     ),
     base_url: str | None = BaseUrlOpt,
     skip_validation: bool = typer.Option(
@@ -185,7 +211,34 @@ def cmd_register(
     """Register (or upsert as draft) a domain via POST /v1/domains."""
     if domain_json:
         body: dict[str, Any] = json.loads(domain_json.read_text(encoding="utf-8"))
+        if benchmark_id is not None:
+            body["id"] = benchmark_id
+        if name is not None:
+            body["name"] = name
+        if owner_id is not None:
+            body["owner_id"] = owner_id
+        if description is not None:
+            body["description"] = description
+        if env_url is not None:
+            body["endpoint"] = {**body.get("endpoint", {}), "mode": "remote", "url": env_url}
     else:
+        missing = [
+            flag
+            for flag, value in (
+                ("--id", benchmark_id),
+                ("--name", name),
+                ("--owner-id", owner_id),
+                ("--description", description),
+                ("--env-url", env_url),
+            )
+            if value is None
+        ]
+        if missing:
+            _die(
+                "missing required flag(s) for inference mode: "
+                + ", ".join(missing)
+                + " (or pass --from-json with the full payload)"
+            )
         src: ScoringSource | None = None
         if scoring_source in ("terminal", "episode_reward"):
             src = scoring_source  # type: ignore[assignment]
@@ -193,11 +246,11 @@ def cmd_register(
             _die("--scoring-source must be 'terminal' or 'episode_reward'")
         shape = shape_from_hint(benchmark_kind, description)
         body = build_domain_payload(
-            benchmark_id=benchmark_id,
-            name=name,
-            owner_id=owner_id,
-            description=description,
-            env_url=env_url,
+            benchmark_id=benchmark_id,  # type: ignore[arg-type]
+            name=name,  # type: ignore[arg-type]
+            owner_id=owner_id,  # type: ignore[arg-type]
+            description=description,  # type: ignore[arg-type]
+            env_url=env_url,  # type: ignore[arg-type]
             shape=shape,
             max_steps_override=max_steps,
             scoring_source_override=src,
@@ -300,7 +353,7 @@ def cmd_list(
         items = [d for d in items if d.get("status") == "draft"]
 
     if plain or not sys.stdout.isatty():
-        _print_json({"benchmarks": items, "count": len(items)})
+        _print_json(items)
         return
 
     table = Table(title=f"benchmarks ({len(items)} total, status={status})")
