@@ -16,16 +16,16 @@ Usage:
 
     serve(MyEnv, port=8765)
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Any, Type
 
 import uvicorn
+from bench_common.env_sdk.base import BaseEnv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
-from bench_common.env_sdk.base import BaseEnv
 
 log = logging.getLogger(__name__)
 
@@ -103,8 +103,10 @@ def serve(
         content_type = "application/json"
         system_prompt = None
 
-        if isinstance(obs, dict) and "data" in obs and (
-            "content_type" in obs or "system_prompt" in obs
+        if (
+            isinstance(obs, dict)
+            and "data" in obs
+            and ("content_type" in obs or "system_prompt" in obs)
         ):
             data = obs.get("data")
             content_type = obs.get("content_type", content_type)

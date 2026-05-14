@@ -1,6 +1,7 @@
 """
 FastAPI application entry point.
 """
+
 import asyncio
 import json
 import os
@@ -15,12 +16,11 @@ import django  # noqa: E402
 django.setup()
 
 import structlog  # noqa: E402
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-
 from app.routes import bench, developer, domains, leaderboard, runs, techniques, test  # noqa: E402
 from bench_common.storage.database import init_db  # noqa: E402
 from bench_common.storage.trace_store import trace_store  # noqa: E402
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 log = structlog.get_logger()
 
@@ -73,6 +73,7 @@ async def health() -> dict:
 
 
 # ── WebSocket trace streaming ─────────────────────────────────────────────────
+
 
 @app.websocket("/v1/ws/episodes/{episode_id}/trace")
 async def stream_trace(websocket: WebSocket, episode_id: str) -> None:

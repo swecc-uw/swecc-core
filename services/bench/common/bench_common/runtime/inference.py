@@ -3,15 +3,15 @@ Inference router wrapping LiteLLM.
 Builds messages from observation + binding vow context, calls the model,
 and parses the response into an action dict.
 """
+
 from __future__ import annotations
 
 import json
 import re
 from typing import Any
 
-import structlog
 import litellm
-
+import structlog
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow, CompositeSpace, SpaceSpec, SpaceType
 from bench_common.core.run import AgentConfig
@@ -41,8 +41,7 @@ class InferenceRouter:
         model_name = agent_config.model
         if model_name not in settings.supported_models:
             raise ValueError(
-                f"Model {model_name!r} is not supported. "
-                f"Allowed: {settings.supported_models}"
+                f"Model {model_name!r} is not supported. " f"Allowed: {settings.supported_models}"
             )
         is_ollama = model_name.startswith("ollama/")
 
@@ -116,9 +115,7 @@ class InferenceRouter:
 
     def _describe_space(self, space: SpaceSpec | CompositeSpace) -> str:
         if isinstance(space, CompositeSpace):
-            inner = ", ".join(
-                f"{k}: {self._describe_space(v)}" for k, v in space.fields.items()
-            )
+            inner = ", ".join(f"{k}: {self._describe_space(v)}" for k, v in space.fields.items())
             return f"composite({inner})"
         if space.enum_values:
             return f"one of {space.enum_values}"
@@ -126,9 +123,7 @@ class InferenceRouter:
             return space.description
         return space.type.value
 
-    def _serialize_observation(
-        self, observation: Observation, vow: BindingVow, step: int
-    ) -> str:
+    def _serialize_observation(self, observation: Observation, vow: BindingVow, step: int) -> str:
         data = observation.data
         if isinstance(data, (dict, list)):
             data_str = json.dumps(data, ensure_ascii=False)
@@ -152,8 +147,9 @@ class InferenceRouter:
                 for val in action_space.enum_values:
                     if re.search(rf"\b{re.escape(val.lower())}\b", lower):
                         return val
-                log.warning("action_parse_fallback", raw=raw[:200],
-                            allowed=action_space.enum_values)
+                log.warning(
+                    "action_parse_fallback", raw=raw[:200], allowed=action_space.enum_values
+                )
                 return stripped
             if action_space.type == SpaceType.JSON:
                 return self._extract_json(raw)
@@ -164,9 +160,9 @@ class InferenceRouter:
         text = raw.strip()
         for fence in ("```json", "```"):
             if text.startswith(fence):
-                text = text[len(fence):]
+                text = text.removeprefix(fence)
                 if text.endswith("```"):
-                    text = text[: -3]
+                    text = text[:-3]
                 text = text.strip()
                 break
         try:

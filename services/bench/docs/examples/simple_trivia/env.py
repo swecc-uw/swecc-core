@@ -4,6 +4,7 @@ Simple trivia quiz environment.
 This is a complete, working example of a BenchAnything environment.
 Replace the QUESTIONS list and scoring logic with your own benchmark.
 """
+
 from __future__ import annotations
 
 import random
@@ -74,7 +75,7 @@ class SimpleTriviaEnv(BaseEnv):
         return StepResult(
             observation={"result": "done"},
             reward=1.0 if correct else 0.0,
-            terminated=True,   # single-step episode
+            terminated=True,  # single-step episode
             truncated=False,
             info={
                 "correct": str(correct),
@@ -87,7 +88,4 @@ class SimpleTriviaEnv(BaseEnv):
         if self._question is None:
             return "(no active question)"
         q = self._question
-        return (
-            f"Q: {q['question']}\n"
-            + "\n".join(f"  {k}: {v}" for k, v in q["choices"].items())
-        )
+        return f"Q: {q['question']}\n" + "\n".join(f"  {k}: {v}" for k, v in q["choices"].items())

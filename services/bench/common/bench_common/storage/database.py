@@ -14,6 +14,7 @@ The storage API surface (function signatures) is identical to the previous
 SQLAlchemy implementation so callers (orchestrator, api routes, inference CLI)
 need no changes.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,21 +23,18 @@ from datetime import datetime
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.db.models import Q
 
 # These imports require django.setup() to have been called already.
-from bench.models import (
-    BenchJob as BenchJobRow,
-    DeveloperEnvironment as DeveloperEnvironmentRow,
-    Domain as DomainRow,
-    EnvironmentUsage as EnvironmentUsageRow,
-    Episode as EpisodeRow,
-    Leaderboard as LeaderboardRow,
-    Run as RunRow,
-)
-
+from bench.models import BenchJob as BenchJobRow
+from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
+from bench.models import Domain as DomainRow
+from bench.models import EnvironmentUsage as EnvironmentUsageRow
+from bench.models import Episode as EpisodeRow
+from bench.models import Leaderboard as LeaderboardRow
+from bench.models import Run as RunRow
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
+from django.db.models import Q
 
 
 async def init_db() -> None:
@@ -54,6 +52,7 @@ async def init_db() -> None:
 
 
 # ── Domain ────────────────────────────────────────────────────────────────────
+
 
 async def save_domain(domain: Domain) -> None:
     await DomainRow.objects.aupdate_or_create(
@@ -81,6 +80,7 @@ async def list_domains(*, published_only: bool = False) -> list[Domain]:
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
+
 
 async def save_run(run: Run) -> None:
     await RunRow.objects.aupdate_or_create(
@@ -110,6 +110,7 @@ async def list_runs(domain_id: str | None = None) -> list[Run]:
 
 # ── Episode ───────────────────────────────────────────────────────────────────
 
+
 async def save_episode(episode: Episode) -> None:
     await EpisodeRow.objects.aupdate_or_create(
         id=episode.id,
@@ -137,6 +138,7 @@ async def get_episodes(run_id: str) -> list[Episode]:
 
 
 # ── Developer Environments ────────────────────────────────────────────────────
+
 
 async def save_developer_environment(env: dict[str, Any]) -> None:
     await DeveloperEnvironmentRow.objects.aupdate_or_create(
@@ -192,6 +194,7 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
 
 # ── Environment Usage ─────────────────────────────────────────────────────────
 
+
 async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
     run_rows = [row async for row in RunRow.objects.filter(domain_id=domain_id)]
     total_runs = len(run_rows)
@@ -217,6 +220,7 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 
 
 # ── Bench Jobs ────────────────────────────────────────────────────────────────
+
 
 async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
@@ -267,6 +271,7 @@ async def claim_bench_job(job_id: str) -> dict[str, Any] | None:
     @sync_to_async
     def _claim() -> BenchJobRow | None:
         from django.db import transaction
+
         with transaction.atomic():
             row = (
                 BenchJobRow.objects.select_for_update(skip_locked=True)

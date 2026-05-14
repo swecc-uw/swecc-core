@@ -1,6 +1,7 @@
 """
 Domain for the 2048 environment (4x4, slide and merge, win at 2048 tile).
 """
+
 import os
 import sys
 

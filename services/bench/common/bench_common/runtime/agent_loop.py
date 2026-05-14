@@ -1,6 +1,7 @@
 """
 Agent loop — the inner execution engine for a single episode.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +9,6 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.run import AgentConfig, Episode, TraceEvent
 from bench_common.runtime.env_client import HttpEnvClient, Observation
@@ -59,9 +59,7 @@ class AgentLoop:
 
         # ── technique on_episode_start ────────────────────────────────────────
         for technique in self.techniques:
-            await technique.on_episode_start(
-                episode_id, self.config.techniques_for(technique.id())
-            )
+            await technique.on_episode_start(episode_id, self.config.techniques_for(technique.id()))
 
         obs = await env_client.reset(episode_id=episode_id, seed=seed)
         env_system_prompt: str | None = obs.system_prompt
@@ -83,9 +81,7 @@ class AgentLoop:
         result = None
         max_steps = self.vow.episode.max_steps
         max_wall = self.vow.episode.max_wall_seconds
-        deadline = (
-            datetime.utcnow().timestamp() + max_wall if max_wall else None
-        )
+        deadline = datetime.utcnow().timestamp() + max_wall if max_wall else None
 
         while True:
             step += 1

@@ -20,8 +20,9 @@ yourself.  Import BaseEnv + serve() for that case only.
     from bench_common.env_sdk import BaseEnv, StepResult, serve  # adapter path
     from bench_common.env_sdk.registration import register_domain, DomainConfig  # all paths
 """
+
 from bench_common.env_sdk.base import BaseEnv, StepResult
+from bench_common.env_sdk.registration import DomainConfig, register_domain
 from bench_common.env_sdk.server import serve
-from bench_common.env_sdk.registration import register_domain, DomainConfig
 
 __all__ = ["BaseEnv", "StepResult", "serve", "register_domain", "DomainConfig"]

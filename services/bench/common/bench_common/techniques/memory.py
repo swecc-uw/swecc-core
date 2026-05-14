@@ -5,6 +5,7 @@ Maintains a sliding window of recent (observation, action, reward) triples.
 When the window exceeds `summarize_after` entries a brief summary string
 is prepended so the model stays within context limits.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,9 +30,7 @@ class EpisodicMemoryTechnique(Technique):
     def compatible(self, declaration: TechniqueDeclaration) -> bool:
         return declaration.technique_id == self.id()
 
-    async def on_episode_start(
-        self, episode_id: str, config: dict[str, Any]
-    ) -> None:
+    async def on_episode_start(self, episode_id: str, config: dict[str, Any]) -> None:
         self._window_size = int(config.get("window_size", 10))
         self._summarize_after = int(config.get("summarize_after", 5))
         self._window = deque(maxlen=self._window_size)
@@ -79,13 +78,10 @@ class EpisodicMemoryTechnique(Technique):
         if len(self._window) >= self._summarize_after:
             total_reward = sum(e["reward"] for e in self._window)
             self._summary = (
-                f"{len(self._window)} steps so far, "
-                f"cumulative reward={total_reward:.3f}"
+                f"{len(self._window)} steps so far, " f"cumulative reward={total_reward:.3f}"
             )
 
-    async def on_episode_end(
-        self, episode_id: str, terminal_info: dict[str, Any]
-    ) -> None:
+    async def on_episode_end(self, episode_id: str, terminal_info: dict[str, Any]) -> None:
         self._window.clear()
         self._summary = ""
         self._step_counter = 0

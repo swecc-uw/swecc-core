@@ -5,7 +5,10 @@ Edit the constants at the top, then run register.py to push this to
 the platform.  You only need to re-run register.py when you change
 the domain metadata — the adapter server (adapter.py) is independent.
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from bench_common.core.binding_vow import (
@@ -21,11 +24,11 @@ from bench_common.env_sdk.registration import DomainConfig
 
 # ── Edit these ────────────────────────────────────────────────────────────────
 
-DOMAIN_ID   = "simple-trivia"
+DOMAIN_ID = "simple-trivia"
 DOMAIN_NAME = "Simple Trivia Quiz"
-OWNER_ID    = "your-username"          # set this to your user/org id
+OWNER_ID = "your-username"  # set this to your user/org id
 ADAPTER_URL = "http://localhost:8765"  # where adapter.py is running
-TAGS        = ["nlp", "multiple-choice", "tier1"]
+TAGS = ["nlp", "multiple-choice", "tier1"]
 
 # ── Binding Vow — describes the env contract ──────────────────────────────────
 
@@ -70,7 +73,7 @@ SCORING = ScoringConfig(
         MetricDef(
             name="accuracy",
             type="terminal_field",
-            field="correct",       # env sets info["correct"] = "True"/"False"
+            field="correct",  # env sets info["correct"] = "True"/"False"
             aggregation="pass_rate",
         ),
         MetricDef(

@@ -3,19 +3,19 @@ Bench API — developer test bench (1 model, 1 at a time) and full bench
 (all 5 supported models, dispatched as a BenchJob for the EC2 worker or
 run locally when no worker is configured).
 """
+
 from __future__ import annotations
 
 import asyncio
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 log = structlog.get_logger()
 
@@ -26,6 +26,7 @@ _dev_bench_lock = asyncio.Lock()
 
 
 # ── Dev Test Bench ─────────────────────────────────────────────────────────────
+
 
 class TestBenchRequest(BaseModel):
     env_id: str
@@ -62,7 +63,7 @@ async def test_bench(req: TestBenchRequest) -> Episode:
         raise HTTPException(
             status_code=400,
             detail=f"Environment is not ready (status: {env['status']}). "
-                   "Wait for onboarding to complete before benching.",
+            "Wait for onboarding to complete before benching.",
         )
     if not env.get("domain_id"):
         raise HTTPException(status_code=400, detail="Environment has no associated domain")
@@ -87,6 +88,7 @@ async def test_bench(req: TestBenchRequest) -> Episode:
 
 
 # ── Full Bench ─────────────────────────────────────────────────────────────────
+
 
 class FullBenchResponse(BaseModel):
     id: str
@@ -154,6 +156,7 @@ async def _run_full_bench_local(job_id: str) -> None:
         log.info("full_bench_model_start", job_id=job_id, model=model)
         try:
             from bench_common.core.run import RunConfig
+
             run_config = RunConfig(
                 domain_id=domain_id,
                 binding_vow_version=domain.binding_vow.version,
@@ -168,7 +171,9 @@ async def _run_full_bench_local(job_id: str) -> None:
                 if run and run.status in ("completed", "failed"):
                     break
 
-            primary_score = run.scores.get(domain.scoring.primary_metric) if run and run.scores else None
+            primary_score = (
+                run.scores.get(domain.scoring.primary_metric) if run and run.scores else None
+            )
             model_results[model] = {
                 "run_id": run.id if run else None,
                 "status": run.status if run else "failed",
@@ -184,6 +189,7 @@ async def _run_full_bench_local(job_id: str) -> None:
 
 
 # ── Job management (EC2 worker interface) ──────────────────────────────────────
+
 
 class CompleteJobRequest(BaseModel):
     model_results: dict[str, Any]

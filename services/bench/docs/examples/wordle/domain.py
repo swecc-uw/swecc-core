@@ -5,7 +5,10 @@ Edit the constants at the top, then run register.py to push this to
 the platform. You only need to re-run register.py when you change
 the domain metadata — the adapter server (adapter.py) is independent.
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from bench_common.core.binding_vow import (
@@ -21,11 +24,11 @@ from bench_common.env_sdk.registration import DomainConfig
 
 # ── Edit these ────────────────────────────────────────────────────────────────
 
-DOMAIN_ID   = "wordle"
+DOMAIN_ID = "wordle"
 DOMAIN_NAME = "Wordle"
-OWNER_ID    = "your-username"
+OWNER_ID = "your-username"
 ADAPTER_URL = "http://localhost:8888"
-TAGS        = ["nlp", "word-game", "tier1"]
+TAGS = ["nlp", "word-game", "tier1"]
 
 # ── Binding Vow — describes the env contract ──────────────────────────────────
 

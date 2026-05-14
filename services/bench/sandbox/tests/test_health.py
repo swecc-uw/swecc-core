@@ -1,4 +1,5 @@
 """Smoke test that the sandbox app exposes /health (added by FastAPI defaults if missing)."""
+
 from app.main import app
 
 

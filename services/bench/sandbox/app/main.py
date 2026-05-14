@@ -2,17 +2,17 @@
 Sandbox HTTP service — manages cloned env subprocesses and proxies
 traffic from the API container to the appropriate env process.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import httpx
 import structlog
+from app import manager
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-
-from app import manager
 
 log = structlog.get_logger()
 
@@ -20,6 +20,7 @@ app = FastAPI(title="BenchAnything Sandbox", version="0.1.0")
 
 
 # ── Internal management routes ─────────────────────────────────────────────────
+
 
 class CloneRequest(BaseModel):
     env_id: str
@@ -56,6 +57,7 @@ async def stop_env(env_id: str) -> dict[str, str]:
 
 # ── Reverse-proxy to env subprocesses ─────────────────────────────────────────
 
+
 @app.api_route("/envs/{env_id}/{path:path}", methods=["GET", "POST", "DELETE", "PUT", "PATCH"])
 async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
     """
@@ -71,8 +73,7 @@ async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
 
     body = await request.body()
     headers = {
-        k: v for k, v in request.headers.items()
-        if k.lower() not in ("host", "content-length")
+        k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")
     }
 
     async with httpx.AsyncClient(timeout=60.0) as client:

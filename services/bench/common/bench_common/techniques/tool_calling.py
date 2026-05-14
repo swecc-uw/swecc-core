@@ -8,6 +8,7 @@ tool calls parsed from model responses back through the environment's
 For now this is a pass-through — the domain's technique config defines
 available tools; the model sees them as part of the context.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,9 +28,7 @@ class ToolCallingTechnique(Technique):
     def compatible(self, declaration: TechniqueDeclaration) -> bool:
         return declaration.technique_id == self.id()
 
-    async def on_episode_start(
-        self, episode_id: str, config: dict[str, Any]
-    ) -> None:
+    async def on_episode_start(self, episode_id: str, config: dict[str, Any]) -> None:
         self._tools = config.get("tools", [])
 
     async def before_action(
@@ -50,7 +49,5 @@ class ToolCallingTechnique(Technique):
     ) -> None:
         pass
 
-    async def on_episode_end(
-        self, episode_id: str, terminal_info: dict[str, Any]
-    ) -> None:
+    async def on_episode_end(self, episode_id: str, terminal_info: dict[str, Any]) -> None:
         self._tools = []

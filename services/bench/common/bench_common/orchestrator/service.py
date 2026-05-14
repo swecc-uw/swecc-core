@@ -4,6 +4,7 @@ Orchestrator service — control plane for Runs and Episodes.
 Uses asyncio background tasks instead of Celery+Redis.
 Episode execution is capped by settings.max_parallel_episodes.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +13,6 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode, Run, RunConfig, TechniqueConfig
 from bench_common.eval.metrics import compute_scores
@@ -62,18 +62,14 @@ async def create_run(config: RunConfig, requester_id: str) -> Run:
     declared_ids = {t.technique_id for t in vow.techniques}
     for tc in config.agent_config.techniques:
         if tc.technique_id not in declared_ids:
-            raise ValueError(
-                f"Technique '{tc.technique_id}' not declared in binding vow"
-            )
+            raise ValueError(f"Technique '{tc.technique_id}' not declared in binding vow")
 
     run = Run(config=config, requester_id=requester_id, status="running")
     await db.save_run(run)
 
     # Create episode records
     seeds = config.seed_set or list(range(config.num_episodes))
-    episodes = [
-        Episode(run_id=run.id, seed=seed, status="pending") for seed in seeds
-    ]
+    episodes = [Episode(run_id=run.id, seed=seed, status="pending") for seed in seeds]
     for ep in episodes:
         await db.save_episode(ep)
 

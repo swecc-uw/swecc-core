@@ -20,6 +20,7 @@ step(action) -> StepResult(observation, reward, terminated, truncated, info)
 
 info dict gotcha: all values must be strings, e.g. str(True) not True.
 """
+
 from __future__ import annotations
 
 import random
@@ -30,7 +31,7 @@ from bench_common.env_sdk.base import BaseEnv, StepResult
 # ── Replace with your benchmark data ─────────────────────────────────────────
 
 ITEMS = [
-    {"question": "What is 2 + 2?",       "answer": "4"},
+    {"question": "What is 2 + 2?", "answer": "4"},
     {"question": "What color is the sky?", "answer": "blue"},
     {"question": "How many sides does a triangle have?", "answer": "3"},
 ]
@@ -65,11 +66,11 @@ class MyEnv(BaseEnv):
         return StepResult(
             observation={"result": "done"},
             reward=1.0 if correct else 0.0,
-            terminated=True,       # set False for multi-turn episodes
+            terminated=True,  # set False for multi-turn episodes
             truncated=False,
             info={
-                "correct":          str(correct),          # must be str!
-                "given_answer":     response,
-                "correct_answer":   self._item["answer"],
+                "correct": str(correct),  # must be str!
+                "given_answer": response,
+                "correct_answer": self._item["answer"],
             },
         )

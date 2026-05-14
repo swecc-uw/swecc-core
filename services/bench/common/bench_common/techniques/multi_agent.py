@@ -6,6 +6,7 @@ role would use a separate AgentConfig and InferenceRouter. For now the
 technique injects role metadata into the prompt so a single model can
 simulate a given role.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,9 +27,7 @@ class MultiAgentTechnique(Technique):
     def compatible(self, declaration: TechniqueDeclaration) -> bool:
         return declaration.technique_id == self.id()
 
-    async def on_episode_start(
-        self, episode_id: str, config: dict[str, Any]
-    ) -> None:
+    async def on_episode_start(self, episode_id: str, config: dict[str, Any]) -> None:
         self._roles = config.get("roles", [])
         self._turn = 0
         self._current_role = self._roles[0] if self._roles else ""
@@ -52,9 +51,7 @@ class MultiAgentTechnique(Technique):
             self._turn += 1
             self._current_role = self._roles[self._turn % len(self._roles)]
 
-    async def on_episode_end(
-        self, episode_id: str, terminal_info: dict[str, Any]
-    ) -> None:
+    async def on_episode_end(self, episode_id: str, terminal_info: dict[str, Any]) -> None:
         self._roles = []
         self._current_role = ""
         self._turn = 0

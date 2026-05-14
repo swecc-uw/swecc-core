@@ -7,6 +7,7 @@ Expected server contract (Section 5.2 of design doc):
   POST /close   { "episode_id": "..." }                      → {}
   GET  /health                                               → { "status": "ok" }
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -75,9 +76,7 @@ class HttpEnvClient:
         )
 
     async def step(self, episode_id: str, action: Any) -> StepResult:
-        r = await self._client.post(
-            "/step", json={"episode_id": episode_id, "action": action}
-        )
+        r = await self._client.post("/step", json={"episode_id": episode_id, "action": action})
         r.raise_for_status()
         body = r.json()
         obs_raw = body.get("observation", {})

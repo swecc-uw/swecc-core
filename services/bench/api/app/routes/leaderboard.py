@@ -2,10 +2,10 @@
 Leaderboard routes.
 Builds rankings dynamically from completed Run records in SQLite.
 """
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from bench_common.storage import database as db
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/leaderboards", tags=["leaderboard"])
 

@@ -72,10 +72,12 @@ class MockEnvHandler(BaseHTTPRequestHandler):
             idx = seed % len(QUESTIONS)
             _state[ep] = {"idx": idx, "done": False}
             q = QUESTIONS[idx]
-            self._send_json({
-                "data": q,
-                "content_type": "application/json",
-            })
+            self._send_json(
+                {
+                    "data": q,
+                    "content_type": "application/json",
+                }
+            )
 
         elif self.path == "/step":
             action = body.get("action", "")
@@ -83,13 +85,15 @@ class MockEnvHandler(BaseHTTPRequestHandler):
             q = QUESTIONS[st["idx"]]
             correct = str(action).strip().upper() == q["answer"]
             _state[ep]["done"] = True
-            self._send_json({
-                "observation": {"data": {"result": "done"}, "content_type": "application/json"},
-                "reward": 1.0 if correct else 0.0,
-                "terminated": True,
-                "truncated": False,
-                "info": {"correct": str(correct), "answer": q["answer"]},
-            })
+            self._send_json(
+                {
+                    "observation": {"data": {"result": "done"}, "content_type": "application/json"},
+                    "reward": 1.0 if correct else 0.0,
+                    "terminated": True,
+                    "truncated": False,
+                    "info": {"correct": str(correct), "answer": q["answer"]},
+                }
+            )
 
         elif self.path == "/close":
             _state.pop(ep, None)
@@ -105,20 +109,28 @@ def _start_mock_server(port: int = 18765) -> HTTPServer:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 async def main() -> None:
     # Ensure data dir exists
     os.makedirs("./data", exist_ok=True)
 
     # Lazy imports so we can run from repo root without installing
     import sys
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-    from bench_common.storage.database import init_db, save_domain, get_domain
-    from bench_common.core.binding_vow import BindingVow, SpaceSpec, SpaceType, RewardSpec, EpisodeSemantics
+    from bench_common.core.binding_vow import (
+        BindingVow,
+        EpisodeSemantics,
+        RewardSpec,
+        SpaceSpec,
+        SpaceType,
+    )
     from bench_common.core.domain import Domain, EnvironmentEndpoint
-    from bench_common.core.scoring import ScoringConfig, MetricDef
     from bench_common.core.run import AgentConfig
+    from bench_common.core.scoring import MetricDef, ScoringConfig
     from bench_common.orchestrator.service import run_test_episode
+    from bench_common.storage.database import get_domain, init_db, save_domain
 
     await init_db()
 
