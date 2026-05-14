@@ -37,7 +37,23 @@ jobs:
         env:
           MATRIX_SVC: ${{ matrix.service }}
 
+      # The matrix lists every service the CI knows about, but a given branch
+      # might not include every service yet (e.g. PRs that introduce CI
+      # plumbing before the service code lands, or PRs that touch only a
+      # subset of the monorepo). Skip the lint steps gracefully when the
+      # service directory is absent rather than failing the job.
+      - name: Check whether service is present on this branch
+        id: present
+        run: |
+          if [ -d "${{ steps.svcdir.outputs.dir }}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Service '${{ matrix.service }}' is not present on this branch (${{ steps.svcdir.outputs.dir }} missing) — skipping lint."
+          fi
+
       - name: Install dependencies
+        if: steps.present.outputs.exists == 'true'
         working-directory: ${{ steps.svcdir.outputs.dir }}
         run: |
           python -m pip install --upgrade pip
@@ -46,6 +62,7 @@ jobs:
           pip install pre-commit
 
       - name: Run pre-commit
+        if: steps.present.outputs.exists == 'true'
         run: pre-commit run --all-files
 
   detect-changes:
@@ -205,18 +222,36 @@ jobs:
         env:
           MATRIX_SVC: ${{ matrix.service }}
 
+      # See the lint job — the matrix knows about every bench-* service, but
+      # branches that introduce CI plumbing ahead of the service code (or that
+      # land before sibling services do) won't have these directories yet.
+      # Skip gracefully instead of failing the job.
+      - name: Check whether service is present on this branch
+        id: present
+        run: |
+          svc_dir="./services/bench/${{ steps.svc.outputs.sub }}"
+          common_dir="./services/bench/common"
+          if [ -d "$svc_dir" ] && { [ "${{ matrix.service }}" = "bench-worker" ] || [ -d "$common_dir" ]; }; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::bench service '${{ matrix.service }}' (or its bench_common dep) is not present on this branch — skipping tests."
+          fi
+
       - name: Install bench_common (shared kernel)
-        if: matrix.service != 'bench-worker'
+        if: steps.present.outputs.exists == 'true' && matrix.service != 'bench-worker'
         working-directory: ./services/bench/common
         run: |
           python -m pip install --upgrade pip
           pip install -e .
 
       - name: Install service test deps
+        if: steps.present.outputs.exists == 'true'
         working-directory: ./services/bench/${{ steps.svc.outputs.sub }}
         run: pip install -r requirements-test.txt
 
       - name: Run tests
+        if: steps.present.outputs.exists == 'true'
         working-directory: ./services/bench/${{ steps.svc.outputs.sub }}
         env:
           # bench-api uses Django ORM against Postgres in production. The smoke
