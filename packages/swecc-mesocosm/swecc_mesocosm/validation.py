@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from swecc_mesocosm.settings import settings
 
@@ -15,7 +15,7 @@ def load_constraints() -> dict[str, Any]:
     p = _constraints_path()
     if not p.is_file():
         return {"rules_version": "0", "error": f"missing {p}"}
-    return json.loads(p.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
 
 
 def validate_benchmark_config(
@@ -39,10 +39,16 @@ def validate_benchmark_config(
     for field in required:
         if field not in domain_payload or domain_payload[field] in (None, ""):
             issues.append(f"Missing or empty field: {field}")
-            fixes.append(f"Set `{field}` in the register payload (see GET /v1/domains schema).")
+            fixes.append(
+                f"Set `{field}` in the register payload (see GET /v1/domains schema)."
+            )
 
     model = None
-    ac = domain_payload.get("inferred_agent", {}) if "inferred_agent" in domain_payload else None
+    ac = (
+        domain_payload.get("inferred_agent", {})
+        if "inferred_agent" in domain_payload
+        else None
+    )
     if isinstance(ac, dict):
         model = ac.get("model")
 
@@ -75,7 +81,7 @@ def validate_benchmark_config(
                 "binding_vow.episode.max_steps is unset — episodes may run unbounded in theory."
             )
             fixes.append(
-                "Set episode.max_steps to your true horizon (e.g. 1 for trivia, 30–200 for games)."
+                "Set episode.max_steps to your true horizon (e.g. 1 for trivia, 30-200 for games)."
             )
 
     return {

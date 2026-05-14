@@ -17,9 +17,12 @@ class SuggestedShape:
     tags: list[str]
 
 
-_QA = re.compile(r"\b(trivia|quiz|question|choice|mcq|multiple\s*choice|answer\s*[abcd])\b", re.I)
+_QA = re.compile(
+    r"\b(trivia|quiz|question|choice|mcq|multiple\s*choice|answer\s*[abcd])\b", re.I
+)
 _MULTI = re.compile(
-    r"\b(wordle|game|level|maze|simulation|grid|turn|round|multi[- ]?step|episode|rl)\b", re.I
+    r"\b(wordle|game|level|maze|simulation|grid|turn|round|multi[- ]?step|episode|rl)\b",
+    re.I,
 )
 _TOOL = re.compile(r"\b(tool|function\s*call|api|search)\b", re.I)
 
@@ -38,7 +41,7 @@ def suggest_benchmark_shape(plain_description: str) -> SuggestedShape:
                 "Defaulting to max_steps=1 and terminal-based scoring (success/correct in info)."
             ),
             primary_metric="success_rate",
-            tags=tags + ["qa", "mcq"],
+            tags=[*tags, "qa", "mcq"],
         )
     if _TOOL.search(t):
         tags.append("tools")
@@ -53,7 +56,7 @@ def suggest_benchmark_shape(plain_description: str) -> SuggestedShape:
                 "tighten max_steps to your environment's true horizon."
             ),
             primary_metric="avg_reward",
-            tags=tags + ["env", "multi_step"],
+            tags=[*tags, "env", "multi_step"],
         )
     return SuggestedShape(
         benchmark_kind="general_text_env",
@@ -64,7 +67,7 @@ def suggest_benchmark_shape(plain_description: str) -> SuggestedShape:
             "as primary. Adjust if your env is single-shot or long-horizon."
         ),
         primary_metric="success_rate",
-        tags=tags + ["default"],
+        tags=[*tags, "default"],
     )
 
 
@@ -76,9 +79,13 @@ def shape_from_hint(
         return suggest_benchmark_shape(description)
     k = benchmark_kind.lower().strip()
     if k in ("qa_mcq", "qa", "trivia", "quiz"):
-        return suggest_benchmark_shape("trivia quiz question multiple choice " + description)
+        return suggest_benchmark_shape(
+            "trivia quiz question multiple choice " + description
+        )
     if k in ("interactive_env", "interactive", "env", "multi_step", "game"):
-        return suggest_benchmark_shape("multi step game simulation episode " + description)
+        return suggest_benchmark_shape(
+            "multi step game simulation episode " + description
+        )
     return suggest_benchmark_shape(f"{k} " + description)
 
 
@@ -139,9 +146,14 @@ def build_domain_payload(
         },
         "action_space": {
             "type": "text",
-            "description": "Free-form string action; refine to json/discrete in domain.py for production.",
+            "description": (
+                "Free-form string action; refine to json/discrete in domain.py for production."
+            ),
         },
-        "reward": {"type": "scalar", "description": "Step reward; env may also set terminal info."},
+        "reward": {
+            "type": "scalar",
+            "description": "Step reward; env may also set terminal info.",
+        },
         "episode": {
             "max_steps": max_steps,
             "supports_seed": True,

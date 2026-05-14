@@ -21,7 +21,9 @@ from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
-from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
+from swecc_mesocosm.infer import (
+    suggest_benchmark_shape as infer_suggest_benchmark_shape,
+)
 from swecc_mesocosm.settings import settings
 
 app = typer.Typer(
@@ -54,6 +56,7 @@ def _main_options(
 ) -> None:
     """mesocosm CLI options (root)."""
 
+
 console = Console()
 err_console = Console(stderr=True)
 
@@ -65,7 +68,9 @@ def _print_json(obj: Any) -> None:
     """Pretty-print JSON to a TTY, raw to a pipe."""
     text = json.dumps(obj, indent=2, ensure_ascii=False, default=str)
     if sys.stdout.isatty():
-        console.print(Syntax(text, "json", theme="ansi_dark", background_color="default"))
+        console.print(
+            Syntax(text, "json", theme="ansi_dark", background_color="default")
+        )
     else:
         sys.stdout.write(text + "\n")
 
@@ -125,13 +130,27 @@ BaseUrlOpt = typer.Option(
     help=f"bench API URL (default: {settings.base_url}).",
 )
 
+RegisterFromJsonOpt = typer.Option(
+    None,
+    "--from-json",
+    exists=True,
+    readable=True,
+    help=(
+        "Send this JSON file as the request body. With this set, per-field "
+        "flags (--id/--name/--owner-id/--description/--env-url) become optional "
+        "overrides; without it, all five are required and the body is inferred."
+    ),
+)
+
 
 # ── helpers / inference (no API) ───────────────────────────────────────
 
 
 @app.command("suggest")
 def cmd_suggest(
-    description: str = typer.Argument(..., help="Short plain-text description of the benchmark."),
+    description: str = typer.Argument(
+        ..., help="Short plain-text description of the benchmark."
+    ),
 ) -> None:
     """Recommend benchmark_kind, scoring_source, and max_steps from a description."""
     s = infer_suggest_benchmark_shape(description)
@@ -178,14 +197,18 @@ def cmd_validate(
 def cmd_register(
     benchmark_id: str | None = typer.Option(None, "--id", help="Domain id (slug)."),
     name: str | None = typer.Option(None, "--name", help="Human-readable name."),
-    owner_id: str | None = typer.Option(None, "--owner-id", help="Owning user/team id."),
+    owner_id: str | None = typer.Option(
+        None, "--owner-id", help="Owning user/team id."
+    ),
     description: str | None = typer.Option(
         None, "--description", help="Plain-text description."
     ),
     env_url: str | None = typer.Option(
         None, "--env-url", help="Stable HTTP URL of the eval environment."
     ),
-    max_steps: int | None = typer.Option(None, "--max-steps", help="Override inferred max_steps."),
+    max_steps: int | None = typer.Option(
+        None, "--max-steps", help="Override inferred max_steps."
+    ),
     scoring_source: str | None = typer.Option(
         None,
         "--scoring-source",
@@ -194,15 +217,7 @@ def cmd_register(
     benchmark_kind: str | None = typer.Option(
         None, "--kind", help="Hint for shape inference (e.g. qa_mcq, interactive_env)."
     ),
-    domain_json: Path | None = typer.Option(
-        None,
-        "--from-json",
-        exists=True,
-        readable=True,
-        help="Send this JSON file as the request body. With this set, per-field "
-        "flags (--id/--name/--owner-id/--description/--env-url) become optional "
-        "overrides; without it, all five are required and the body is inferred.",
-    ),
+    domain_json: Path | None = RegisterFromJsonOpt,
     base_url: str | None = BaseUrlOpt,
     skip_validation: bool = typer.Option(
         False, "--skip-validation", help="Skip the local pre-flight validation."
@@ -220,7 +235,11 @@ def cmd_register(
         if description is not None:
             body["description"] = description
         if env_url is not None:
-            body["endpoint"] = {**body.get("endpoint", {}), "mode": "remote", "url": env_url}
+            body["endpoint"] = {
+                **body.get("endpoint", {}),
+                "mode": "remote",
+                "url": env_url,
+            }
     else:
         missing = [
             flag
@@ -239,6 +258,11 @@ def cmd_register(
                 + ", ".join(missing)
                 + " (or pass --from-json with the full payload)"
             )
+        assert benchmark_id is not None
+        assert name is not None
+        assert owner_id is not None
+        assert description is not None
+        assert env_url is not None
         src: ScoringSource | None = None
         if scoring_source in ("terminal", "episode_reward"):
             src = scoring_source  # type: ignore[assignment]
@@ -246,11 +270,11 @@ def cmd_register(
             _die("--scoring-source must be 'terminal' or 'episode_reward'")
         shape = shape_from_hint(benchmark_kind, description)
         body = build_domain_payload(
-            benchmark_id=benchmark_id,  # type: ignore[arg-type]
-            name=name,  # type: ignore[arg-type]
-            owner_id=owner_id,  # type: ignore[arg-type]
-            description=description,  # type: ignore[arg-type]
-            env_url=env_url,  # type: ignore[arg-type]
+            benchmark_id=benchmark_id,
+            name=name,
+            owner_id=owner_id,
+            description=description,
+            env_url=env_url,
             shape=shape,
             max_steps_override=max_steps,
             scoring_source_override=src,
@@ -293,7 +317,9 @@ def cmd_publish(
     _print_json(
         {
             "domain": domain,
-            "artifact_digests": {name: sha256_digest(content) for name, content in arts.items()},
+            "artifact_digests": {
+                name: sha256_digest(content) for name, content in arts.items()
+            },
         }
     )
 
@@ -302,7 +328,9 @@ def cmd_publish(
 def cmd_get(
     benchmark_id: str = typer.Argument(..., help="Domain id to fetch."),
     artifacts: bool = typer.Option(
-        False, "--artifacts", help="Include synthesized contract/eval_profile/dataset_lock."
+        False,
+        "--artifacts",
+        help="Include synthesized contract/eval_profile/dataset_lock.",
     ),
     base_url: str | None = BaseUrlOpt,
 ) -> None:
@@ -331,8 +359,12 @@ def cmd_get(
 
 @app.command("list")
 def cmd_list(
-    status: str = typer.Option("all", "--status", help="One of: all, published, draft."),
-    plain: bool = typer.Option(False, "--json", help="Output raw JSON instead of a table."),
+    status: str = typer.Option(
+        "all", "--status", help="One of: all, published, draft."
+    ),
+    plain: bool = typer.Option(
+        False, "--json", help="Output raw JSON instead of a table."
+    ),
     base_url: str | None = BaseUrlOpt,
 ) -> None:
     """List domains (GET /v1/domains)."""
@@ -377,8 +409,12 @@ def cmd_list(
 @eval_app.command("test")
 def cmd_eval_test(
     domain_id: str = typer.Option(..., "--domain-id", help="Target domain id."),
-    binding_vow_version: str = typer.Option(..., "--vow-version", help="Binding vow version."),
-    model: str = typer.Option(..., "--model", help="Model identifier (e.g. openai/gpt-4o-mini)."),
+    binding_vow_version: str = typer.Option(
+        ..., "--vow-version", help="Binding vow version."
+    ),
+    model: str = typer.Option(
+        ..., "--model", help="Model identifier (e.g. openai/gpt-4o-mini)."
+    ),
     env_url: str | None = typer.Option(None, "--env-url", help="Override env URL."),
     seed: int | None = typer.Option(None, "--seed", help="Episode seed."),
     temperature: float = typer.Option(0.0, "--temperature"),
@@ -489,7 +525,11 @@ def cmd_run_get(
         try:
             run = await c.get_run(run_id)
             episodes = await c.list_episodes(run_id)
-            return {"run": run, "episodes": episodes, "aggregate_scores": run.get("scores", {})}
+            return {
+                "run": run,
+                "episodes": episodes,
+                "aggregate_scores": run.get("scores", {}),
+            }
         finally:
             await c.aclose()
 
@@ -499,7 +539,9 @@ def cmd_run_get(
 @run_app.command("episodes")
 def cmd_run_episodes(
     run_id: str = typer.Argument(...),
-    include_traces: bool = typer.Option(False, "--traces", help="Include per-episode traces."),
+    include_traces: bool = typer.Option(
+        False, "--traces", help="Include per-episode traces."
+    ),
     base_url: str | None = BaseUrlOpt,
 ) -> None:
     """List episodes for a run (GET /v1/runs/{id}/episodes)."""

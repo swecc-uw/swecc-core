@@ -6,9 +6,9 @@ from typing import Any
 
 
 def _canonical_json(obj: Any) -> bytes:
-    return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode(
-        "utf-8"
-    )
+    return json.dumps(
+        obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
 
 
 def sha256_digest(obj: Any) -> str:
@@ -25,7 +25,9 @@ def compile_benchmark_artifacts(domain: dict[str, Any]) -> dict[str, Any]:
         "status": domain.get("status"),
     }
     dataset_lock: dict[str, Any] = {
-        "note": "No dataset lock is stored on the server yet. Pin seeds and env version in your repo.",
+        "note": (
+            "No dataset lock is stored on the server yet. Pin seeds and env version in your repo."
+        ),
         "domain_id": domain.get("id"),
     }
     return {
