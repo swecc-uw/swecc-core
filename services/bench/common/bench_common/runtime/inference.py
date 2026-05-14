@@ -47,9 +47,10 @@ class InferenceRouter:
         )
 
         model_name = agent_config.model
-        if model_name not in settings.supported_models:
+        allowed_models = settings.supported_models + settings.accepted_model_aliases
+        if model_name not in allowed_models:
             raise ValueError(
-                f"Model {model_name!r} is not supported. " f"Allowed: {settings.supported_models}"
+                f"Model {model_name!r} is not supported. " f"Allowed: {allowed_models}"
             )
         is_ollama = model_name.startswith("ollama/")
 

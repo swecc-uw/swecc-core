@@ -44,10 +44,11 @@ async def dev_bench_status() -> dict[str, bool]:
 @router.post("/test", response_model=Episode)
 async def test_bench(req: TestBenchRequest) -> Episode:
     """Run a single dev test bench: one model, one episode at a time."""
-    if req.model not in settings.supported_models:
+    allowed_models = settings.supported_models + settings.accepted_model_aliases
+    if req.model not in allowed_models:
         raise HTTPException(
             status_code=422,
-            detail=f"Unsupported model {req.model!r}. Allowed: {settings.supported_models}",
+            detail=f"Unsupported model {req.model!r}. Allowed: {allowed_models}",
         )
 
     if _dev_bench_lock.locked():
