@@ -1,0 +1,6 @@
+# Shared kernel (bench_common) is installed by the Dockerfile and brings the
+# heavy deps (django, psycopg, litellm, structlog, pydantic, ...). Only the
+# API's own server-layer deps belong here.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+gunicorn>=22.0
