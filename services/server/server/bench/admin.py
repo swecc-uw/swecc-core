@@ -1,14 +1,13 @@
-from django.contrib import admin
-
 from bench.models import (
     BenchJob,
     DeveloperEnvironment,
     Domain,
-    Episode,
     EnvironmentUsage,
+    Episode,
     Leaderboard,
     Run,
 )
+from django.contrib import admin
 
 
 @admin.register(Domain)

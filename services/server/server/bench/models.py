@@ -10,6 +10,7 @@ Most rows store a JSON blob in `data` — the canonical schema lives in the
 Pydantic models in bench_common.core.* and is round-tripped through the
 ORM layer for storage. Indexed columns are surfaced for query filters.
 """
+
 from django.db import models
 
 
