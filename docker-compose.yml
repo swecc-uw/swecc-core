@@ -241,44 +241,6 @@ services:
     profiles:
       - bench-worker
 
-  # =============================================================================
-  # MCP host (Shape B in services/mcp/README.md)
-  #
-  # Starlette gateway that exposes every package under services/mcp/servers/<x>
-  # over Streamable HTTP at /<x>/mcp. Lets remote agent harnesses (Cursor,
-  # Claude Code, Continue, custom clients) connect to bench-anything (and
-  # future MCPs) by URL — no local subprocess spawn required.
-  #
-  # Build context is ./services so the Dockerfile can COPY mcp/host/ AND
-  # mcp/servers/* in one go.
-  # =============================================================================
-  mcp-host:
-    build:
-      context: ./services
-      dockerfile: mcp/host/Dockerfile
-    container_name: swecc-mcp-host
-    networks:
-      - swecc-network
-    ports:
-      - "${MCP_HOST_PORT:-8009}:8009"
-    depends_on:
-      bench-api:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      # bench-anything-mcp is a thin client over bench-api's HTTP surface.
-      # Inside the compose network we can hit it directly by container name.
-      # Override to https://api.swecc.org/bench if you want this MCP host
-      # (e.g. a local one) to drive the deployed bench-api instead.
-      - BENCH_ANYTHING_BASE_URL=${BENCH_ANYTHING_BASE_URL:-http://swecc-bench-api:8000}
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8009/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
   # Scheduler is optional for local dev (uncomment if needed)
   # scheduler:
   #   build:
@@ -309,11 +271,10 @@ services:
     depends_on:
       - server
       - sockets
-      # Optional in dev: nginx will 502 on /bench/ or /mcp/ if these aren't
-      # up, but the rest of the gateway still works. depends_on is
-      # declarative, not a strict ordering — services start in parallel.
+      # Optional in dev: nginx will 502 on /bench/ if bench-api isn't up, but
+      # the rest of the gateway still works. depends_on is declarative, not a
+      # strict ordering — services start in parallel.
       - bench-api
-      - mcp-host
     profiles:
       - with-nginx
 

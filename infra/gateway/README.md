@@ -18,7 +18,6 @@ This folder defines the **linuxserver/swag** reverse-proxy deployment used to te
   | `/ws`, `/ws/` | `swecc_stack_sockets:8004` | WebSocket upgrade |
   | `/bench/v1/ws/` | `swecc_stack_bench-api:8000` | bench-api trace stream (WS, no buffering) |
   | `/bench/` | `swecc_stack_bench-api:8000` | bench-api HTTP (strips `/bench/`) |
-  | `/mcp/` | `swecc_stack_mcp-host:8009` | MCP Streamable HTTP gateway (strips `/mcp/`) |
   | `/` (catch-all) | `swecc_stack_server:8000` | Django (auth, members, leaderboard, …) |
 
 - [`config/nginx/proxy-confs/swecc-server.conf`](./config/nginx/proxy-confs/swecc-server.conf) — legacy reference for the Django service. **Not** loaded by SWAG (wrong filename suffix); kept around as documentation only.

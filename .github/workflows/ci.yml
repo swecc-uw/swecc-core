@@ -26,12 +26,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Resolve service directory (bench-* lives under services/bench/<sub>; mcp-host under services/mcp/host)
+      - name: Resolve service directory (bench-* lives under services/bench/<sub>)
         id: svcdir
         run: |
           case "${{ matrix.service }}" in
             bench-*)  echo "dir=./services/bench/${MATRIX_SVC#bench-}" >> "$GITHUB_OUTPUT" ;;
-            mcp-host) echo "dir=./services/mcp/host" >> "$GITHUB_OUTPUT" ;;
             *)        echo "dir=./services/${{ matrix.service }}" >> "$GITHUB_OUTPUT" ;;
           esac
         env:
@@ -110,12 +109,6 @@ jobs:
           fi
           if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/worker/"; then
             CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-worker\"]")
-          fi
-
-          # mcp-host bundles every package under services/mcp/servers/ — a
-          # change to any of those, or to the host itself, invalidates the image.
-          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/mcp/host/\|^services/mcp/servers/"; then
-            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"mcp-host\"]")
           fi
 
           echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
@@ -290,9 +283,6 @@ jobs:
             bench-api)     echo "context=./services" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/api/Dockerfile" >> "$GITHUB_OUTPUT" ;;
             bench-sandbox) echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/sandbox/Dockerfile" >> "$GITHUB_OUTPUT" ;;
             bench-worker)  echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/worker/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-            # mcp-host context is ./services so its Dockerfile can pip-install
-            # every package under services/mcp/servers/* in a single COPY.
-            mcp-host)      echo "context=./services" >> "$GITHUB_OUTPUT"; echo "file=./services/mcp/host/Dockerfile" >> "$GITHUB_OUTPUT" ;;
             *)             echo "context=./services/${{ matrix.service }}" >> "$GITHUB_OUTPUT"; echo "file=./services/${{ matrix.service }}/Dockerfile" >> "$GITHUB_OUTPUT" ;;
           esac
 

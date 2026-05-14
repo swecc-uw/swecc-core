@@ -6,7 +6,7 @@ on:
       service:
         required: true
         type: string
-        description: "Service name (server, bot, ai, chronos, sockets, scheduler, bench-api, bench-sandbox, bench-worker, mcp-host). Used as the image tag and swarm service name."
+        description: "Service name (server, bot, ai, chronos, sockets, scheduler, bench-api, bench-sandbox, bench-worker). Used as the image tag and swarm service name."
       context:
         required: false
         type: string

@@ -6,7 +6,7 @@ set -euo pipefail
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 export REPO_ROOT
 
-SERVICES=(server bot ai chronos sockets scheduler bench-api bench-sandbox bench-worker mcp-host)
+SERVICES=(server bot ai chronos sockets scheduler bench-api bench-sandbox bench-worker)
 export SERVICES
 
 DOCKERHUB_ORG="${DOCKERHUB_USERNAME:-swecc}"
@@ -60,9 +60,6 @@ service_dir() {
     bench-*)
       echo "${REPO_ROOT}/services/bench/${svc#bench-}"
       ;;
-    mcp-host)
-      echo "${REPO_ROOT}/services/mcp/host"
-      ;;
     *)
       echo "${REPO_ROOT}/services/${svc}"
       ;;
@@ -73,12 +70,11 @@ service_dir() {
 # service_dir; for bench-sandbox/bench-worker it's services/bench/ so the
 # Dockerfile can COPY the shared common/ kernel; for bench-api it's
 # services/ so the Dockerfile can ALSO COPY the Django bench app from
-# services/server/server/bench/. mcp-host similarly needs services/ so its
-# Dockerfile can pip-install every package under services/mcp/servers/*.
+# services/server/server/bench/.
 build_context() {
   local svc="$1"
   case "$svc" in
-    bench-api|mcp-host)
+    bench-api)
       echo "${REPO_ROOT}/services"
       ;;
     bench-*)
@@ -96,9 +92,6 @@ build_dockerfile() {
   case "$svc" in
     bench-api)
       echo "bench/api/Dockerfile"
-      ;;
-    mcp-host)
-      echo "mcp/host/Dockerfile"
       ;;
     bench-*)
       echo "${svc#bench-}/Dockerfile"
