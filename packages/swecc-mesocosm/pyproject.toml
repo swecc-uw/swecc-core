@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "CLI and Python client for SWECC's benchmark and eval platform."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
+license = { file = "LICENSE" }
 keywords = ["benchmark", "evaluation", "llm", "swecc"]
 authors = [
     { name = "SWECC Labs", email = "swecc@uw.edu" },
