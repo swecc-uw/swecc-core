@@ -9,14 +9,15 @@ Usage:
     uv run python docs/examples/simple_trivia/register.py --api http://prod-api:8000
     uv run python docs/examples/simple_trivia/register.py --publish
 """
+
 import argparse
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from docs.examples.simple_trivia.domain import DOMAIN_CONFIG, DOMAIN_ID
 from bench_common.env_sdk.registration import publish_domain, register_domain
+from docs.examples.simple_trivia.domain import DOMAIN_CONFIG, DOMAIN_ID
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Register SimpleTriviaEnv")

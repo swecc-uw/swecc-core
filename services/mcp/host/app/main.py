@@ -26,18 +26,18 @@ to mount sse_app() under a separate prefix later.
 References:
     https://github.com/modelcontextprotocol/python-sdk/blob/v1.x/examples/snippets/servers/streamable_http_multiple_servers.py
 """
+
 from __future__ import annotations
 
 import contextlib
 import logging
 from typing import Any
 
+from app.registry import MountedServer, discover
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
-
-from app.registry import MountedServer, discover
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("mcp-host")

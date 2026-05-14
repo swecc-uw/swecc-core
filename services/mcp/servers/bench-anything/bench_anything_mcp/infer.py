@@ -17,9 +17,7 @@ class SuggestedShape:
     tags: list[str]
 
 
-_QA = re.compile(
-    r"\b(trivia|quiz|question|choice|mcq|multiple\s*choice|answer\s*[abcd])\b", re.I
-)
+_QA = re.compile(r"\b(trivia|quiz|question|choice|mcq|multiple\s*choice|answer\s*[abcd])\b", re.I)
 _MULTI = re.compile(
     r"\b(wordle|game|level|maze|simulation|grid|turn|round|multi[- ]?step|episode|rl)\b", re.I
 )
@@ -124,7 +122,12 @@ def build_domain_payload(
                 "type": "episode_reward",
                 "aggregation": "mean",
             },
-            {"name": "success_rate", "type": "terminal_field", "field": "success", "aggregation": "pass_rate"},
+            {
+                "name": "success_rate",
+                "type": "terminal_field",
+                "field": "success",
+                "aggregation": "pass_rate",
+            },
         ]
         primary_metric_name = "avg_reward"
 

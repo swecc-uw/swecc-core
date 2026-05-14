@@ -1164,7 +1164,7 @@ strict = true
 ## 19. Open Questions
 1. **Binding Vow versioning policy** — Should vow updates always create a new version (append-only), or allow in-place edits while a domain is in draft?
 
-Answer: The preferred design is to develop a Binding Vow at the completion of the environment or benchmark. Thus this should create a new version. 
+Answer: The preferred design is to develop a Binding Vow at the completion of the environment or benchmark. Thus this should create a new version.
 
 2. **Trace format** — JSON-lines per episode vs. a structured format like OpenTelemetry spans? JSONL is simpler; OTel gives free tooling.
 

@@ -29,10 +29,13 @@ CLI usage:
         --env-url http://localhost:8765 \\
         --system "Answer with only the letter A, B, C, or D."
 """
+
 from __future__ import annotations
 
-import requests
 from threading import Semaphore
+
+import requests
+
 
 # Replace async HttpEnvClient with synchronous requests
 class HttpEnvClient:
@@ -44,10 +47,11 @@ class HttpEnvClient:
         response = requests.get(f"{self.env_url}/health", timeout=self.timeout)
         return response.ok
 
+
 from bench_common.core.run import AgentConfig, Episode, TechniqueConfig
 from bench_common.runtime.agent_loop import AgentLoop
-from bench_common.storage.trace_store import TraceStore
 from bench_common.storage import database as db
+from bench_common.storage.trace_store import TraceStore
 from bench_common.techniques import TECHNIQUE_REGISTRY
 from bench_common.techniques.base import Technique
 
@@ -246,6 +250,7 @@ def bench(model, domain_id, env_url, num_episodes):
 
     # Compute domain scores over completed episodes
     from bench_common.eval.metrics import compute_scores
+
     completed_eps = [e for e in episodes if e.status == "completed"]
     scores = compute_scores(domain.scoring, completed_eps) if completed_eps else {}
 
@@ -260,6 +265,7 @@ def bench(model, domain_id, env_url, num_episodes):
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
+
 
 def _parse_args():
     import argparse
@@ -282,22 +288,48 @@ examples:
       --system "Reply with only the letter A, B, C, or D."
         """,
     )
-    p.add_argument("--model", required=True,
-                   help='LiteLLM model string, e.g. "ollama/llama3.2", "ollama/mistral"')
-    p.add_argument("--domain", required=True, dest="domain_id",
-                   help="Domain ID (must be registered in the local DB)")
-    p.add_argument("--env-url", required=True,
-                   help="Base URL of the environment HTTP server, e.g. http://localhost:8765")
-    p.add_argument("--episodes", type=int, default=5, dest="num_episodes",
-                   help="Number of episodes to run (default: 5)")
-    p.add_argument("--seeds", type=int, nargs="+", default=None,
-                   help="Explicit seed list (overrides --episodes)")
-    p.add_argument("--system", default=None, dest="system_prompt",
-                   help="Override the system prompt")
+    p.add_argument(
+        "--model",
+        required=True,
+        help='LiteLLM model string, e.g. "ollama/llama3.2", "ollama/mistral"',
+    )
+    p.add_argument(
+        "--domain",
+        required=True,
+        dest="domain_id",
+        help="Domain ID (must be registered in the local DB)",
+    )
+    p.add_argument(
+        "--env-url",
+        required=True,
+        help="Base URL of the environment HTTP server, e.g. http://localhost:8765",
+    )
+    p.add_argument(
+        "--episodes",
+        type=int,
+        default=5,
+        dest="num_episodes",
+        help="Number of episodes to run (default: 5)",
+    )
+    p.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Explicit seed list (overrides --episodes)",
+    )
+    p.add_argument(
+        "--system", default=None, dest="system_prompt", help="Override the system prompt"
+    )
     p.add_argument("--temperature", type=float, default=0.0)
     p.add_argument("--max-tokens", type=int, default=512)
-    p.add_argument("--parallel", type=int, default=1, dest="max_parallel",
-                   help="Episode concurrency (default: 1)")
+    p.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        dest="max_parallel",
+        help="Episode concurrency (default: 1)",
+    )
     return p.parse_args()
 
 

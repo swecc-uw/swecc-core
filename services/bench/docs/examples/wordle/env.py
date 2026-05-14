@@ -5,6 +5,7 @@ Wordle environment.
 per-letter feedback: "green" (correct letter, correct position),
 "yellow" (correct letter, wrong position), "gray" (not in the word).
 """
+
 from __future__ import annotations
 
 import os
@@ -100,7 +101,4 @@ class WordleEnv(BaseEnv):
         return result
 
     def render(self, mode: str = "text") -> str:
-        return (
-            f"secret={'*' * 5} "
-            f"guesses_used={self._guesses_used}/{self._max_guesses}"
-        )
+        return f"secret={'*' * 5} " f"guesses_used={self._guesses_used}/{self._max_guesses}"

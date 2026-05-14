@@ -11,6 +11,7 @@ name with hyphens turned into underscores plus an `_mcp` suffix.
 Adding a new MCP just means dropping a new folder in `servers/` and rebuilding
 the mcp-host image — no edits here required.
 """
+
 from __future__ import annotations
 
 import importlib

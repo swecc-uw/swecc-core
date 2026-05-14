@@ -27,7 +27,12 @@ def validate_benchmark_config(
     fixes: list[str] = []
     if "error" in c:
         issues.append(c["error"])
-        return {"ok": False, "issues": issues, "suggested_fixes": fixes, "rules_version": c.get("rules_version", "")}
+        return {
+            "ok": False,
+            "issues": issues,
+            "suggested_fixes": fixes,
+            "rules_version": c.get("rules_version", ""),
+        }
 
     rules_v = c.get("rules_version", "0.1.0")
 
@@ -38,11 +43,7 @@ def validate_benchmark_config(
             fixes.append(f"Set `{field}` in the register payload (see GET /v1/domains schema).")
 
     model = None
-    ac = (
-        domain_payload.get("inferred_agent", {})
-        if "inferred_agent" in domain_payload
-        else None
-    )
+    ac = domain_payload.get("inferred_agent", {}) if "inferred_agent" in domain_payload else None
     if isinstance(ac, dict):
         model = ac.get("model")
 
@@ -63,14 +64,20 @@ def validate_benchmark_config(
             issues.append(
                 f"primary_metric {pm!r} is not listed in scoring.metrics (names: {names})."
             )
-            fixes.append("Add a MetricDef with name matching primary_metric, or change primary_metric.")
+            fixes.append(
+                "Add a MetricDef with name matching primary_metric, or change primary_metric."
+            )
 
     vow = domain_payload.get("binding_vow", {})
     if isinstance(vow, dict):
         ep = vow.get("episode", {})
         if isinstance(ep, dict) and ep.get("max_steps") is None:
-            issues.append("binding_vow.episode.max_steps is unset — episodes may run unbounded in theory.")
-            fixes.append("Set episode.max_steps to your true horizon (e.g. 1 for trivia, 30–200 for games).")
+            issues.append(
+                "binding_vow.episode.max_steps is unset — episodes may run unbounded in theory."
+            )
+            fixes.append(
+                "Set episode.max_steps to your true horizon (e.g. 1 for trivia, 30–200 for games)."
+            )
 
     return {
         "ok": len(issues) == 0,

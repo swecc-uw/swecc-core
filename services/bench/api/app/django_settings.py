@@ -6,6 +6,7 @@ FastAPI app that only uses Django's ORM to talk to the bench schema (which is
 provisioned by swecc-server's `manage.py migrate` on startup). These settings
 contain just enough to make `django.setup()` happy and `apps.bench` importable.
 """
+
 import os
 
 # A SECRET_KEY is required by Django even when no views are served. The value

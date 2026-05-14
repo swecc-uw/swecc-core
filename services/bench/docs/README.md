@@ -26,9 +26,9 @@ Your env server              Domain config             Running agents
 my_env_server.py             domain.py                 POST /v1/runs
   GET  /health               DomainConfig(               { agent_config,
   POST /reset     ◄────────    binding_vow,                domain_id }
-  POST /step      ◄────────    scoring,              
-  POST /close     ◄────────    endpoint.url          
-                             )                      
+  POST /step      ◄────────    scoring,
+  POST /close     ◄────────    endpoint.url
+                             )
         │                         │                       │
         │                         ▼                       │
         │                   register.py  ◄────────────────┘

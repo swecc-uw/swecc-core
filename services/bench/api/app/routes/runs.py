@@ -1,10 +1,9 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
 from bench_common.core.run import Episode, Run, RunConfig
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import trace_store
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 

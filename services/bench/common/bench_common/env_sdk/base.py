@@ -5,6 +5,7 @@ The interface mirrors Gymnasium's (reset / step / close) so that wrapping
 an existing Gym env requires almost no code.  The platform calls these methods
 via the HTTP adapter server in src/env_sdk/server.py.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -15,6 +16,7 @@ from typing import Any
 @dataclass
 class StepResult:
     """Return value of BaseEnv.step()."""
+
     observation: Any
     reward: float
     terminated: bool
@@ -75,9 +77,8 @@ class BaseEnv(ABC):
         """
         ...
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027 — intentional no-op default; subclasses may override
         """Release resources.  Called after every episode.  Override if needed."""
-        pass
 
     def render(self, mode: str = "text") -> Any:
         """

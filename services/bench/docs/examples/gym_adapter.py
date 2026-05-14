@@ -12,10 +12,11 @@ Usage:
     2. Fill in the DomainConfig in the __main__ block.
     3. Run: uv run python docs/examples/gym_adapter.py
 """
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -84,7 +85,7 @@ def gym_adapter(gym_env_id: str, **gym_kwargs: Any) -> type[GymEnvAdapter]:
         CartPole = gym_adapter("CartPole-v1")
         serve(CartPole, port=8765)
     """
-    import gymnasium
+    import gymnasium  # noqa: F811 — re-import is intentional; factory-local for lazy availability
 
     class _Adapter(GymEnvAdapter):
         def _make_gym_env(self) -> Any:
@@ -98,6 +99,7 @@ def _to_json(value: Any) -> Any:
     """Recursively convert numpy types to plain Python for JSON serialisation."""
     try:
         import numpy as np
+
         if isinstance(value, np.ndarray):
             return value.tolist()
         if isinstance(value, np.generic):
@@ -116,7 +118,7 @@ def _to_json(value: Any) -> Any:
 if __name__ == "__main__":
     # Quick unit test — no server, no platform needed
     try:
-        import gymnasium  # noqa: F401
+        import gymnasium  # noqa: F401 — availability probe before the factory below uses it
     except ImportError:
         print("Install gymnasium first:  pip install gymnasium")
         sys.exit(1)

@@ -3,13 +3,13 @@ Local filesystem trace store.
 Each episode gets its own JSONL file: {trace_dir}/{episode_id}.jsonl
 Each line is a serialized TraceEvent.
 """
+
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
 import aiofiles
-
 from bench_common.config import settings
 from bench_common.core.run import TraceEvent
 

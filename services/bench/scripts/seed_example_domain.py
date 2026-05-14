@@ -4,6 +4,7 @@ Seed an example domain into a running BenchAnything API server.
 Usage:
     python scripts/seed_example_domain.py [--api-url http://localhost:8000]
 """
+
 import argparse
 import sys
 
@@ -111,8 +112,13 @@ def seed(api_url: str) -> None:
             patch = {
                 k: DOMAIN_PAYLOAD[k]
                 for k in (
-                    "detail", "pricing", "tags", "version_history",
-                    "has_gold_benchmark", "image_url", "profile_picture_url",
+                    "detail",
+                    "pricing",
+                    "tags",
+                    "version_history",
+                    "has_gold_benchmark",
+                    "image_url",
+                    "profile_picture_url",
                 )
                 if k in DOMAIN_PAYLOAD
             }

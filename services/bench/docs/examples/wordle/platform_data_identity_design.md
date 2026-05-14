@@ -1,8 +1,8 @@
 # BenchAnything Data and Identity Design
 
-**Status:** Draft  
-**Date:** April 22, 2026  
-**Author:** Codex  
+**Status:** Draft
+**Date:** April 22, 2026
+**Author:** Codex
 
 ## Problem Statement
 
@@ -14,12 +14,12 @@ This document proposes a pragmatic next version of the data model: keep local de
 
 ## Glossary
 
-**Domain** is a benchmark or environment definition registered with the platform.  
-**Domain Version** is an immutable snapshot of a domain's binding vow, scoring, and endpoint metadata at publish time.  
-**Run** is a benchmark execution request over one domain version and one agent configuration.  
-**Episode** is a single seeded execution inside a run.  
-**Trace Event** is one append-only event emitted during an episode, such as an observation, action, model call, or terminal result.  
-**User** is an authenticated person in BenchAnything. In this proposal, all users authenticate with Google and must belong to the UW domain.  
+**Domain** is a benchmark or environment definition registered with the platform.
+**Domain Version** is an immutable snapshot of a domain's binding vow, scoring, and endpoint metadata at publish time.
+**Run** is a benchmark execution request over one domain version and one agent configuration.
+**Episode** is a single seeded execution inside a run.
+**Trace Event** is one append-only event emitted during an episode, such as an observation, action, model call, or terminal result.
+**User** is an authenticated person in BenchAnything. In this proposal, all users authenticate with Google and must belong to the UW domain.
 **Session** is the server-side login state associated with an authenticated user.
 
 ## Current State
@@ -220,12 +220,12 @@ saved_entities (
 
 The minimum useful indexes are:
 
-`runs (requester_user_id, created_at desc)` for the dashboard.  
-`runs (domain_id, status, created_at desc)` for domain history.  
-`runs (domain_version_id, model, created_at desc)` for comparisons.  
-`episodes (run_id, status, started_at desc)` for run detail pages.  
-`trace_events (episode_id, seq_no)` for replay and pagination.  
-`trace_events (run_id, event_type, ts)` for filtered log queries.  
+`runs (requester_user_id, created_at desc)` for the dashboard.
+`runs (domain_id, status, created_at desc)` for domain history.
+`runs (domain_version_id, model, created_at desc)` for comparisons.
+`episodes (run_id, status, started_at desc)` for run detail pages.
+`trace_events (episode_id, seq_no)` for replay and pagination.
+`trace_events (run_id, event_type, ts)` for filtered log queries.
 `run_metrics (metric_name, metric_value desc)` to support leaderboard materialization.
 
 If production volume grows substantially, `trace_events` should be partitioned by month or by `run_id` hash, but that can wait until after we have real data.
@@ -276,9 +276,9 @@ On successful verification, the backend upserts a `users` row keyed by `google_s
 
 The MVP should accept an allowlist of hosted domains, with initial value `["uw.edu"]`. A token is accepted only if:
 
-the Google signature and audience checks pass,  
-`email_verified` is true,  
-`hd` is present and equals an allowed UW domain, and  
+the Google signature and audience checks pass,
+`email_verified` is true,
+`hd` is present and equals an allowed UW domain, and
 the normalized email suffix matches the same allowlist.
 
 Checking both `hd` and suffix protects the product requirement clearly and avoids relying on an editable client-side login hint.
@@ -301,9 +301,9 @@ Admin roles are out of scope for the first pass.
 
 Every authenticated user gets a dashboard at `/v1/me/dashboard` showing:
 
-their recent runs,  
-their draft and published domains,  
-their developer environment submissions, and  
+their recent runs,
+their draft and published domains,
+their developer environment submissions, and
 their saved entities.
 
 This is the first place users will feel the identity model. It also forces the backend to answer the right queries efficiently, which is exactly why the schema needs to change.
@@ -336,11 +336,11 @@ The dashboard and leaderboard read mostly from normalized metadata and derived m
 
 The minimum new endpoints are:
 
-`POST /v1/auth/google` to exchange a Google ID token for a session.  
-`POST /v1/auth/logout` to revoke the current session.  
-`GET /v1/me` to return the signed-in user.  
-`GET /v1/me/dashboard` to return user-centric summary data.  
-`POST /v1/saved-entities` and `DELETE /v1/saved-entities/{id}` for bookmarks.  
+`POST /v1/auth/google` to exchange a Google ID token for a session.
+`POST /v1/auth/logout` to revoke the current session.
+`GET /v1/me` to return the signed-in user.
+`GET /v1/me/dashboard` to return user-centric summary data.
+`POST /v1/saved-entities` and `DELETE /v1/saved-entities/{id}` for bookmarks.
 `GET /v1/runs/{run_id}/trace-events` for paginated event access.
 
 The existing `create_domain`, `submit_environment`, and `create_run` flows should stop taking owner identity in the request body. The backend should fill it from the session.
@@ -349,10 +349,10 @@ The existing `create_domain`, `submit_environment`, and `create_run` flows shoul
 
 We should add at least the following technical metrics:
 
-auth success rate, auth rejection rate, and reasons for rejection,  
-trace event insert latency and throughput,  
-trace query p50 and p95 latency by endpoint,  
-run creation to first event latency, and  
+auth success rate, auth rejection rate, and reasons for rejection,
+trace event insert latency and throughput,
+trace query p50 and p95 latency by endpoint,
+run creation to first event latency, and
 dashboard query latency.
 
 We should also track the ratio of trace events with external `blob_ref` attachments so we know when multimodal storage pressure starts to matter.
@@ -397,10 +397,10 @@ In stage 4, remove write dependencies on blob-backed `data` columns for the hot 
 
 The first implementation milestone includes:
 
-normalized `users`, `user_sessions`, `domains`, `domain_versions`, `runs`, `episodes`, `trace_events`, and `saved_entities` tables,  
-Google sign-in restricted to UW accounts,  
-dashboard queries for the signed-in user,  
-saved runs/domains, and  
+normalized `users`, `user_sessions`, `domains`, `domain_versions`, `runs`, `episodes`, `trace_events`, and `saved_entities` tables,
+Google sign-in restricted to UW accounts,
+dashboard queries for the signed-in user,
+saved runs/domains, and
 paginated trace-event queries.
 
 ## Out of Scope

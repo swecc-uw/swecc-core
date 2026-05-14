@@ -20,6 +20,7 @@ Usage:
     # Point at a different API server
     uv run python -m src.env_sdk.register path/to/domain.py --api http://prod:8000
 """
+
 from __future__ import annotations
 
 import argparse
@@ -64,8 +65,7 @@ def _load_domain_config(path: str) -> DomainConfig:
         )
     if not isinstance(config, DomainConfig):
         raise TypeError(
-            f"DOMAIN_CONFIG in {filepath} is {type(config).__name__}, "
-            f"expected DomainConfig"
+            f"DOMAIN_CONFIG in {filepath} is {type(config).__name__}, " f"expected DomainConfig"
         )
     return config
 
@@ -80,19 +80,24 @@ def main() -> None:
         help="Path to a domain.py file that exports DOMAIN_CONFIG",
     )
     parser.add_argument(
-        "--api", default="http://localhost:8000",
+        "--api",
+        default="http://localhost:8000",
         help="Platform API URL (default: http://localhost:8000)",
     )
     parser.add_argument(
-        "--id", dest="domain_id", default=None,
+        "--id",
+        dest="domain_id",
+        default=None,
         help="Override the domain ID (default: use DOMAIN_CONFIG.id)",
     )
     parser.add_argument(
-        "--auto-id", action="store_true",
+        "--auto-id",
+        action="store_true",
         help="Derive domain ID from the parent folder name of domain.py",
     )
     parser.add_argument(
-        "--publish", action="store_true",
+        "--publish",
+        action="store_true",
         help="Also publish (freeze Binding Vow, enable leaderboard)",
     )
     args = parser.parse_args()
@@ -102,21 +107,29 @@ def main() -> None:
     # Apply ID overrides
     if args.auto_id:
         folder_name = Path(args.domain_file).resolve().parent.name
-        config = config.model_copy(update={
-            "id": folder_name,
-            "binding_vow": config.binding_vow.model_copy(update={
-                "id": f"{folder_name}-v{config.binding_vow.version}",
-                "domain_id": folder_name,
-            }),
-        })
+        config = config.model_copy(
+            update={
+                "id": folder_name,
+                "binding_vow": config.binding_vow.model_copy(
+                    update={
+                        "id": f"{folder_name}-v{config.binding_vow.version}",
+                        "domain_id": folder_name,
+                    }
+                ),
+            }
+        )
     elif args.domain_id:
-        config = config.model_copy(update={
-            "id": args.domain_id,
-            "binding_vow": config.binding_vow.model_copy(update={
-                "id": f"{args.domain_id}-v{config.binding_vow.version}",
-                "domain_id": args.domain_id,
-            }),
-        })
+        config = config.model_copy(
+            update={
+                "id": args.domain_id,
+                "binding_vow": config.binding_vow.model_copy(
+                    update={
+                        "id": f"{args.domain_id}-v{config.binding_vow.version}",
+                        "domain_id": args.domain_id,
+                    }
+                ),
+            }
+        )
 
     register_domain(config, api_url=args.api)
 

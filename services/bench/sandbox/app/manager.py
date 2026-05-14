@@ -2,6 +2,7 @@
 Sandbox process manager — clones GitHub repos and runs their adapter servers
 as subprocesses, proxying traffic through the sandbox's own HTTP server.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -43,7 +44,11 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
 
     log.info("cloning_repo", env_id=env_id, github_url=github_url)
     clone_proc = await asyncio.create_subprocess_exec(
-        "git", "clone", "--depth=1", github_url, str(env_dir),
+        "git",
+        "clone",
+        "--depth=1",
+        github_url,
+        str(env_dir),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -74,7 +79,13 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
     if req_file.exists():
         log.info("installing_deps", env_id=env_id)
         pip_proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pip", "install", "-q", "-r", str(req_file),
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "-r",
+            str(req_file),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -88,7 +99,10 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
 
     log.info("starting_env_server", env_id=env_id, port=port)
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, str(adapter_path), "--port", str(port),
+        sys.executable,
+        str(adapter_path),
+        "--port",
+        str(port),
         cwd=str(env_dir),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
-
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.scoring import ScoringConfig
+from pydantic import BaseModel
 
 
 class ResourceSpec(BaseModel):

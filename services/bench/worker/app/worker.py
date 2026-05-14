@@ -9,6 +9,7 @@ Required environment variables:
     WORKER_API_URL        Public URL of the BenchAnything API
     ANTHROPIC_API_KEY     (and other model provider keys)
 """
+
 from __future__ import annotations
 
 import json
@@ -19,10 +20,10 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from subprocess import PIPE, run
 from typing import Any
 
 import requests
-from subprocess import run, PIPE
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,7 +87,8 @@ def run_full_bench(job):
     try:
         proc = run(
             ["git", "clone", "--depth=1", github_url, str(work_dir / "repo")],
-            stdout=PIPE, stderr=PIPE
+            stdout=PIPE,
+            stderr=PIPE,
         )
         if proc.returncode != 0:
             raise RuntimeError(f"git clone failed: {proc.stderr.decode().strip()}")
@@ -117,6 +119,7 @@ async def _wait_for_health(url: str, timeout: int = 30) -> None:
 
 def _find_free_port() -> int:
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
@@ -130,7 +133,9 @@ def _wait_for_api(max_attempts: int = 60, delay: float = 5.0) -> None:
             if resp.status_code < 500:
                 log.info(f"API reachable at {API_URL} after {attempt} attempt(s)")
                 return
-            log.info(f"API at {API_URL} returned {resp.status_code} (attempt {attempt}/{max_attempts})")
+            log.info(
+                f"API at {API_URL} returned {resp.status_code} (attempt {attempt}/{max_attempts})"
+            )
         except requests.RequestException as exc:
             log.info(f"waiting for API at {API_URL} (attempt {attempt}/{max_attempts}): {exc}")
         time.sleep(delay)

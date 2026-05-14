@@ -1,6 +1,7 @@
 """
 2048 sliding-tile game for BenchAnything (4x4, merge by sliding).
 """
+
 from __future__ import annotations
 
 import copy
@@ -229,7 +230,5 @@ class Game2048Env(BaseEnv):
         parts = []
         for row in self._grid:
             parts.append("".join(f"{v:5d}" if v else "    ." for v in row))
-        parts.append(
-            f"score={self._score} step={self._step_index} max={_max_tile(self._grid)}"
-        )
+        parts.append(f"score={self._score} step={self._step_index} max={_max_tile(self._grid)}")
         return "\n".join(parts)

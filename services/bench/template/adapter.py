@@ -8,15 +8,16 @@ Local dev:
 
 The platform sandbox will start this automatically and assign its own port.
 """
+
 import argparse
-import sys
 import os
+import sys
 
 # When running locally outside the sandbox, make the SDK importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from template.env import MyEnv       # <- change this if you rename env.py / class
 from bench_common.env_sdk import serve
+from template.env import MyEnv  # <- change this if you rename env.py / class
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

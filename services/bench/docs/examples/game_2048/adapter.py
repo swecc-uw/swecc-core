@@ -3,14 +3,15 @@ HTTP adapter for Game2048Env.
 
   uv run python docs/examples/game_2048/adapter.py
 """
+
 import argparse
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from docs.examples.game_2048.env import Game2048Env
 from bench_common.env_sdk import serve
+from docs.examples.game_2048.env import Game2048Env
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Game2048Env adapter server")

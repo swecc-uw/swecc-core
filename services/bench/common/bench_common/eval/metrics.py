@@ -1,6 +1,7 @@
 """
 Scoring engine — computes metrics from completed episodes.
 """
+
 from __future__ import annotations
 
 import statistics
@@ -45,7 +46,5 @@ def compute_metric(metric: MetricDef, episodes: list[Episode]) -> float:
     return statistics.mean(values)
 
 
-def compute_scores(
-    scoring: ScoringConfig, episodes: list[Episode]
-) -> dict[str, float]:
+def compute_scores(scoring: ScoringConfig, episodes: list[Episode]) -> dict[str, float]:
     return {m.name: compute_metric(m, episodes) for m in scoring.metrics}

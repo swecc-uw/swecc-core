@@ -8,14 +8,15 @@ Usage:
     uv run python docs/examples/wordle/adapter.py
     uv run python docs/examples/wordle/adapter.py --port 9000
 """
+
 import argparse
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from docs.examples.wordle.env import WordleEnv
 from bench_common.env_sdk import serve
+from docs.examples.wordle.env import WordleEnv
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="WordleEnv adapter server")

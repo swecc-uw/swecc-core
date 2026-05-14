@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-import uuid
 
 
 def _new_id() -> str:
@@ -66,7 +66,14 @@ class TraceEvent(BaseModel):
     step: int
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     event_type: Literal[
-        "observation", "action", "reward", "model_call", "tool_call",
-        "technique_event", "step_result", "episode_start", "episode_end"
+        "observation",
+        "action",
+        "reward",
+        "model_call",
+        "tool_call",
+        "technique_event",
+        "step_result",
+        "episode_start",
+        "episode_end",
     ]
     payload: dict[str, Any]

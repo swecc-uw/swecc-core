@@ -8,14 +8,15 @@ Usage:
     uv run python docs/examples/simple_trivia/adapter.py
     uv run python docs/examples/simple_trivia/adapter.py --port 9000
 """
+
 import argparse
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from docs.examples.simple_trivia.env import SimpleTriviaEnv
 from bench_common.env_sdk import serve
+from docs.examples.simple_trivia.env import SimpleTriviaEnv
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SimpleTriviaEnv adapter server")

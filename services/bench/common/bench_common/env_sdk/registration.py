@@ -14,16 +14,16 @@ Usage:
     )
     register_domain(cfg, api_url="http://localhost:8000")
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
-
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
+from pydantic import BaseModel
 
 
 class DomainConfig(BaseModel):
@@ -31,6 +31,7 @@ class DomainConfig(BaseModel):
     Everything needed to register a Domain.  Fill this in inside your
     adapter package's domain.py and pass it to register_domain().
     """
+
     id: str
     name: str
     owner_id: str
