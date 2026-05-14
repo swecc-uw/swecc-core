@@ -29,13 +29,15 @@ EOF
 
 build_service() {
   local svc="$1"
-  local svc_dir
+  local svc_dir context dockerfile
   svc_dir="$(service_dir "$svc")"
+  context="$(build_context "$svc")"
+  dockerfile="$(build_dockerfile "$svc")"
 
   log INFO "Building Docker image for $svc"
 
   [[ -d "$svc_dir" ]] || die "Service directory not found: $svc_dir"
-  [[ -f "$svc_dir/Dockerfile" ]] || die "Dockerfile not found in $svc_dir"
+  [[ -f "${context}/${dockerfile}" ]] || die "Dockerfile not found at ${context}/${dockerfile}"
 
   local image
   image="$(docker_image "$svc" "$TAG")"
@@ -43,8 +45,10 @@ build_service() {
   image_sha="$(docker_image "$svc" "$(git_sha_full)")"
 
   log INFO "Image: $image"
+  log INFO "Build context: $context"
+  log INFO "Dockerfile: $dockerfile"
 
-  docker build -t "$image" -t "$image_sha" "$svc_dir"
+  docker build -t "$image" -t "$image_sha" -f "${context}/${dockerfile}" "$context"
 
   if [[ "$PUSH" == "true" ]]; then
     log INFO "Pushing $image to Docker Hub"
