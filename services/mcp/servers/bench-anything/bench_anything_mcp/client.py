@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-
 from bench_anything_mcp.settings import settings
 
 

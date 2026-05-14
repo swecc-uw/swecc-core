@@ -1,24 +1,20 @@
 """
 BenchAnything MCP — tools map to the HTTP API in src.api (v1 domains, runs, test).
 """
+
 from __future__ import annotations
 
 import json
 from typing import Any, Literal
 
 import httpx
-from mcp.server.fastmcp import FastMCP
-
+from bench_anything_mcp import validation
 from bench_anything_mcp.artifacts import compile_benchmark_artifacts, sha256_digest
 from bench_anything_mcp.client import BenchAnythingClient
-from bench_anything_mcp.infer import (
-    ScoringSource,
-    build_domain_payload,
-    shape_from_hint,
-    suggest_benchmark_shape as infer_suggest_benchmark_shape,
-)
+from bench_anything_mcp.infer import ScoringSource, build_domain_payload, shape_from_hint
+from bench_anything_mcp.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
 from bench_anything_mcp.settings import settings
-from bench_anything_mcp import validation
+from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("BenchAnything")
 
