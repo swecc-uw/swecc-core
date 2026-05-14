@@ -68,8 +68,30 @@ def _http_error_payload(exc: httpx.HTTPStatusError) -> dict[str, Any]:
     }
 
 
+def _connection_error_payload(exc: httpx.RequestError) -> dict[str, Any]:
+    return {
+        "error": "connection_error",
+        "kind": type(exc).__name__,
+        "detail": str(exc),
+        "url": str(exc.request.url) if exc.request is not None else None,
+        "hint": "Is the bench-api server running and reachable at MESOCOSM_BASE_URL?",
+    }
+
+
 def _run_async(coro: Any) -> Any:
     return asyncio.run(coro)
+
+
+def _run_with_http_errors(coro: Any) -> Any:
+    """Run an async API call; map httpx errors to clean JSON + exit 1."""
+    try:
+        return _run_async(coro)
+    except httpx.HTTPStatusError as e:
+        _print_json(_http_error_payload(e))
+        raise typer.Exit(1) from e
+    except httpx.RequestError as e:
+        _print_json(_connection_error_payload(e))
+        raise typer.Exit(1) from e
 
 
 def _client(base_url: str | None) -> BenchAnythingClient:
@@ -107,18 +129,19 @@ def cmd_suggest(
 
 @app.command("validate")
 def cmd_validate(
-    payload: Path = typer.Argument(
+    payload: str = typer.Argument(
         ...,
-        exists=True,
-        readable=True,
         help="Path to a JSON file containing a POST /v1/domains body (use '-' for stdin).",
     ),
 ) -> None:
     """Validate a domain payload against the local policy/constraints.json."""
-    if str(payload) == "-":
+    if payload == "-":
         raw = sys.stdin.read()
     else:
-        raw = payload.read_text(encoding="utf-8")
+        p = Path(payload)
+        if not p.is_file():
+            _die(f"no such file: {payload}")
+        raw = p.read_text(encoding="utf-8")
     try:
         body = json.loads(raw)
     except json.JSONDecodeError as e:
@@ -194,11 +217,7 @@ def cmd_register(
         finally:
             await c.aclose()
 
-    try:
-        created = _run_async(_go())
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    created = _run_with_http_errors(_go())
     _print_json(created)
 
 
@@ -216,11 +235,7 @@ def cmd_publish(
         finally:
             await c.aclose()
 
-    try:
-        domain = _run_async(_go())
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    domain = _run_with_http_errors(_go())
     arts = compile_benchmark_artifacts(domain)
     _print_json(
         {
@@ -247,11 +262,7 @@ def cmd_get(
         finally:
             await c.aclose()
 
-    try:
-        domain = _run_async(_go())
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    domain = _run_with_http_errors(_go())
     if artifacts:
         arts = compile_benchmark_artifacts(domain)
         _print_json(
@@ -284,11 +295,7 @@ def cmd_list(
         finally:
             await c.aclose()
 
-    try:
-        items = _run_async(_go())
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    items = _run_with_http_errors(_go())
     if status == "draft":
         items = [d for d in items if d.get("status") == "draft"]
 
@@ -347,11 +354,7 @@ def cmd_eval_test(
         finally:
             await c.aclose()
 
-    try:
-        _print_json(_run_async(_go()))
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    _print_json(_run_with_http_errors(_go()))
 
 
 @eval_app.command("run")
@@ -412,11 +415,7 @@ def cmd_eval_run(
         finally:
             await c.aclose()
 
-    try:
-        result = _run_async(_go())
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    result = _run_with_http_errors(_go())
     _print_json(result)
     if result.get("error") == "domain_not_published":
         raise typer.Exit(1)
@@ -441,11 +440,7 @@ def cmd_run_get(
         finally:
             await c.aclose()
 
-    try:
-        _print_json(_run_async(_go()))
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    _print_json(_run_with_http_errors(_go()))
 
 
 @run_app.command("episodes")
@@ -467,11 +462,7 @@ def cmd_run_episodes(
         finally:
             await c.aclose()
 
-    try:
-        _print_json(_run_async(_go()))
-    except httpx.HTTPStatusError as e:
-        _print_json(_http_error_payload(e))
-        raise typer.Exit(1) from e
+    _print_json(_run_with_http_errors(_go()))
 
 
 def main() -> None:
