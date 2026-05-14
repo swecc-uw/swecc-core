@@ -24,11 +24,18 @@ class Settings(BaseSettings):
     # Sandbox — where cloned envs run (overridden to http://sandbox:8001 in Docker)
     sandbox_url: str = "http://localhost:8001"
 
-    # Supported model allowlist (LiteLLM provider/model format)
+    # Supported model allowlist (LiteLLM provider/model format).
+    # NOTE: Google AI Studio is served by LiteLLM under the `gemini/` prefix
+    # (using GEMINI_API_KEY / GOOGLE_API_KEY). The `google/` prefix is NOT a
+    # valid LiteLLM provider — use `vertex_ai/` for Vertex AI instead.
     supported_models: list[str] = [
         "anthropic/claude-sonnet-4-6",
         "openai/gpt-4o",
-        "google/gemini-2.0-flash",
+        "gemini/gemini-2.5-flash",
+        "gemini/gemini-2.5-flash-lite",
+        "gemini/gemini-flash-latest",
+        "gemini/gemini-flash-lite-latest",
+        "gemini/gemini-2.0-flash",
         "deepseek/deepseek-chat",
         "xai/grok-2",
     ]

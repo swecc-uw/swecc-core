@@ -19,6 +19,14 @@ from bench_common.runtime.env_client import Observation
 
 log = structlog.get_logger()
 
+# Disable LiteLLM's default internal retries on rate-limit errors. The default
+# (3 retries with exponential backoff) burns through free-tier per-minute quotas
+# in seconds when a 429 surfaces, turning a single failed call into ~3-10 wasted
+# calls against the daily cap. We surface the 429 immediately instead, and let
+# the orchestrator / worker decide what to do (e.g. mark the episode failed,
+# back off the run, etc).
+litellm.num_retries = 0
+
 
 class InferenceRouter:
     """Model-agnostic inference via LiteLLM."""
