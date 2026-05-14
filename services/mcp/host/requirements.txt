@@ -1,6 +1,0 @@
-# MCP gateway dependencies. Each services/mcp/servers/<name>/ package brings
-# its own requirements via its pyproject.toml (e.g. bench-anything-mcp pulls
-# httpx, pydantic, pydantic-settings) — keep this file minimal.
-mcp[cli]>=1.6
-starlette>=0.37
-uvicorn[standard]>=0.30
