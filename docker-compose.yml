@@ -53,7 +53,8 @@ services:
       test: ["CMD", "rabbitmq-diagnostics", "check_running"]
       interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 12
+      start_period: 90s
 
   # =============================================================================
   # Application Services
@@ -156,6 +157,128 @@ services:
       - RABBIT_HOST=swecc-rabbitmq-instance
       - SWECC_URL=http://swecc-server:8000
 
+  # =============================================================================
+  # Bench services (BenchAnything backend; UI lives in a separate repo)
+  # =============================================================================
+  bench-sandbox:
+    build:
+      context: ./services/bench
+      dockerfile: sandbox/Dockerfile
+    container_name: swecc-bench-sandbox
+    networks:
+      - swecc-network
+    volumes:
+      - bench_envs:/envs
+    env_file:
+      - .env
+    environment:
+      - SANDBOX_HOST=swecc-bench-sandbox
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  bench-api:
+    build:
+      # Expanded context (services/) so the Dockerfile can pull both
+      # bench/ and the Django app at server/server/bench/.
+      context: ./services
+      dockerfile: bench/api/Dockerfile
+    container_name: swecc-bench-api
+    networks:
+      - swecc-network
+    ports:
+      - "${BENCH_API_PORT:-8010}:8000"
+    volumes:
+      - bench_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      bench-sandbox:
+        condition: service_healthy
+      # swecc-server runs `manage.py migrate` on startup; bench-api needs the
+      # bench_* tables to exist before it boots.
+      server:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - ORCH_TRACE_DIR=/data/traces
+      - ORCH_SANDBOX_URL=http://swecc-bench-sandbox:8001
+      # LiteLLM expects GOOGLE_API_KEY for the google/gemini-* provider. The
+      # rest of swecc-core (services/ai) uses GEMINI_API_KEY for the same
+      # Google AI Studio key — fall back to it so a single key in .env covers
+      # both services.
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  bench-worker:
+    build:
+      context: ./services/bench
+      dockerfile: worker/Dockerfile
+    container_name: swecc-bench-worker
+    networks:
+      - swecc-network
+    depends_on:
+      bench-api:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - WORKER_API_URL=http://swecc-bench-api:8000
+      - WORKER_POLL_INTERVAL=${WORKER_POLL_INTERVAL:-10}
+      # Same GEMINI_API_KEY → GOOGLE_API_KEY fallback as bench-api, so the
+      # worker can call google/gemini-* models when its run_full_bench loop
+      # eventually invokes litellm directly.
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
+    profiles:
+      - bench-worker
+
+  # =============================================================================
+  # MCP host (Shape B in services/mcp/README.md)
+  #
+  # Starlette gateway that exposes every package under services/mcp/servers/<x>
+  # over Streamable HTTP at /<x>/mcp. Lets remote agent harnesses (Cursor,
+  # Claude Code, Continue, custom clients) connect to bench-anything (and
+  # future MCPs) by URL — no local subprocess spawn required.
+  #
+  # Build context is ./services so the Dockerfile can COPY mcp/host/ AND
+  # mcp/servers/* in one go.
+  # =============================================================================
+  mcp-host:
+    build:
+      context: ./services
+      dockerfile: mcp/host/Dockerfile
+    container_name: swecc-mcp-host
+    networks:
+      - swecc-network
+    ports:
+      - "${MCP_HOST_PORT:-8009}:8009"
+    depends_on:
+      bench-api:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # bench-anything-mcp is a thin client over bench-api's HTTP surface.
+      # Inside the compose network we can hit it directly by container name.
+      # Override to https://api.swecc.org/bench if you want this MCP host
+      # (e.g. a local one) to drive the deployed bench-api instead.
+      - BENCH_ANYTHING_BASE_URL=${BENCH_ANYTHING_BASE_URL:-http://swecc-bench-api:8000}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8009/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Scheduler is optional for local dev (uncomment if needed)
   # scheduler:
   #   build:
@@ -186,6 +309,11 @@ services:
     depends_on:
       - server
       - sockets
+      # Optional in dev: nginx will 502 on /bench/ or /mcp/ if these aren't
+      # up, but the rest of the gateway still works. depends_on is
+      # declarative, not a strict ordering — services start in parallel.
+      - bench-api
+      - mcp-host
     profiles:
       - with-nginx
 
@@ -193,6 +321,8 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  bench_data:
+  bench_envs:
 
 networks:
   swecc-network:
