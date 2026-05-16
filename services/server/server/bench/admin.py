@@ -46,9 +46,9 @@ class DeveloperEnvironmentAdmin(admin.ModelAdmin):
 
 @admin.register(BenchJob)
 class BenchJobAdmin(admin.ModelAdmin):
-    list_display = ("id", "env_id", "status", "created_at", "completed_at")
+    list_display = ("id", "environment_id", "status", "created_at", "completed_at")
     list_filter = ("status",)
-    search_fields = ("id", "env_id", "github_url")
+    search_fields = ("id", "environment_id", "github_url")
 
 
 @admin.register(EnvironmentUsage)

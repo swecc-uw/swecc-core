@@ -147,7 +147,10 @@ async def get_episode(episode_id: str) -> Episode | None:
 
 
 async def get_episodes(run_id: str) -> list[Episode]:
-    return [_model_from_row_data(Episode, row.data) async for row in EpisodeRow.objects.filter(run_id=run_id)]
+    return [
+        _model_from_row_data(Episode, row.data)
+        async for row in EpisodeRow.objects.filter(run_id=run_id)
+    ]
 
 
 # ── Developer Environments ────────────────────────────────────────────────────
@@ -275,7 +278,11 @@ async def claim_bench_job(job_id: str) -> dict[str, Any] | None:
         from django.db import transaction
 
         with transaction.atomic():
-            row = BenchJobRow.objects.select_for_update(skip_locked=True).filter(id=job_id, status="queued").first()
+            row = (
+                BenchJobRow.objects.select_for_update(skip_locked=True)
+                .filter(id=job_id, status="queued")
+                .first()
+            )
             if row is None:
                 return None
             row.status = "running"
@@ -287,7 +294,9 @@ async def claim_bench_job(job_id: str) -> dict[str, Any] | None:
     return _bench_job_to_dict(row) if row else None
 
 
-async def complete_bench_job(job_id: str, model_results: dict[str, Any], failed: bool = False) -> dict[str, Any] | None:
+async def complete_bench_job(
+    job_id: str, model_results: dict[str, Any], failed: bool = False
+) -> dict[str, Any] | None:
     try:
         row = await BenchJobRow.objects.aget(id=job_id)
     except BenchJobRow.DoesNotExist:
