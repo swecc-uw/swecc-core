@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from asgiref.sync import sync_to_async
 
@@ -28,13 +28,29 @@ from asgiref.sync import sync_to_async
 from bench.models import BenchJob as BenchJobRow
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
 from bench.models import Domain as DomainRow
-from bench.models import EnvironmentUsage as EnvironmentUsageRow
 from bench.models import Episode as EpisodeRow
 from bench.models import Leaderboard as LeaderboardRow
 from bench.models import Run as RunRow
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
-from django.db.models import Q
+from django.utils import timezone
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def _model_from_row_data(model_cls: type[T], data: Any) -> T:
+    if isinstance(data, dict):
+        return model_cls.model_validate(data)
+    return model_cls.model_validate_json(data)
+
+
+def _iso_dt(value: datetime | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return value.isoformat()
 
 
 async def init_db() -> None:
@@ -58,7 +74,7 @@ async def save_domain(domain: Domain) -> None:
     await DomainRow.objects.aupdate_or_create(
         id=domain.id,
         defaults={
-            "data": domain.model_dump_json(),
+            "data": domain.model_dump(mode="json"),
             "published": domain.status == "published",
         },
     )
@@ -69,14 +85,14 @@ async def get_domain(domain_id: str) -> Domain | None:
         row = await DomainRow.objects.aget(id=domain_id)
     except DomainRow.DoesNotExist:
         return None
-    return Domain.model_validate_json(row.data)
+    return _model_from_row_data(Domain, row.data)
 
 
 async def list_domains(*, published_only: bool = False) -> list[Domain]:
     qs = DomainRow.objects.all()
     if published_only:
         qs = qs.filter(published=True)
-    return [Domain.model_validate_json(row.data) async for row in qs]
+    return [_model_from_row_data(Domain, row.data) async for row in qs]
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
@@ -86,7 +102,7 @@ async def save_run(run: Run) -> None:
     await RunRow.objects.aupdate_or_create(
         id=run.id,
         defaults={
-            "data": run.model_dump_json(),
+            "data": run.model_dump(mode="json"),
             "domain_id": run.config.domain_id,
             "status": run.status,
         },
@@ -98,14 +114,14 @@ async def get_run(run_id: str) -> Run | None:
         row = await RunRow.objects.aget(id=run_id)
     except RunRow.DoesNotExist:
         return None
-    return Run.model_validate_json(row.data)
+    return _model_from_row_data(Run, row.data)
 
 
 async def list_runs(domain_id: str | None = None) -> list[Run]:
     qs = RunRow.objects.all()
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
-    return [Run.model_validate_json(row.data) async for row in qs]
+    return [_model_from_row_data(Run, row.data) async for row in qs]
 
 
 # ── Episode ───────────────────────────────────────────────────────────────────
@@ -115,7 +131,7 @@ async def save_episode(episode: Episode) -> None:
     await EpisodeRow.objects.aupdate_or_create(
         id=episode.id,
         defaults={
-            "data": episode.model_dump_json(),
+            "data": episode.model_dump(mode="json"),
             "run_id": episode.run_id,
             "status": episode.status,
         },
@@ -127,14 +143,11 @@ async def get_episode(episode_id: str) -> Episode | None:
         row = await EpisodeRow.objects.aget(id=episode_id)
     except EpisodeRow.DoesNotExist:
         return None
-    return Episode.model_validate_json(row.data)
+    return _model_from_row_data(Episode, row.data)
 
 
 async def get_episodes(run_id: str) -> list[Episode]:
-    return [
-        Episode.model_validate_json(row.data)
-        async for row in EpisodeRow.objects.filter(run_id=run_id)
-    ]
+    return [_model_from_row_data(Episode, row.data) async for row in EpisodeRow.objects.filter(run_id=run_id)]
 
 
 # ── Developer Environments ────────────────────────────────────────────────────
@@ -152,7 +165,6 @@ async def save_developer_environment(env: dict[str, Any]) -> None:
             "domain_id": env.get("domain_id"),
             "env_url": env.get("env_url"),
             "error_message": env.get("error_message"),
-            "created_at": env.get("created_at", datetime.utcnow().isoformat()),
         },
     )
 
@@ -170,7 +182,9 @@ async def delete_developer_environment(env_id: str) -> bool:
     return deleted > 0
 
 
-async def list_developer_environments(owner_id: str | None = None) -> list[dict[str, Any]]:
+async def list_developer_environments(
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
     qs = DeveloperEnvironmentRow.objects.all().order_by("-created_at")
     if owner_id:
         qs = qs.filter(owner_id=owner_id)
@@ -188,7 +202,7 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
         "domain_id": row.domain_id,
         "env_url": row.env_url,
         "error_message": row.error_message,
-        "created_at": row.created_at,
+        "created_at": _iso_dt(row.created_at),
     }
 
 
@@ -201,7 +215,7 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 
     total_episodes = 0
     for r in run_rows:
-        run = Run.model_validate_json(r.data)
+        run = _model_from_row_data(Run, r.data)
         total_episodes += run.config.num_episodes if run.config else 0
 
     lb_rows = [row async for row in LeaderboardRow.objects.filter(domain_id=domain_id)]
@@ -224,26 +238,14 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 
 async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
-    created_at = datetime.utcnow().isoformat()
-    await BenchJobRow.objects.acreate(
+    row = await BenchJobRow.objects.acreate(
         id=job_id,
-        env_id=env_id,
+        environment_id=env_id,
         domain_id=domain_id,
         github_url=github_url,
         status="queued",
-        created_at=created_at,
     )
-    return {
-        "id": job_id,
-        "env_id": env_id,
-        "domain_id": domain_id,
-        "github_url": github_url,
-        "status": "queued",
-        "model_results": None,
-        "claimed_at": None,
-        "completed_at": None,
-        "created_at": created_at,
-    }
+    return _bench_job_to_dict(row)
 
 
 async def get_bench_job(job_id: str) -> dict[str, Any] | None:
@@ -260,7 +262,7 @@ async def list_bench_jobs(
 ) -> list[dict[str, Any]]:
     qs = BenchJobRow.objects.all().order_by("-created_at")
     if env_id:
-        qs = qs.filter(env_id=env_id)
+        qs = qs.filter(environment_id=env_id)
     if status:
         qs = qs.filter(status=status)
     return [_bench_job_to_dict(row) async for row in qs]
@@ -273,15 +275,11 @@ async def claim_bench_job(job_id: str) -> dict[str, Any] | None:
         from django.db import transaction
 
         with transaction.atomic():
-            row = (
-                BenchJobRow.objects.select_for_update(skip_locked=True)
-                .filter(id=job_id, status="queued")
-                .first()
-            )
+            row = BenchJobRow.objects.select_for_update(skip_locked=True).filter(id=job_id, status="queued").first()
             if row is None:
                 return None
             row.status = "running"
-            row.claimed_at = datetime.utcnow().isoformat()
+            row.claimed_at = timezone.now()
             row.save(update_fields=["status", "claimed_at"])
             return row
 
@@ -289,29 +287,30 @@ async def claim_bench_job(job_id: str) -> dict[str, Any] | None:
     return _bench_job_to_dict(row) if row else None
 
 
-async def complete_bench_job(
-    job_id: str, model_results: dict[str, Any], failed: bool = False
-) -> dict[str, Any] | None:
+async def complete_bench_job(job_id: str, model_results: dict[str, Any], failed: bool = False) -> dict[str, Any] | None:
     try:
         row = await BenchJobRow.objects.aget(id=job_id)
     except BenchJobRow.DoesNotExist:
         return None
     row.status = "failed" if failed else "completed"
-    row.model_results = json.dumps(model_results)
-    row.completed_at = datetime.utcnow().isoformat()
+    row.model_results = model_results
+    row.completed_at = timezone.now()
     await row.asave(update_fields=["status", "model_results", "completed_at"])
     return _bench_job_to_dict(row)
 
 
 def _bench_job_to_dict(row: BenchJobRow) -> dict[str, Any]:
+    results = row.model_results
+    if isinstance(results, str):
+        results = json.loads(results) if results else None
     return {
         "id": row.id,
-        "env_id": row.env_id,
+        "env_id": row.environment_id,
         "domain_id": row.domain_id,
         "github_url": row.github_url,
         "status": row.status,
-        "model_results": json.loads(row.model_results) if row.model_results else None,
-        "claimed_at": row.claimed_at,
-        "completed_at": row.completed_at,
-        "created_at": row.created_at,
+        "model_results": results,
+        "claimed_at": _iso_dt(row.claimed_at),
+        "completed_at": _iso_dt(row.completed_at),
+        "created_at": _iso_dt(row.created_at),
     }
