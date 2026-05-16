@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, cast
 
 import httpx
-
 from swecc_mesocosm.settings import settings
 
 

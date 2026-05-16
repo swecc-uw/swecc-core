@@ -16,7 +16,6 @@ import typer
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
-
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.client import BenchClient

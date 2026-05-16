@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from swecc_mesocosm import validation
 from swecc_mesocosm.infer import build_domain_payload
 
