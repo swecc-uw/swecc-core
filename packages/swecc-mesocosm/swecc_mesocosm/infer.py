@@ -17,9 +17,7 @@ class SuggestedShape:
     tags: list[str]
 
 
-_QA = re.compile(
-    r"\b(trivia|quiz|question|choice|mcq|multiple\s*choice|answer\s*[abcd])\b", re.I
-)
+_QA = re.compile(r"\b(trivia|quiz|question|choice|mcq|multiple\s*choice|answer\s*[abcd])\b", re.I)
 _MULTI = re.compile(
     r"\b(wordle|game|level|maze|simulation|grid|turn|round|multi[- ]?step|episode|rl)\b",
     re.I,
@@ -79,13 +77,9 @@ def shape_from_hint(
         return suggest_benchmark_shape(description)
     k = benchmark_kind.lower().strip()
     if k in ("qa_mcq", "qa", "trivia", "quiz"):
-        return suggest_benchmark_shape(
-            "trivia quiz question multiple choice " + description
-        )
+        return suggest_benchmark_shape("trivia quiz question multiple choice " + description)
     if k in ("interactive_env", "interactive", "env", "multi_step", "game"):
-        return suggest_benchmark_shape(
-            "multi step game simulation episode " + description
-        )
+        return suggest_benchmark_shape("multi step game simulation episode " + description)
     return suggest_benchmark_shape(f"{k} " + description)
 
 

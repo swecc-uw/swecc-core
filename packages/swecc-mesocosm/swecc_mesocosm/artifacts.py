@@ -6,9 +6,9 @@ from typing import Any
 
 
 def _canonical_json(obj: Any) -> bytes:
-    return json.dumps(
-        obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")
-    ).encode("utf-8")
+    return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8"
+    )
 
 
 def sha256_digest(obj: Any) -> str:
