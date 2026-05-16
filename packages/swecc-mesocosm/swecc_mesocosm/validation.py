@@ -15,7 +15,10 @@ def load_constraints() -> dict[str, Any]:
     p = _constraints_path()
     if not p.is_file():
         return {"rules_version": "0", "error": f"missing {p}"}
-    return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
+    try:
+        return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
+    except json.JSONDecodeError as e:
+        return {"rules_version": "0", "error": f"invalid JSON in {p}: {e}"}
 
 
 def validate_benchmark_config(

@@ -9,13 +9,14 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import typer
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
+
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.client import BenchClient
@@ -212,7 +213,13 @@ def cmd_register(
 ) -> None:
     """Register (or upsert as draft) a domain via POST /v1/domains."""
     if domain_json:
-        body: dict[str, Any] = json.loads(domain_json.read_text(encoding="utf-8"))
+        try:
+            body = json.loads(domain_json.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            _die(f"invalid JSON in {domain_json}: {e}")
+        if not isinstance(body, dict):
+            _die(f"--from-json must contain a JSON object, got {type(body).__name__}")
+        body = cast(dict[str, Any], body)
         if benchmark_id is not None:
             body["id"] = benchmark_id
         if name is not None:
