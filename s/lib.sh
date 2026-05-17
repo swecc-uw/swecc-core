@@ -6,7 +6,7 @@ set -euo pipefail
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 export REPO_ROOT
 
-SERVICES=(server bot ai chronos sockets scheduler)
+SERVICES=(server bot ai chronos sockets scheduler bench-api bench-sandbox bench-worker)
 export SERVICES
 
 DOCKERHUB_ORG="${DOCKERHUB_USERNAME:-swecc}"
@@ -56,7 +56,50 @@ validate_service() {
 
 service_dir() {
   local svc="$1"
-  echo "${REPO_ROOT}/services/${svc}"
+  case "$svc" in
+    bench-*)
+      echo "${REPO_ROOT}/services/bench/${svc#bench-}"
+      ;;
+    *)
+      echo "${REPO_ROOT}/services/${svc}"
+      ;;
+  esac
+}
+
+# Where docker build should run from. For most services this is the same as
+# service_dir; for bench-sandbox/bench-worker it's services/bench/ so the
+# Dockerfile can COPY the shared common/ kernel; for bench-api it's
+# services/ so the Dockerfile can ALSO COPY the Django bench app from
+# services/server/server/bench/.
+build_context() {
+  local svc="$1"
+  case "$svc" in
+    bench-api)
+      echo "${REPO_ROOT}/services"
+      ;;
+    bench-*)
+      echo "${REPO_ROOT}/services/bench"
+      ;;
+    *)
+      echo "${REPO_ROOT}/services/${svc}"
+      ;;
+  esac
+}
+
+# Path to the Dockerfile, relative to build_context.
+build_dockerfile() {
+  local svc="$1"
+  case "$svc" in
+    bench-api)
+      echo "bench/api/Dockerfile"
+      ;;
+    bench-*)
+      echo "${svc#bench-}/Dockerfile"
+      ;;
+    *)
+      echo "Dockerfile"
+      ;;
+  esac
 }
 
 docker_image() {

@@ -1,0 +1,24 @@
+name: Deploy Bench Sandbox
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'services/bench/sandbox/**'
+      - 'services/bench/common/**'
+      - 's/ops/**'
+      - 's/lib.sh'
+      - '.github/workflows/deploy-bench-sandbox.yml'
+      - '.github/workflows/reusable-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bench-sandbox
+      context: ./services/bench
+      dockerfile: sandbox/Dockerfile
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

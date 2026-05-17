@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 COVERAGE=false
 VERBOSE=false
 SERVICES=()
-ALL_SERVICES=(ai bot sockets server)
+ALL_SERVICES=(ai bot sockets server bench-api bench-sandbox bench-worker)
 FAILED_SERVICES=()
 
 usage() {
@@ -37,6 +37,9 @@ SERVICES:
   bot               Run bot service tests
   sockets           Run sockets service tests
   server            Run server (Django) tests
+  bench-api         Run bench-api smoke tests
+  bench-sandbox     Run bench-sandbox smoke tests
+  bench-worker      Run bench-worker smoke tests
   all               Run all service tests (default)
 
 EXAMPLES:
@@ -78,7 +81,7 @@ while [[ $# -gt 0 ]]; do
       SERVICES=("${ALL_SERVICES[@]}")
       shift
       ;;
-    ai|bot|sockets|server)
+    ai|bot|sockets|server|bench-api|bench-sandbox|bench-worker)
       SERVICES+=("$1")
       shift
       ;;
@@ -178,6 +181,42 @@ test_sockets() {
   return $exit_code
 }
 
+# Generic bench-* test runner. Each bench-* service follows the same shape:
+#   services/bench/<sub>/{requirements-test.txt, tests/, pytest.ini}
+# bench-api and bench-sandbox additionally need bench_common installed (the
+# shared kernel under services/bench/common/).
+test_bench_service() {
+  local svc="$1"        # bench-api | bench-sandbox | bench-worker
+  local sub="${svc#bench-}"
+  log INFO "Testing $svc..."
+
+  if ! python3 -m pytest --version &>/dev/null; then
+    log ERROR "pytest not found. Run: ./setup_tests.sh && source venv/bin/activate"
+    return 1
+  fi
+
+  if [ "$svc" != "bench-worker" ]; then
+    log INFO "Installing bench_common (shared kernel)..."
+    python3 -m pip install -q -e ./services/bench/common 2>&1 | grep -v "Requirement already satisfied" || true
+  fi
+
+  cd "services/bench/$sub"
+  python3 -m pip install -q -r requirements-test.txt 2>&1 | grep -v "Requirement already satisfied" || true
+
+  ORCH_DATABASE_URL="${ORCH_DATABASE_URL:-sqlite+aiosqlite:///./test.db}" \
+  ORCH_TRACE_DIR="${ORCH_TRACE_DIR:-/tmp/bench-traces}" \
+  ORCH_SANDBOX_URL="${ORCH_SANDBOX_URL:-http://localhost:8001}" \
+  WORKER_API_URL="${WORKER_API_URL:-http://localhost:8000}" \
+    python3 -m pytest tests/ -v
+  local exit_code=$?
+  cd "$SCRIPT_DIR"
+  return $exit_code
+}
+
+test_bench_api()     { test_bench_service bench-api; }
+test_bench_sandbox() { test_bench_service bench-sandbox; }
+test_bench_worker()  { test_bench_service bench-worker; }
+
 # Function to test server (Django)
 test_server() {
   log INFO "Testing server (Django)..."
@@ -206,7 +245,8 @@ for service in "${SERVICES[@]}"; do
 
   # Run test and capture exit code
   set +e  # Temporarily disable exit on error
-  test_"$service"
+  # Bash functions can't have hyphens, so map bench-api -> test_bench_api etc.
+  test_"${service//-/_}"
   exit_code=$?
   set -e  # Re-enable exit on error
 
