@@ -59,7 +59,51 @@ mesocosm run episodes <run-id> --traces
 All commands print JSON to stdout (pretty when stdout is a TTY, compact otherwise), so they pipe cleanly into `jq`:
 
 ```bash
-mesocosm list --status published | jq '.benchmarks[].id'
+mesocosm list --status published | jq '.[].id'
+```
+
+## Local vs bench-api commands
+
+**Local** means the CLI does not call bench-api at `MESOCOSM_BASE_URL` (no HTTP to `/v1/...`). That is not the same as “no LLM”: model calls happen on the **server** when you use `eval` commands.
+
+**Bench-api** means the command needs a reachable bench-api (`MESOCOSM_BASE_URL` or `--base-url` on the command).
+
+### Local (no bench-api)
+
+| Command | What it does |
+| --------| -------------|
+| `mesocosm --version` / `-V` | Print the installed package version. |
+| `mesocosm suggest <description>` | Regex heuristics on your text → JSON defaults (`benchmark_kind`, `scoring_source`, `max_steps`, `primary_metric`, `reasoning`, `tags`). Preview only; does not register. |
+| `mesocosm validate <path>` | Check a domain JSON payload against shipped `policy/constraints.json` (`-` = stdin). Exit 0 if `ok`, else 1. |
+
+These work without bench-api running.
+
+### Bench-api (HTTP)
+
+| Command | API | What it does |
+| --------|-----| -------------|
+| `mesocosm register` | `POST /v1/domains` (409 → `PATCH`) | Build or load a payload, optionally run local `validate`, then upsert a draft domain. |
+| `mesocosm publish <id>` | `POST /v1/domains/{id}/publish` | Publish a domain; print artifact SHA-256 digests. |
+| `mesocosm get <id>` | `GET /v1/domains/{id}` | Fetch a domain; `--artifacts` adds synthesized contract files locally. |
+| `mesocosm list` | `GET /v1/domains` | List domains (`--status`, `--json` for raw output). |
+| `mesocosm eval test` | `POST /v1/test/episode` | One test episode (model + env on the server). |
+| `mesocosm eval run` | `GET` domain + `POST /v1/runs` | Full eval run with aggregated scores. |
+| `mesocosm run get <run-id>` | `GET /v1/runs/{id}` (+ episodes) | Run status and aggregate scores. |
+| `mesocosm run episodes <run-id>` | `GET /v1/runs/{id}/episodes` | Episode list; `--traces` fetches traces too. |
+
+`register` is hybrid: inference and `validate` run locally; the upsert step needs bench-api.
+
+```text
+LOCAL                          BENCH-API
+────────────────────────────   ─────────────────────────────────────
+mesocosm --version             mesocosm register
+mesocosm suggest "<desc>"      mesocosm publish <id>
+mesocosm validate <file>       mesocosm get <id> [--artifacts]
+                               mesocosm list [--status ...] [--json]
+                               mesocosm eval test ...
+                               mesocosm eval run ...
+                               mesocosm run get <run-id>
+                               mesocosm run episodes <run-id> [--traces]
 ```
 
 ## Python client
