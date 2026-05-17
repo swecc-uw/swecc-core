@@ -85,7 +85,7 @@ jobs:
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-api
-      context: ./services/bench
+      context: ./services
       dockerfile: api/Dockerfile
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
