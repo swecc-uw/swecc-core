@@ -86,7 +86,7 @@ jobs:
     with:
       service: bench-api
       context: ./services
-      dockerfile: api/Dockerfile
+      dockerfile: bench/api/Dockerfile
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
