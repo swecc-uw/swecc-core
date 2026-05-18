@@ -50,3 +50,16 @@ services/server/components/images/test*.png
 
 # Django migrations created during tests
 services/server/server/contentManage/migrations/
+
+# Bench (BenchAnything) build/runtime artifacts
+services/bench/**/build/
+services/bench/**/dist/
+services/bench/**/*.egg-info/
+services/bench/**/.pytest_cache/
+services/bench/**/test.db
+services/bench/**/.next/
+services/bench/**/node_modules/
+# Bench data volumes are container-managed; the host paths below should not exist
+# but are listed defensively.
+services/bench/**/data/
+services/bench/**/envs/

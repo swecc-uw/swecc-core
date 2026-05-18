@@ -1,0 +1,7 @@
+# Add your own dependencies here.
+# The platform already provides: fastapi, uvicorn, httpx, pydantic.
+# You do NOT need to list benchanything itself — it is pre-installed in the sandbox.
+
+# Example:
+# numpy>=1.26
+# nltk>=3.8

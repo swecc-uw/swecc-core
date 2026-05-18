@@ -2,10 +2,7 @@ FROM python:3.9 AS development
 
 WORKDIR /app
 COPY requirements-server.txt .
-RUN apt-get update && apt-get install -y \
-    gunicorn \
-    && rm -rf /var/lib/apt/lists/*
-RUN pip install -r requirements-server.txt
+RUN pip install --no-cache-dir -r requirements-server.txt
 COPY . .
 
 FROM development AS production

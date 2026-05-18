@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [server, bot, ai, sockets, scheduler]
+        service: [server, bot, ai, sockets, scheduler, bench-api, bench-sandbox, bench-worker]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,8 +26,34 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Resolve service directory (bench-* lives under services/bench/<sub>)
+        id: svcdir
+        run: |
+          case "${{ matrix.service }}" in
+            bench-*)  echo "dir=./services/bench/${MATRIX_SVC#bench-}" >> "$GITHUB_OUTPUT" ;;
+            *)        echo "dir=./services/${{ matrix.service }}" >> "$GITHUB_OUTPUT" ;;
+          esac
+        env:
+          MATRIX_SVC: ${{ matrix.service }}
+
+      # The matrix lists every service the CI knows about, but a given branch
+      # might not include every service yet (e.g. PRs that introduce CI
+      # plumbing before the service code lands, or PRs that touch only a
+      # subset of the monorepo). Skip the lint steps gracefully when the
+      # service directory is absent rather than failing the job.
+      - name: Check whether service is present on this branch
+        id: present
+        run: |
+          if [ -d "${{ steps.svcdir.outputs.dir }}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Service '${{ matrix.service }}' is not present on this branch (${{ steps.svcdir.outputs.dir }} missing) — skipping lint."
+          fi
+
       - name: Install dependencies
-        working-directory: ./services/${{ matrix.service }}
+        if: steps.present.outputs.exists == 'true'
+        working-directory: ${{ steps.svcdir.outputs.dir }}
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
@@ -35,6 +61,7 @@ jobs:
           pip install pre-commit
 
       - name: Run pre-commit
+        if: steps.present.outputs.exists == 'true'
         run: pre-commit run --all-files
 
   detect-changes:
@@ -70,6 +97,19 @@ jobs:
               CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"$svc\"]")
             fi
           done
+
+          # Bench is a multi-image product folder. Common changes invalidate api+sandbox.
+          # bench-api also embeds the Django bench app from services/server/server/bench/
+          # so changes there must trigger a rebuild.
+          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/api/\|^services/bench/common/\|^services/server/server/bench/"; then
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-api\"]")
+          fi
+          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/sandbox/\|^services/bench/common/"; then
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-sandbox\"]")
+          fi
+          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/worker/"; then
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-worker\"]")
+          fi
 
           echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
           echo "Changed services: $CHANGED_SERVICES"
@@ -152,6 +192,72 @@ jobs:
           name: ${{ matrix.service }}-coverage
           fail_ci_if_error: false
 
+  test-bench:
+    name: Test Bench Services
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [bench-api, bench-sandbox, bench-worker]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Resolve service subfolder
+        id: svc
+        run: echo "sub=${MATRIX_SVC#bench-}" >> "$GITHUB_OUTPUT"
+        env:
+          MATRIX_SVC: ${{ matrix.service }}
+
+      # See the lint job — the matrix knows about every bench-* service, but
+      # branches that introduce CI plumbing ahead of the service code (or that
+      # land before sibling services do) won't have these directories yet.
+      # Skip gracefully instead of failing the job.
+      - name: Check whether service is present on this branch
+        id: present
+        run: |
+          svc_dir="./services/bench/${{ steps.svc.outputs.sub }}"
+          common_dir="./services/bench/common"
+          if [ -d "$svc_dir" ] && { [ "${{ matrix.service }}" = "bench-worker" ] || [ -d "$common_dir" ]; }; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::bench service '${{ matrix.service }}' (or its bench_common dep) is not present on this branch — skipping tests."
+          fi
+
+      - name: Install bench_common (shared kernel)
+        if: steps.present.outputs.exists == 'true' && matrix.service != 'bench-worker'
+        working-directory: ./services/bench/common
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Install service test deps
+        if: steps.present.outputs.exists == 'true'
+        working-directory: ./services/bench/${{ steps.svc.outputs.sub }}
+        run: pip install -r requirements-test.txt
+
+      - name: Run tests
+        if: steps.present.outputs.exists == 'true'
+        working-directory: ./services/bench/${{ steps.svc.outputs.sub }}
+        env:
+          # bench-api uses Django ORM against Postgres in production. The smoke
+          # tests don't touch the DB; they just import the app and hit /health.
+          # We add services/server/server to PYTHONPATH so bench-api's
+          # django.setup() can find the bench Django app at boot time
+          # (production builds COPY this directory into the image instead).
+          PYTHONPATH: ${{ github.workspace }}/services/server/server:${{ github.workspace }}/services/bench/${{ steps.svc.outputs.sub }}
+          ORCH_TRACE_DIR: /tmp/bench-traces
+          ORCH_SANDBOX_URL: http://localhost:8001
+          WORKER_API_URL: http://localhost:8000
+        run: pytest tests/ -v
+
   build:
     name: Build Docker Images
     needs: detect-changes
@@ -168,10 +274,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve build context
+        id: ctx
+        run: |
+          case "${{ matrix.service }}" in
+            # bench-api context is ./services because it also pulls the Django
+            # bench app from services/server/server/bench/.
+            bench-api)     echo "context=./services" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/api/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+            bench-sandbox) echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/sandbox/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+            bench-worker)  echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/worker/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+            *)             echo "context=./services/${{ matrix.service }}" >> "$GITHUB_OUTPUT"; echo "file=./services/${{ matrix.service }}/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Build Docker image (no push)
         uses: docker/build-push-action@v5
         with:
-          context: ./services/${{ matrix.service }}
+          context: ${{ steps.ctx.outputs.context }}
+          file: ${{ steps.ctx.outputs.file }}
           push: false
           tags: swecc-${{ matrix.service }}:test
           cache-from: type=gha
