@@ -1,0 +1,63 @@
+# One-off prod ops on the self-hosted deploy runner (no SSH key required).
+# Use from fix/bench-prod-gateway (or any branch with infra/nginx.conf + stack.yml).
+#
+# GitHub → Actions → "Ops: prod bench gateway" → Run workflow
+#   Branch: fix/bench-prod-gateway
+#   Action: full (diagnose + reload prod_nginx + curl verify)
+#   Confirm: bench-ops
+
+name: Ops: prod bench gateway
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "bench-ops" to confirm'
+        required: true
+        type: string
+      action:
+        description: What to run on the EC2 deploy runner
+        required: true
+        type: choice
+        options:
+          - diagnose
+          - reload-nginx
+          - verify
+          - full
+        default: full
+
+jobs:
+  validate:
+    name: Validate confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        if: inputs.confirm != 'bench-ops'
+        run: |
+          echo "Cancelled. Type exactly: bench-ops"
+          exit 1
+
+  ops:
+    name: Run on Swarm manager
+    needs: validate
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run ops script
+        run: |
+          chmod +x ./scripts/ops-prod-bench-gateway.sh
+          ./scripts/ops-prod-bench-gateway.sh "${{ inputs.action }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Ops: prod bench gateway" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch:** \`${{ github.ref_name }}\` @ \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Action:** \`${{ inputs.action }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Check the job log for \`bench-api\` logs, in-nginx wget, and \`/bench/health/\` curl output." >> "$GITHUB_STEP_SUMMARY"
