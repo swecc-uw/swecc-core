@@ -121,7 +121,9 @@ deploy_service() {
 
   wait_for_service "$svc"
 
-  "${SCRIPT_DIR}/ensure-gateway-dns.sh" "$svc" || true
+  if ! "${SCRIPT_DIR}/ensure-gateway-dns.sh" "$svc"; then
+    die "Failed to ensure gateway DNS for $svc"
+  fi
 
   log INFO "Successfully deployed $svc"
 }
