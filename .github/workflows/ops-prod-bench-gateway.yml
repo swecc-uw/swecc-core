@@ -6,7 +6,7 @@
 #   Action: full (diagnose + reload prod_nginx + curl verify)
 #   Confirm: bench-ops
 
-name: Ops: prod bench gateway
+name: "Ops: prod bench gateway"
 
 on:
   workflow_dispatch:
