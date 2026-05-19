@@ -15,6 +15,24 @@ export DOCKERHUB_ORG
 SWARM_NETWORK="prod_swecc-network"
 export SWARM_NETWORK
 
+# SWAG upstreams use swecc_stack_<service>; Swarm service name stays e.g. server.
+SWARM_STACK_NAME="${SWARM_STACK_NAME:-swecc_stack}"
+export SWARM_STACK_NAME
+
+swarm_gateway_dns() {
+  echo "${SWARM_STACK_NAME}_$1"
+}
+
+# Idempotent: attach swecc_stack_* alias on prod_swecc-network (also if create lacked --network-alias).
+swarm_ensure_gateway_alias() {
+  local svc="$1"
+  local alias
+  alias="$(swarm_gateway_dns "$svc")"
+  docker service update \
+    --network-add "name=${SWARM_NETWORK},alias=${alias}" \
+    "$svc" >/dev/null 2>&1 || true
+}
+
 if [[ -t 1 ]]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'
