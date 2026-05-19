@@ -13,7 +13,6 @@ def apply_common_env() -> None:
 
 def apply_sandbox_env() -> None:
     apply_common_env()
-    os.environ.setdefault("ENVS_DIR", "/tmp/bench-envs")
     os.environ.setdefault("SANDBOX_HOST", "localhost")
 
 
