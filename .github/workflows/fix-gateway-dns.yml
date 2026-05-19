@@ -1,0 +1,41 @@
+name: Fix gateway DNS aliases
+
+# SWAG proxies to swecc_stack_bench-api but deploy.sh creates service bench-api.
+# Run this on the self-hosted deploy runner (no SSH required).
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Swarm service(s) to fix (comma-separated, or bench-api)"
+        required: false
+        default: bench-api
+        type: string
+
+jobs:
+  fix:
+    name: Ensure SWAG DNS aliases
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Apply gateway DNS aliases
+        run: |
+          chmod +x ./s/ops/ensure-gateway-dns.sh ./s/lib.sh
+          IFS=',' read -ra SVCS <<< "${{ inputs.service }}"
+          for s in "${SVCS[@]}"; do
+            s="${s// /}"
+            [[ -n "$s" ]] || continue
+            ./s/ops/ensure-gateway-dns.sh "$s"
+          done
+
+      - name: Smoke test bench-api (from deploy host)
+        if: contains(inputs.service, 'bench-api') || inputs.service == 'bench-api'
+        run: |
+          docker run --rm --network prod_swecc-network curlimages/curl:latest \
+            curl -sf http://swecc_stack_bench-api:8000/health
+          echo ""
+          curl -sf https://api.swecc.org/bench/health/ || curl -sf https://api.swecc.org/bench/health
+          echo ""

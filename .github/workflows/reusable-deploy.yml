@@ -80,6 +80,9 @@ jobs:
 
       - name: Deploy service
         run: |
-          chmod +x ./s/ops/deploy.sh ./s/lib.sh
+          chmod +x ./s/ops/deploy.sh ./s/ops/ensure-gateway-dns.sh ./s/lib.sh
           export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
           ./s/ops/deploy.sh ${{ inputs.service }}
+
+      - name: Ensure SWAG gateway DNS alias
+        run: ./s/ops/ensure-gateway-dns.sh ${{ inputs.service }}
