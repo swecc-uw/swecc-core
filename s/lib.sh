@@ -15,8 +15,7 @@ export DOCKERHUB_ORG
 SWARM_NETWORK="prod_swecc-network"
 export SWARM_NETWORK
 
-# SWAG / prod nginx upstreams use stack-style names (swecc_stack_server, …).
-# Swarm service name stays server / bench-api; --network-alias adds the prefix.
+# SWAG upstreams use swecc_stack_<service>; Swarm service name stays e.g. server.
 SWARM_STACK_NAME="${SWARM_STACK_NAME:-swecc_stack}"
 export SWARM_STACK_NAME
 
@@ -24,51 +23,14 @@ swarm_gateway_dns() {
   echo "${SWARM_STACK_NAME}_$1"
 }
 
-# EC2 deploy runners may run older Docker without --network-alias on service create.
-swarm_supports_network_alias_on_create() {
-  docker service create --help 2>&1 | grep -q -- '--network-alias'
-}
-
-# Args for `docker service create`: --network prod_swecc-network [--network-alias swecc_stack_<svc>]
-# with_gateway_alias=false for staging (must not steal swecc_stack_* from production).
-swarm_network_create_args() {
-  local svc="$1"
-  local -n _out="${2:?output array name required}"
-  local with_gateway_alias="${3:-true}"
-  local alias
-  alias="$(swarm_gateway_dns "$svc")"
-  _out=(--network "$SWARM_NETWORK")
-  if [[ "$with_gateway_alias" != "true" ]]; then
-    return 0
-  fi
-  if swarm_supports_network_alias_on_create; then
-    _out+=(--network-alias "$alias")
-  else
-    log WARN "Docker lacks --network-alias on create; will try service update for ${alias} after deploy (nginx also falls back to ${svc})"
-  fi
-}
-
-# After create: ensure swecc_stack_* alias on production (idempotent; also fixes older Docker).
-swarm_ensure_gateway_routing() {
+# Idempotent: attach swecc_stack_* alias on prod_swecc-network (also if create lacked --network-alias).
+swarm_ensure_gateway_alias() {
   local svc="$1"
   local alias
   alias="$(swarm_gateway_dns "$svc")"
-
-  if ! docker service inspect "$svc" &>/dev/null; then
-    log WARN "Cannot add alias ${alias}: service ${svc} not found"
-    return 1
-  fi
-
-  log INFO "Ensuring gateway alias ${alias} on ${svc}"
-  if docker service update \
+  docker service update \
     --network-add "name=${SWARM_NETWORK},alias=${alias}" \
-    "$svc" >/dev/null 2>&1; then
-    log INFO "Gateway alias ${alias} added on ${svc}"
-    return 0
-  fi
-
-  log INFO "Gateway alias ${alias} already set (or ${svc} reachable without alias)"
-  return 0
+    "$svc" >/dev/null 2>&1 || true
 }
 
 if [[ -t 1 ]]; then

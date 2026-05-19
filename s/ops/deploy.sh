@@ -14,8 +14,9 @@ Services: ${SERVICES[*]}
 
 This script performs a zero-downtime deployment to Docker Swarm:
 1. (Existing service) Validates the new image on a staging task, then rolls
-   production forward with `docker service update` (start-first; never rm prod first)
-2. (New service) Creates the production service on prod_swecc-network with gateway alias
+   production forward with \`docker service update\` (start-first)
+2. (New service) Creates the production service on prod_swecc-network with
+   --network-alias swecc_stack_<service>
 
 Required environment:
   - DOCKERHUB_USERNAME: Docker Hub username
@@ -30,9 +31,8 @@ EOF
 
 deploy_service() {
   local svc="$1"
-  local prod_net_args=()
-  local staging_net_args=()
   local gateway_alias
+  gateway_alias="$(swarm_gateway_dns "$svc")"
 
   log INFO "Deploying service: $svc"
 
@@ -45,13 +45,9 @@ deploy_service() {
 
   eval "$(get_resource_limits "$svc")"
 
-  gateway_alias="$(swarm_gateway_dns "$svc")"
-  swarm_network_create_args "$svc" prod_net_args true
-  swarm_network_create_args "$svc" staging_net_args false
-
   log INFO "Image: $image"
   log INFO "Config: $config_name"
-  log INFO "Network: ${SWARM_NETWORK} (gateway DNS: ${gateway_alias})"
+  log INFO "Gateway DNS alias: ${gateway_alias}"
   log INFO "Resources: CPU=$CPU_LIMIT/$CPU_RESERVE, Memory=$MEMORY_LIMIT/$MEMORY_RESERVE"
 
   log INFO "Pulling latest image"
@@ -67,11 +63,11 @@ deploy_service() {
   fi
 
   if [[ "$service_exists" == "true" ]]; then
-    log INFO "Creating staging service: $staging_name (no gateway alias)"
+    log INFO "Creating staging service: $staging_name"
 
     docker service create \
       --name "$staging_name" \
-      "${staging_net_args[@]}" \
+      --network "$SWARM_NETWORK" \
       --env-file /tmp/${svc}_env.tmp \
       --limit-cpu "$CPU_LIMIT" \
       --limit-memory "$MEMORY_LIMIT" \
@@ -83,7 +79,7 @@ deploy_service() {
 
     wait_for_service "$staging_name"
 
-    log INFO "Rolling update $svc (start-first; production stays registered until new task is up)"
+    log INFO "Rolling update $svc (start-first)"
     local -a update_args=(
       --image "$image"
       --limit-cpu "$CPU_LIMIT"
@@ -96,55 +92,46 @@ deploy_service() {
     )
     if docker service update --help 2>&1 | grep -q -- '--env-file'; then
       update_args+=(--env-file /tmp/${svc}_env.tmp)
-    else
-      log WARN "docker service update lacks --env-file; env vars unchanged on this host"
     fi
     docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
 
     docker service rm "$staging_name" 2>/dev/null || true
-    rm -f /tmp/${svc}_env.tmp
+  else
+    log INFO "Creating production service: $svc"
 
-    wait_for_service "$svc"
-    swarm_ensure_gateway_routing "$svc" || true
+    local extra_args=()
 
-    log INFO "Successfully updated $svc (reachable as ${svc} and ${gateway_alias} on ${SWARM_NETWORK})"
-    return 0
+    case "$svc" in
+      chronos|sockets)
+        extra_args+=(--mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
+        ;;
+      chronos)
+        extra_args+=(--mount "type=volume,source=chronos_data,target=/app")
+        ;;
+    esac
+
+    docker service create \
+      --name "$svc" \
+      --network "$SWARM_NETWORK" \
+      --network-alias "$gateway_alias" \
+      --env-file /tmp/${svc}_env.tmp \
+      --limit-cpu "$CPU_LIMIT" \
+      --limit-memory "$MEMORY_LIMIT" \
+      --reserve-cpu "$CPU_RESERVE" \
+      --reserve-memory "$MEMORY_RESERVE" \
+      --restart-condition any \
+      --update-order start-first \
+      --update-delay 30s \
+      --with-registry-auth \
+      "${extra_args[@]}" \
+      "$image"
   fi
 
-  log INFO "Creating production service: $svc"
-
-  local extra_args=()
-
-  case "$svc" in
-    chronos|sockets)
-      extra_args+=(--mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
-      ;;
-    chronos)
-      extra_args+=(--mount "type=volume,source=chronos_data,target=/app")
-      ;;
-  esac
-
-  docker service create \
-    --name "$svc" \
-    "${prod_net_args[@]}" \
-    --env-file /tmp/${svc}_env.tmp \
-    --limit-cpu "$CPU_LIMIT" \
-    --limit-memory "$MEMORY_LIMIT" \
-    --reserve-cpu "$CPU_RESERVE" \
-    --reserve-memory "$MEMORY_RESERVE" \
-    --restart-condition any \
-    --update-order start-first \
-    --update-delay 30s \
-    --with-registry-auth \
-    "${extra_args[@]}" \
-    "$image"
-
   rm -f /tmp/${svc}_env.tmp
-
   wait_for_service "$svc"
-  swarm_ensure_gateway_routing "$svc" || true
+  swarm_ensure_gateway_alias "$svc"
 
-  log INFO "Successfully deployed $svc (reachable as ${svc} and ${gateway_alias} on ${SWARM_NETWORK})"
+  log INFO "Successfully deployed $svc"
 }
 
 while [[ $# -gt 0 ]]; do

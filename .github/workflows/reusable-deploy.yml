@@ -80,10 +80,6 @@ jobs:
 
       - name: Deploy service
         run: |
-          chmod +x ./s/ops/deploy.sh ./s/ops/ensure-gateway-dns.sh ./s/lib.sh
+          chmod +x ./s/ops/deploy.sh ./s/lib.sh
           export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
           ./s/ops/deploy.sh ${{ inputs.service }}
-
-      - name: Ensure swecc_stack_* network alias
-        continue-on-error: true
-        run: ./s/ops/ensure-gateway-dns.sh ${{ inputs.service }}
