@@ -33,6 +33,19 @@ swarm_ensure_gateway_alias() {
     "$svc" >/dev/null 2>&1 || true
 }
 
+# Swarm Docker config for --env-file.
+# bench-api → server_env (shared Postgres). Collision rules:
+#   - Shared: DB_* only (django_settings.py), plus ORCH_* for bench (config.Settings)
+#   - Shared LLM keys: OPENAI_API_KEY, etc. (both may use LiteLLM)
+#   - Do NOT set DJANGO_SETTINGS_MODULE in server_env (bench-api overrides at boot)
+swarm_env_config() {
+  local svc="$1"
+  case "$svc" in
+    bench-api) echo "server_env" ;;
+    *) echo "${svc}_env" ;;
+  esac
+}
+
 if [[ -t 1 ]]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'

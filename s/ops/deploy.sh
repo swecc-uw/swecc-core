@@ -40,13 +40,14 @@ deploy_service() {
 
   local image
   image="$(docker_image "$svc" "latest")"
-  local config_name="${svc}_env"
+  local config_name
+  config_name="$(swarm_env_config "$svc")"
   local staging_name="${svc}-staging"
 
   eval "$(get_resource_limits "$svc")"
 
   log INFO "Image: $image"
-  log INFO "Config: $config_name"
+  log INFO "Env config: $config_name"
   log INFO "Gateway DNS alias: ${gateway_alias}"
   log INFO "Resources: CPU=$CPU_LIMIT/$CPU_RESERVE, Memory=$MEMORY_LIMIT/$MEMORY_RESERVE"
 

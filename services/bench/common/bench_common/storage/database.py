@@ -60,11 +60,19 @@ async def init_db() -> None:
     try:
         await DomainRow.objects.acount()
     except Exception as exc:  # pragma: no cover - defensive
-        raise RuntimeError(
-            "bench tables missing in Postgres — swecc-server has not run "
-            "`manage.py migrate` yet. Start the `server` service first, then "
-            "restart bench-api."
-        ) from exc
+        hint = "bench tables missing — run swecc-server `manage.py migrate` first."
+        err = str(exc).lower()
+        if "tenant or user not found" in err or "password authentication failed" in err:
+            hint = (
+                "Postgres auth failed for bench-api. On Swarm, bench-api uses Docker "
+                "config server_env (same as server) — fix DB_* there and redeploy."
+            )
+        elif "connection" in err or "operationalerror" in type(exc).__name__.lower():
+            hint = (
+                "Postgres unreachable from bench-api. Check DB_HOST/DB_PORT/DB_USER "
+                "(Supabase pooler :6543 needs user postgres.<project-ref>)."
+            )
+        raise RuntimeError(f"{hint} Original error: {exc}") from exc
 
 
 # ── Domain ────────────────────────────────────────────────────────────────────
