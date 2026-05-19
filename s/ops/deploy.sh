@@ -53,10 +53,6 @@ deploy_service() {
   log INFO "Preparing environment from Docker config"
   docker config inspect "$config_name" --format pretty | grep '=' > /tmp/${svc}_env.tmp || true
 
-  local gateway_dns network_arg
-  gateway_dns="$(swarm_gateway_dns "$svc")"
-  network_arg="--network-add name=${SWARM_NETWORK},alias=${gateway_dns}"
-
   local service_exists=false
   if docker service inspect "$svc" &>/dev/null; then
     service_exists=true
@@ -68,7 +64,7 @@ deploy_service() {
 
     docker service create \
       --name "$staging_name" \
-      "$network_arg" \
+      --network "$SWARM_NETWORK" \
       --env-file /tmp/${svc}_env.tmp \
       --limit-cpu "$CPU_LIMIT" \
       --limit-memory "$MEMORY_LIMIT" \
@@ -102,7 +98,7 @@ deploy_service() {
 
   docker service create \
     --name "$svc" \
-    "$network_arg" \
+    --network "$SWARM_NETWORK" \
     --env-file /tmp/${svc}_env.tmp \
     --limit-cpu "$CPU_LIMIT" \
     --limit-memory "$MEMORY_LIMIT" \
@@ -120,11 +116,6 @@ deploy_service() {
   rm -f /tmp/${svc}_env.tmp
 
   wait_for_service "$svc"
-
-  if ! "${SCRIPT_DIR}/ensure-gateway-dns.sh" "$svc"; then
-    die "Failed to ensure gateway DNS for $svc"
-  fi
-
   log INFO "Successfully deployed $svc"
 }
 
