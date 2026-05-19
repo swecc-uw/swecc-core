@@ -21,6 +21,7 @@ on:
         type: choice
         options:
           - diagnose
+          - redeploy-bench-api
           - reload-nginx
           - verify
           - full
@@ -43,6 +44,9 @@ jobs:
     runs-on:
       group: EC2
       labels: [self-hosted, deploy]
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

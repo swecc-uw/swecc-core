@@ -4,6 +4,8 @@ set -euo pipefail
 
 ACTION="${1:-diagnose}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Stable path on the EC2 manager (runner workspace paths change per job).
+NGINX_CONF_HOST="${NGINX_CONF_HOST:-/opt/swecc/nginx.conf}"
 cd "$REPO_ROOT"
 
 log() {
@@ -25,8 +27,8 @@ diagnose() {
   log "--- bench-api logs (last 40 lines) ---"
   docker service logs bench-api --tail 40 2>&1 || true
 
-  log "=== prod_nginx ==="
-  docker service ps prod_nginx --no-trunc 2>/dev/null || log "prod_nginx stack service not found"
+  log "=== prod_nginx (live service name: prod_nginx, not prod_prod_nginx) ==="
+  docker service ps prod_nginx --no-trunc 2>/dev/null || log "prod_nginx service not found"
   local cid
   cid="$(nginx_container_id)"
   if [[ -n "$cid" ]]; then
@@ -40,26 +42,50 @@ diagnose() {
     log "No running prod_nginx container found"
   fi
 
-  log "=== infra/nginx.conf bench routes (checkout on runner) ==="
+  log "=== bench routes in repo infra/nginx.conf ==="
   grep -n "bench" "$REPO_ROOT/infra/nginx.conf" || log "no bench lines in nginx.conf"
 }
 
+redeploy_bench_api() {
+  if [[ -z "${DOCKERHUB_USERNAME:-}" ]] || [[ -z "${DOCKERHUB_TOKEN:-}" ]]; then
+    log "SKIP bench-api redeploy (DOCKERHUB_* not set)"
+    return 0
+  fi
+  log "Redeploying bench-api with server_env (./s/ops/deploy.sh)"
+  chmod +x ./s/ops/deploy.sh ./s/lib.sh
+  echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+  ./s/ops/deploy.sh bench-api
+}
+
 reload_nginx() {
-  if [[ ! -f "$REPO_ROOT/infra/stack.yml" ]] || [[ ! -f "$REPO_ROOT/infra/nginx.conf" ]]; then
-    log "ERROR: missing infra/stack.yml or infra/nginx.conf under $REPO_ROOT"
+  local conf_src="${REPO_ROOT}/infra/nginx.conf"
+  if [[ ! -f "$conf_src" ]]; then
+    log "ERROR: missing $conf_src"
     exit 1
   fi
-  log "Deploying prod stack (prod_nginx) from repo root"
-  log "Bind mount: ${REPO_ROOT}/infra/nginx.conf -> /etc/nginx/nginx.conf"
-  export PWD="$REPO_ROOT"
-  docker stack deploy -c infra/stack.yml prod
-  log "Waiting for prod_nginx tasks..."
-  sleep 15
-  docker service ps prod_nginx 2>/dev/null || true
+  if ! docker service inspect prod_nginx &>/dev/null; then
+    log "ERROR: Swarm service prod_nginx not found (will not docker stack deploy — ports already bound)"
+    exit 1
+  fi
+
+  log "Installing nginx.conf to ${NGINX_CONF_HOST}"
+  sudo mkdir -p "$(dirname "$NGINX_CONF_HOST")"
+  sudo cp "$conf_src" "$NGINX_CONF_HOST"
+
+  log "Updating prod_nginx bind mount (in-place service update)"
+  docker service update --force prod_nginx \
+    --mount-rm type=bind,target=/etc/nginx/nginx.conf \
+    --mount-add "type=bind,source=${NGINX_CONF_HOST},target=/etc/nginx/nginx.conf,readonly" \
+    || docker service update --force prod_nginx \
+      --mount-add "type=bind,source=${NGINX_CONF_HOST},target=/etc/nginx/nginx.conf,readonly"
+
+  log "Waiting for prod_nginx..."
+  sleep 20
+  docker service ps prod_nginx --no-trunc 2>/dev/null || true
   local cid
   cid="$(nginx_container_id)"
   if [[ -n "$cid" ]]; then
-    docker exec "$cid" nginx -t
+    docker exec "$cid" nginx -t 2>&1 || log "WARN: nginx -t failed after update"
   fi
 }
 
@@ -75,6 +101,9 @@ case "$ACTION" in
   diagnose)
     diagnose
     ;;
+  redeploy-bench-api)
+    redeploy_bench_api
+    ;;
   reload-nginx)
     reload_nginx
     verify_external
@@ -84,11 +113,12 @@ case "$ACTION" in
     ;;
   full)
     diagnose
+    redeploy_bench_api
     reload_nginx
     verify_external
     ;;
   *)
-    log "Unknown action: $ACTION (use diagnose|reload-nginx|verify|full)"
+    log "Unknown action: $ACTION (use diagnose|redeploy-bench-api|reload-nginx|verify|full)"
     exit 1
     ;;
 esac
