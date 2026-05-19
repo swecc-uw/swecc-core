@@ -18,8 +18,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-swecc} -d ${DB_NAME:-swecc}"]
       interval: 5s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   redis:
     build: ./infra/redis
@@ -83,6 +84,18 @@ services:
       - RABBIT_HOST=swecc-rabbitmq-instance
     command: >
       bash -c "cd server && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
 
   sockets:
     build: ./services/sockets
@@ -174,11 +187,17 @@ services:
     environment:
       - SANDBOX_HOST=swecc-bench-sandbox
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)",
+        ]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
 
   bench-api:
     build:
@@ -201,7 +220,7 @@ services:
       # swecc-server runs `manage.py migrate` on startup; bench-api needs the
       # bench_* tables to exist before it boots.
       server:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -213,11 +232,17 @@ services:
       # both services.
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
 
   bench-worker:
     build:
@@ -257,7 +282,8 @@ services:
   #     - SCHEDULER_BASE_URL=http://swecc-server:8000
 
   # =============================================================================
-  # Reverse Proxy (optional for local dev)
+  # Reverse Proxy (local api gateway — mirrors prod /bench/ routing)
+  # Start with: docker compose --profile with-nginx up --build
   # =============================================================================
   nginx:
     image: nginx:stable-alpine
