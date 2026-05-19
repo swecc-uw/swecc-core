@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Test runner for bench-sandbox (pytest; setup in tests/conftest.py)."""
+
 from __future__ import annotations
 
 import sys

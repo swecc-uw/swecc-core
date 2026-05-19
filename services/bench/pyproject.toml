@@ -1,0 +1,9 @@
+# Align bench-* service lint with repo root pre-commit (black/isort line-length 100).
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["app", "bench_common", "test_support"]
