@@ -15,6 +15,15 @@ export DOCKERHUB_ORG
 SWARM_NETWORK="prod_swecc-network"
 export SWARM_NETWORK
 
+# SWAG / swecc-infra nginx upstreams use stack-style DNS (swecc_stack_server, …).
+# deploy.sh creates services named server, bench-api, … — register matching aliases.
+SWARM_STACK_NAME="${SWARM_STACK_NAME:-swecc_stack}"
+export SWARM_STACK_NAME
+
+swarm_gateway_dns() {
+  echo "${SWARM_STACK_NAME}_$1"
+}
+
 if [[ -t 1 ]]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'
