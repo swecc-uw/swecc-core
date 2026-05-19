@@ -10,6 +10,8 @@ usage() {
   cat <<EOF
 Usage: $0 [service ...]
 Default: server sockets bench-api
+
+Re-attach swecc_stack_* DNS aliases on prod_swecc-network (safe to re-run).
 EOF
   exit 1
 }
@@ -28,5 +30,5 @@ fi
 
 require_cmd docker
 for svc in "${targets[@]}"; do
-  swarm_add_gateway_alias "$svc" || true
+  swarm_ensure_gateway_routing "$svc" || true
 done

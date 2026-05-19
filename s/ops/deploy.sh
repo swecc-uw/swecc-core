@@ -13,10 +13,9 @@ Usage: $0 <service|all>
 Services: ${SERVICES[*]}
 
 This script performs a zero-downtime deployment to Docker Swarm:
-1. Creates a staging service with the new image
-2. Waits for staging to be healthy
-3. Promotes staging to production
-4. Removes the old production service
+1. (Existing service) Validates the new image on a staging task, then rolls
+   production forward with `docker service update` (start-first; never rm prod first)
+2. (New service) Creates the production service on prod_swecc-network with gateway alias
 
 Required environment:
   - DOCKERHUB_USERNAME: Docker Hub username
@@ -31,6 +30,9 @@ EOF
 
 deploy_service() {
   local svc="$1"
+  local prod_net_args=()
+  local staging_net_args=()
+  local gateway_alias
 
   log INFO "Deploying service: $svc"
 
@@ -43,8 +45,13 @@ deploy_service() {
 
   eval "$(get_resource_limits "$svc")"
 
+  gateway_alias="$(swarm_gateway_dns "$svc")"
+  swarm_network_create_args "$svc" prod_net_args true
+  swarm_network_create_args "$svc" staging_net_args false
+
   log INFO "Image: $image"
   log INFO "Config: $config_name"
+  log INFO "Network: ${SWARM_NETWORK} (gateway DNS: ${gateway_alias})"
   log INFO "Resources: CPU=$CPU_LIMIT/$CPU_RESERVE, Memory=$MEMORY_LIMIT/$MEMORY_RESERVE"
 
   log INFO "Pulling latest image"
@@ -53,14 +60,6 @@ deploy_service() {
   log INFO "Preparing environment from Docker config"
   docker config inspect "$config_name" --format pretty | grep '=' > /tmp/${svc}_env.tmp || true
 
-  local gateway_alias alias_args=()
-  gateway_alias="$(swarm_gateway_dns "$svc")"
-  if swarm_supports_network_alias_on_create; then
-    alias_args=(--network-alias "$gateway_alias")
-  else
-    log WARN "Docker on this host lacks --network-alias; deploy uses ${svc} DNS (SWAG nginx has backup upstreams)"
-  fi
-
   local service_exists=false
   if docker service inspect "$svc" &>/dev/null; then
     service_exists=true
@@ -68,12 +67,11 @@ deploy_service() {
   fi
 
   if [[ "$service_exists" == "true" ]]; then
-    log INFO "Creating staging service: $staging_name"
+    log INFO "Creating staging service: $staging_name (no gateway alias)"
 
     docker service create \
       --name "$staging_name" \
-      --network "$SWARM_NETWORK" \
-      --network-alias "$gateway_alias" \
+      "${staging_net_args[@]}" \
       --env-file /tmp/${svc}_env.tmp \
       --limit-cpu "$CPU_LIMIT" \
       --limit-memory "$MEMORY_LIMIT" \
@@ -85,11 +83,32 @@ deploy_service() {
 
     wait_for_service "$staging_name"
 
-    log INFO "Promoting staging to production"
-    docker service update --hostname "$svc" "$staging_name"
+    log INFO "Rolling update $svc (start-first; production stays registered until new task is up)"
+    local -a update_args=(
+      --image "$image"
+      --limit-cpu "$CPU_LIMIT"
+      --limit-memory "$MEMORY_LIMIT"
+      --reserve-cpu "$CPU_RESERVE"
+      --reserve-memory "$MEMORY_RESERVE"
+      --update-order start-first
+      --update-delay 30s
+      --with-registry-auth
+    )
+    if docker service update --help 2>&1 | grep -q -- '--env-file'; then
+      update_args+=(--env-file /tmp/${svc}_env.tmp)
+    else
+      log WARN "docker service update lacks --env-file; env vars unchanged on this host"
+    fi
+    docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
 
-    log INFO "Removing old production service"
-    docker service rm "$svc" || true
+    docker service rm "$staging_name" 2>/dev/null || true
+    rm -f /tmp/${svc}_env.tmp
+
+    wait_for_service "$svc"
+    swarm_ensure_gateway_routing "$svc" || true
+
+    log INFO "Successfully updated $svc (reachable as ${svc} and ${gateway_alias} on ${SWARM_NETWORK})"
+    return 0
   fi
 
   log INFO "Creating production service: $svc"
@@ -107,8 +126,7 @@ deploy_service() {
 
   docker service create \
     --name "$svc" \
-    --network "$SWARM_NETWORK" \
-    "${alias_args[@]}" \
+    "${prod_net_args[@]}" \
     --env-file /tmp/${svc}_env.tmp \
     --limit-cpu "$CPU_LIMIT" \
     --limit-memory "$MEMORY_LIMIT" \
@@ -121,15 +139,12 @@ deploy_service() {
     "${extra_args[@]}" \
     "$image"
 
-  log INFO "Cleaning up"
-  docker service rm "$staging_name" 2>/dev/null || true
   rm -f /tmp/${svc}_env.tmp
 
   wait_for_service "$svc"
+  swarm_ensure_gateway_routing "$svc" || true
 
-  swarm_add_gateway_alias "$svc" || true
-
-  log INFO "Successfully deployed $svc (also reachable as ${gateway_alias} on ${SWARM_NETWORK})"
+  log INFO "Successfully deployed $svc (reachable as ${svc} and ${gateway_alias} on ${SWARM_NETWORK})"
 }
 
 while [[ $# -gt 0 ]]; do

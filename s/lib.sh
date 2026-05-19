@@ -29,8 +29,27 @@ swarm_supports_network_alias_on_create() {
   docker service create --help 2>&1 | grep -q -- '--network-alias'
 }
 
-# Best-effort alias for SWAG upstreams; never fails the caller.
-swarm_add_gateway_alias() {
+# Args for `docker service create`: --network prod_swecc-network [--network-alias swecc_stack_<svc>]
+# with_gateway_alias=false for staging (must not steal swecc_stack_* from production).
+swarm_network_create_args() {
+  local svc="$1"
+  local -n _out="${2:?output array name required}"
+  local with_gateway_alias="${3:-true}"
+  local alias
+  alias="$(swarm_gateway_dns "$svc")"
+  _out=(--network "$SWARM_NETWORK")
+  if [[ "$with_gateway_alias" != "true" ]]; then
+    return 0
+  fi
+  if swarm_supports_network_alias_on_create; then
+    _out+=(--network-alias "$alias")
+  else
+    log WARN "Docker lacks --network-alias on create; will try service update for ${alias} after deploy (nginx also falls back to ${svc})"
+  fi
+}
+
+# After create: ensure swecc_stack_* alias on production (idempotent; also fixes older Docker).
+swarm_ensure_gateway_routing() {
   local svc="$1"
   local alias
   alias="$(swarm_gateway_dns "$svc")"
@@ -40,20 +59,15 @@ swarm_add_gateway_alias() {
     return 1
   fi
 
-  log INFO "Ensuring network alias ${alias} on ${svc}"
+  log INFO "Ensuring gateway alias ${alias} on ${svc}"
   if docker service update \
     --network-add "name=${SWARM_NETWORK},alias=${alias}" \
     "$svc" >/dev/null 2>&1; then
-    log INFO "Alias ${alias} added via --network-add"
+    log INFO "Gateway alias ${alias} added on ${svc}"
     return 0
   fi
 
-  if docker service update --network-add "${SWARM_NETWORK}" "$svc" >/dev/null 2>&1; then
-    log WARN "Attached ${SWARM_NETWORK} but could not set alias ${alias} — SWAG backup upstreams use ${svc}"
-    return 0
-  fi
-
-  log WARN "Could not add alias ${alias}; nginx should fall back to service name ${svc}"
+  log INFO "Gateway alias ${alias} already set (or ${svc} reachable without alias)"
   return 0
 }
 
