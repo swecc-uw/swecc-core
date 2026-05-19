@@ -53,8 +53,13 @@ deploy_service() {
   log INFO "Preparing environment from Docker config"
   docker config inspect "$config_name" --format pretty | grep '=' > /tmp/${svc}_env.tmp || true
 
-  local gateway_alias
+  local gateway_alias alias_args=()
   gateway_alias="$(swarm_gateway_dns "$svc")"
+  if swarm_supports_network_alias_on_create; then
+    alias_args=(--network-alias "$gateway_alias")
+  else
+    log WARN "Docker on this host lacks --network-alias; deploy uses ${svc} DNS (SWAG nginx has backup upstreams)"
+  fi
 
   local service_exists=false
   if docker service inspect "$svc" &>/dev/null; then
@@ -103,7 +108,7 @@ deploy_service() {
   docker service create \
     --name "$svc" \
     --network "$SWARM_NETWORK" \
-    --network-alias "$gateway_alias" \
+    "${alias_args[@]}" \
     --env-file /tmp/${svc}_env.tmp \
     --limit-cpu "$CPU_LIMIT" \
     --limit-memory "$MEMORY_LIMIT" \
@@ -122,8 +127,7 @@ deploy_service() {
 
   wait_for_service "$svc"
 
-  # Best-effort: older tasks may lack alias if create flag unsupported on this Docker version.
-  "${SCRIPT_DIR}/ensure-gateway-dns.sh" "$svc" || true
+  swarm_add_gateway_alias "$svc" || true
 
   log INFO "Successfully deployed $svc (also reachable as ${gateway_alias} on ${SWARM_NETWORK})"
 }

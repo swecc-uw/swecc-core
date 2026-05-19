@@ -24,6 +24,39 @@ swarm_gateway_dns() {
   echo "${SWARM_STACK_NAME}_$1"
 }
 
+# EC2 deploy runners may run older Docker without --network-alias on service create.
+swarm_supports_network_alias_on_create() {
+  docker service create --help 2>&1 | grep -q -- '--network-alias'
+}
+
+# Best-effort alias for SWAG upstreams; never fails the caller.
+swarm_add_gateway_alias() {
+  local svc="$1"
+  local alias
+  alias="$(swarm_gateway_dns "$svc")"
+
+  if ! docker service inspect "$svc" &>/dev/null; then
+    log WARN "Cannot add alias ${alias}: service ${svc} not found"
+    return 1
+  fi
+
+  log INFO "Ensuring network alias ${alias} on ${svc}"
+  if docker service update \
+    --network-add "name=${SWARM_NETWORK},alias=${alias}" \
+    "$svc" >/dev/null 2>&1; then
+    log INFO "Alias ${alias} added via --network-add"
+    return 0
+  fi
+
+  if docker service update --network-add "${SWARM_NETWORK}" "$svc" >/dev/null 2>&1; then
+    log WARN "Attached ${SWARM_NETWORK} but could not set alias ${alias} — SWAG backup upstreams use ${svc}"
+    return 0
+  fi
+
+  log WARN "Could not add alias ${alias}; nginx should fall back to service name ${svc}"
+  return 0
+}
+
 if [[ -t 1 ]]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'

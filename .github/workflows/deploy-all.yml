@@ -19,6 +19,7 @@ jobs:
           echo "Deployment cancelled. You must type 'deploy-all' to confirm."
           exit 1
 
+  # Django first — migrations before bench-api and dependents.
   deploy-server:
     name: Deploy Server
     needs: validate
@@ -29,39 +30,10 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  deploy-bot:
-    name: Deploy Bot
-    needs: validate
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      service: bot
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  deploy-ai:
-    name: Deploy AI
-    needs: validate
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      service: ai
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  deploy-chronos:
-    name: Deploy Chronos
-    needs: validate
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      service: chronos
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
+  # WebSockets next — /ws routes fail for everyone if sockets is down.
   deploy-sockets:
     name: Deploy Sockets
-    needs: validate
+    needs: deploy-server
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: sockets
@@ -69,19 +41,9 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  deploy-scheduler:
-    name: Deploy Scheduler
-    needs: validate
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      service: scheduler
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
   deploy-bench-api:
     name: Deploy Bench API
-    needs: validate
+    needs: deploy-server
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-api
@@ -93,7 +55,7 @@ jobs:
 
   deploy-bench-sandbox:
     name: Deploy Bench Sandbox
-    needs: validate
+    needs: deploy-server
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-sandbox
@@ -103,9 +65,49 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
+  deploy-bot:
+    name: Deploy Bot
+    needs: [deploy-server, deploy-sockets]
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: bot
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-ai:
+    name: Deploy AI
+    needs: deploy-server
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: ai
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-chronos:
+    name: Deploy Chronos
+    needs: deploy-server
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: chronos
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  deploy-scheduler:
+    name: Deploy Scheduler
+    needs: deploy-server
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: scheduler
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
   deploy-bench-worker:
     name: Deploy Bench Worker
-    needs: validate
+    needs: deploy-bench-api
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-worker
@@ -117,7 +119,18 @@ jobs:
 
   summary:
     name: Deployment Summary
-    needs: [deploy-server, deploy-bot, deploy-ai, deploy-chronos, deploy-sockets, deploy-scheduler, deploy-bench-api, deploy-bench-sandbox, deploy-bench-worker]
+    needs:
+      [
+        deploy-server,
+        deploy-sockets,
+        deploy-bot,
+        deploy-ai,
+        deploy-chronos,
+        deploy-scheduler,
+        deploy-bench-api,
+        deploy-bench-sandbox,
+        deploy-bench-worker,
+      ]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -128,10 +141,10 @@ jobs:
           echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Server | ${{ needs.deploy-server.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sockets | ${{ needs.deploy-sockets.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Bot | ${{ needs.deploy-bot.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| AI | ${{ needs.deploy-ai.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Chronos | ${{ needs.deploy-chronos.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Sockets | ${{ needs.deploy-sockets.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Scheduler | ${{ needs.deploy-scheduler.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Bench API | ${{ needs.deploy-bench-api.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Bench Sandbox | ${{ needs.deploy-bench-sandbox.result }} |" >> $GITHUB_STEP_SUMMARY
