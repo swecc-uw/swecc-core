@@ -7,13 +7,14 @@ from typing import Any
 
 import httpx
 import structlog
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/v1/developer", tags=["developer"])

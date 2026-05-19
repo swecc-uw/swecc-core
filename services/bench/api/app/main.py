@@ -26,11 +26,12 @@ if "bench.apps.BenchConfig" not in django_settings.INSTALLED_APPS:
     )
 
 import structlog  # noqa: E402
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
 from app.routes import bench, developer, domains, leaderboard, runs, techniques, test  # noqa: E402
 from bench_common.storage.database import init_db  # noqa: E402
 from bench_common.storage.trace_store import trace_store  # noqa: E402
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 log = structlog.get_logger()
 
