@@ -10,13 +10,12 @@ import asyncio
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 log = structlog.get_logger()
 
