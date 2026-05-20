@@ -46,6 +46,15 @@ diagnose() {
   grep -n "bench" "$REPO_ROOT/infra/nginx.conf" || log "no bench lines in nginx.conf"
 }
 
+sync_server_env() {
+  if [[ -z "${DB_HOST:-}" ]]; then
+    log "ERROR: DB_* secrets not in environment (run via workflow sync-server-env)"
+    exit 1
+  fi
+  chmod +x ./scripts/sync-prod-server-env.sh
+  ./scripts/sync-prod-server-env.sh
+}
+
 redeploy_bench_api() {
   if [[ -z "${DOCKERHUB_USERNAME:-}" ]] || [[ -z "${DOCKERHUB_TOKEN:-}" ]]; then
     log "SKIP bench-api redeploy (DOCKERHUB_* not set)"
@@ -104,6 +113,9 @@ case "$ACTION" in
   redeploy-bench-api)
     redeploy_bench_api
     ;;
+  sync-server-env)
+    sync_server_env
+    ;;
   reload-nginx)
     reload_nginx
     verify_external
@@ -118,7 +130,7 @@ case "$ACTION" in
     verify_external
     ;;
   *)
-    log "Unknown action: $ACTION (use diagnose|redeploy-bench-api|reload-nginx|verify|full)"
+    log "Unknown action: $ACTION (use diagnose|sync-server-env|redeploy-bench-api|reload-nginx|verify|full)"
     exit 1
     ;;
 esac
