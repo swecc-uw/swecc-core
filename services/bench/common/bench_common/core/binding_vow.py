@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Any, Literal
 
@@ -78,3 +79,90 @@ class BindingVow(BaseModel):
 
     metadata: dict[str, Any] = {}
     description: str = ""
+
+    def validate(self) -> None:
+        """Check all vow constraints.
+
+        Raises VowViolationError listing every problem found so the author
+        can fix them all in one pass rather than discovering them one at a time.
+        """
+        from bench_common.core.errors import VowViolationError
+
+        problems: list[str] = []
+
+        if not _is_valid_semver(self.version):
+            problems.append(
+                f"version {self.version!r} is not valid SemVer — expected 'MAJOR.MINOR.PATCH' "
+                f"(e.g. '1.0.0')"
+            )
+
+        problems.extend(_check_space("observation_space", self.observation_space))
+        problems.extend(_check_space("action_space", self.action_space))
+
+        if self.reward.range:
+            lo = self.reward.range.get("low")
+            hi = self.reward.range.get("high")
+            if lo is not None and hi is not None and lo >= hi:
+                problems.append(
+                    f"reward.range.low ({lo}) must be strictly less than .high ({hi})"
+                )
+
+        if self.episode.max_steps is not None and self.episode.max_steps <= 0:
+            problems.append("episode.max_steps must be a positive integer when set")
+        if self.episode.max_wall_seconds is not None and self.episode.max_wall_seconds <= 0:
+            problems.append("episode.max_wall_seconds must be a positive integer when set")
+        if self.episode.parallel_episodes < 1:
+            problems.append("episode.parallel_episodes must be >= 1")
+
+        for td in self.techniques:
+            if not td.technique_id:
+                problems.append("each technique declaration must have a non-empty technique_id")
+            if td.version and not _is_valid_version_req(td.version):
+                problems.append(
+                    f"technique '{td.technique_id}' version requirement {td.version!r} is not "
+                    f"valid — use SemVer or a range like '^1.0'"
+                )
+
+        if problems:
+            bullet = "\n  • "
+            raise VowViolationError(
+                f"BindingVow '{self.id}' (v{self.version}) has "
+                f"{len(problems)} violation(s):{bullet}{bullet.join(problems)}"
+            )
+
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+")
+_VERSION_REQ_RE = re.compile(r"^[\^~]?\d+\.\d+(\.\d+)?")
+
+
+def _is_valid_semver(version: str) -> bool:
+    return bool(_SEMVER_RE.match(version))
+
+
+def _is_valid_version_req(req: str) -> bool:
+    return bool(_VERSION_REQ_RE.match(req))
+
+
+def _check_space(name: str, space: "SpaceSpec | CompositeSpace") -> list[str]:
+    problems: list[str] = []
+    if isinstance(space, CompositeSpace):
+        if not space.fields:
+            problems.append(f"{name}: composite space must have at least one field")
+        for field_name, sub in space.fields.items():
+            problems.extend(_check_space(f"{name}.{field_name}", sub))
+    else:
+        if space.type == SpaceType.DISCRETE:
+            if not space.enum_values:
+                problems.append(f"{name}: discrete space must declare enum_values")
+            elif len(set(space.enum_values)) != len(space.enum_values):
+                problems.append(f"{name}: discrete enum_values contains duplicates")
+        if space.type == SpaceType.CONTINUOUS and space.bounds:
+            lo = space.bounds.get("low")
+            hi = space.bounds.get("high")
+            if lo is not None and hi is not None and lo >= hi:
+                problems.append(
+                    f"{name}: continuous bounds.low ({lo}) must be < bounds.high ({hi})"
+                )
+    return problems

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -6,9 +8,18 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Database — bench uses Django ORM against the swecc Postgres DB. Connection
-    # settings come from DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_PORT
-    # (read directly by app/django_settings.py), not from this Settings class.
+    # Storage backend.
+    # "django" (default): Django ORM against the shared swecc Postgres DB.
+    #   Requires django.setup() to have been called and DB_HOST/DB_NAME/DB_USER/
+    #   DB_PASSWORD/DB_PORT to be set. Used by bench-api in Docker.
+    # "sqlite": aiosqlite against a local file. No external dependencies.
+    #   Use for local development and testing without a Postgres server.
+    #   Set ORCH_SQLITE_PATH to override the default path.
+    db_backend: Literal["django", "sqlite"] = "django"
+    sqlite_path: str = "./bench_dev.db"
+
+    # Postgres connection settings come from DB_HOST / DB_NAME / DB_USER /
+    # DB_PASSWORD / DB_PORT (read directly by app/django_settings.py), not here.
 
     # Trace storage — local directory
     trace_dir: str = "./data/traces"
