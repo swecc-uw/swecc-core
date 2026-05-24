@@ -46,6 +46,32 @@ swarm_env_config() {
   esac
 }
 
+# docker service update does not support --env-file (only create does on some versions).
+# Apply KEY=value lines via --env-add (updates existing keys).
+swarm_service_update_with_env() {
+  local svc="$1"
+  local env_file="$2"
+  shift 2
+  local -a update_args=("$@")
+  local -a env_add=()
+  local line
+
+  [[ -f "$env_file" ]] || die "env file not found: $env_file"
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" != *"="* ]] && continue
+    env_add+=(--env-add "$line")
+  done <"$env_file"
+
+  if [[ ${#env_add[@]}" -eq 0 ]]; then
+    die "no KEY=value entries in $env_file"
+  fi
+
+  docker service update "${update_args[@]}" "${env_add[@]}" "$svc"
+}
+
 if [[ -t 1 ]]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'

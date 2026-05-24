@@ -93,8 +93,11 @@ deploy_service() {
     )
     if docker service update --help 2>&1 | grep -q -- '--env-file'; then
       update_args+=(--env-file /tmp/${svc}_env.tmp)
+      docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
+    else
+      swarm_service_update_with_env "$svc" /tmp/${svc}_env.tmp "${update_args[@]}" \
+        || die "Failed to update service $svc"
     fi
-    docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
 
     docker service rm "$staging_name" 2>/dev/null || true
   else

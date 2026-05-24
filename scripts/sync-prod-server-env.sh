@@ -3,6 +3,11 @@
 # Run on the self-hosted deploy runner (Swarm manager). Secrets are passed via env, not files in git.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=/dev/null
+. "${REPO_ROOT}/s/lib.sh"
+
 REQUIRED_VARS=(DB_HOST DB_NAME DB_PORT DB_USER DB_PASSWORD JWT_SECRET)
 for v in "${REQUIRED_VARS[@]}"; do
   if [[ -z "${!v:-}" ]]; then
@@ -80,9 +85,9 @@ if docker config inspect "$CONFIG_NAME" &>/dev/null; then
 fi
 docker config create "$CONFIG_NAME" "$OUT"
 
-log "Updating bench-api and server task env from merged file"
-docker service update --env-file "$OUT" bench-api
-docker service update --env-file "$OUT" server
+log "Updating bench-api and server task env from merged file (--env-add; Swarm has no --env-file on update)"
+swarm_service_update_with_env bench-api "$OUT" --force
+swarm_service_update_with_env server "$OUT" --force
 
 log "Waiting for bench-api..."
 sleep 15
