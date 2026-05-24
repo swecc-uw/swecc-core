@@ -120,9 +120,7 @@ async def save_domain(domain: Domain) -> None:
 
 async def get_domain(domain_id: str) -> Domain | None:
     async with await _connect() as conn:
-        async with conn.execute(
-            "SELECT data FROM bench_domain WHERE id = ?", (domain_id,)
-        ) as cur:
+        async with conn.execute("SELECT data FROM bench_domain WHERE id = ?", (domain_id,)) as cur:
             row = await cur.fetchone()
     return Domain.model_validate_json(row["data"]) if row else None
 
@@ -159,9 +157,7 @@ async def save_run(run: Run) -> None:
 
 async def get_run(run_id: str) -> Run | None:
     async with await _connect() as conn:
-        async with conn.execute(
-            "SELECT data FROM bench_run WHERE id = ?", (run_id,)
-        ) as cur:
+        async with conn.execute("SELECT data FROM bench_run WHERE id = ?", (run_id,)) as cur:
             row = await cur.fetchone()
     return Run.model_validate_json(row["data"]) if row else None
 
@@ -263,9 +259,7 @@ async def get_developer_environment(env_id: str) -> dict[str, Any] | None:
 
 async def delete_developer_environment(env_id: str) -> bool:
     async with await _connect() as conn:
-        cur = await conn.execute(
-            "DELETE FROM bench_developerenvironment WHERE id = ?", (env_id,)
-        )
+        cur = await conn.execute("DELETE FROM bench_developerenvironment WHERE id = ?", (env_id,))
         await conn.commit()
     return cur.rowcount > 0
 
@@ -339,9 +333,7 @@ async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) 
 
 async def get_bench_job(job_id: str) -> dict[str, Any] | None:
     async with await _connect() as conn:
-        async with conn.execute(
-            "SELECT * FROM bench_benchjob WHERE id = ?", (job_id,)
-        ) as cur:
+        async with conn.execute("SELECT * FROM bench_benchjob WHERE id = ?", (job_id,)) as cur:
             row = await cur.fetchone()
     return _job_row_to_dict(dict(row)) if row else None
 

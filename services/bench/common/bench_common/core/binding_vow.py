@@ -103,9 +103,7 @@ class BindingVow(BaseModel):
             lo = self.reward.range.get("low")
             hi = self.reward.range.get("high")
             if lo is not None and hi is not None and lo >= hi:
-                problems.append(
-                    f"reward.range.low ({lo}) must be strictly less than .high ({hi})"
-                )
+                problems.append(f"reward.range.low ({lo}) must be strictly less than .high ({hi})")
 
         if self.episode.max_steps is not None and self.episode.max_steps <= 0:
             problems.append("episode.max_steps must be a positive integer when set")

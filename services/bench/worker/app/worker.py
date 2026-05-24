@@ -26,7 +26,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from subprocess import PIPE, run as subprocess_run
+from subprocess import PIPE
+from subprocess import run as subprocess_run
 from typing import Any
 
 import requests
@@ -156,7 +157,13 @@ async def _install_deps(repo_dir: Path) -> None:
         return
     log.info("installing env dependencies")
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, "-m", "pip", "install", "-q", "-r", str(req_file),
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-q",
+        "-r",
+        str(req_file),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -268,9 +275,7 @@ async def _bench_all_models(
                 "completed_episodes": result.completed,
                 "failed_episodes": result.failed,
             }
-            log.info(
-                f"model={model} primary_score={result.scores.get(primary_metric)}"
-            )
+            log.info(f"model={model} primary_score={result.scores.get(primary_metric)}")
         except Exception as exc:
             log.exception(f"model={model} failed: {exc}")
             model_results[model] = {
@@ -292,8 +297,7 @@ def _find_free_port() -> int:
 
 def _score_summary(model_results: dict[str, Any]) -> str:
     return ", ".join(
-        f"{m.split('/')[-1]}={r.get('primary_score')}"
-        for m, r in model_results.items()
+        f"{m.split('/')[-1]}={r.get('primary_score')}" for m, r in model_results.items()
     )
 
 
@@ -301,9 +305,7 @@ def _wait_for_api(max_attempts: int = 60, delay: float = 5.0) -> None:
     """Block until the API responds.  Prevents crashes on cold-start DNS races."""
     for attempt in range(1, max_attempts + 1):
         try:
-            resp = requests.get(
-                f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=3
-            )
+            resp = requests.get(f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=3)
             if resp.status_code < 500:
                 log.info(f"API reachable at {API_URL} after {attempt} attempt(s)")
                 return
