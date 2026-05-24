@@ -67,8 +67,8 @@ swarm_service_update_with_env() {
     env_add+=(--env-add "$line")
   done <"$env_file"
 
-  if [[ ${#env_add[@]}" -eq 0 ]]; then
-    die "no KEY=value entries in $env_file"
+  if [[ ${#env_add[@]} -eq 0 ]]; then
+    die "no env entries in $env_file"
   fi
 
   docker service update "${update_args[@]}" "${env_add[@]}" "$svc"
