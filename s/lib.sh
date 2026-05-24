@@ -60,7 +60,9 @@ swarm_service_update_with_env() {
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
-    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    local trimmed="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$trimmed" ]] && continue
+    [[ "$trimmed" == \#* ]] && continue
     [[ "$line" != *"="* ]] && continue
     env_add+=(--env-add "$line")
   done <"$env_file"
