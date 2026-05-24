@@ -176,3 +176,16 @@ def build_domain_payload(
         "tags": s.tags,
         "detail": description,
     }
+
+
+def sync_binding_vow_to_domain_id(body: dict[str, Any]) -> None:
+    """Keep binding_vow.domain_id and vow id aligned with body[\"id\"] after CLI overrides."""
+    domain_id = body.get("id")
+    if not domain_id or not isinstance(domain_id, str):
+        return
+    vow = body.get("binding_vow")
+    if not isinstance(vow, dict):
+        return
+    vow["domain_id"] = domain_id
+    version = vow.get("version") or "1.0.0"
+    vow["id"] = f"{domain_id}-vow-{version.split('.')[0]}"

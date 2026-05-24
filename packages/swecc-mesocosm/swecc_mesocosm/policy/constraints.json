@@ -12,7 +12,11 @@
   "allowed_model_prefixes": [
     "ollama/",
     "openai/",
-    "anthropic/"
+    "anthropic/",
+    "google/",
+    "gemini/",
+    "deepseek/",
+    "xai/"
   ],
   "scoring_source_allowed": ["terminal", "episode_reward"]
 }

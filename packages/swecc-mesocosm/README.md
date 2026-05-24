@@ -22,7 +22,16 @@ pip install -e ./packages/swecc-mesocosm
 
 ## Configure
 
-The CLI reads `MESOCOSM_BASE_URL` from the environment (default: `http://127.0.0.1:8000`). You can also pass `--base-url` to any command.
+The CLI reads `MESOCOSM_BASE_URL` from the environment (default: `http://127.0.0.1:8010`, matching `BENCH_API_PORT` in docker compose). You can also pass `--base-url` to any command.
+
+Production:
+
+```bash
+export MESOCOSM_BASE_URL=https://api.swecc.org/bench
+mesocosm doctor   # verify health + openapi
+```
+
+See `infra/mesocosm.env.example` in the monorepo root.
 
 ```bash
 export MESOCOSM_BASE_URL=http://127.0.0.1:8010   # docker compose
@@ -34,6 +43,10 @@ export MESOCOSM_BASE_URL=https://api.swecc.org/bench
 
 ```bash
 mesocosm --help
+
+# connectivity check (bench-api health + openapi)
+mesocosm doctor
+mesocosm doctor --base-url https://api.swecc.org/bench
 
 # inference + validation (no network)
 mesocosm suggest "Wordle clone where the agent gets 6 guesses."

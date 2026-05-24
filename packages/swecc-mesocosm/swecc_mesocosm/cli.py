@@ -19,7 +19,12 @@ from rich.table import Table
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.client import BenchClient
-from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
+from swecc_mesocosm.infer import (
+    ScoringSource,
+    build_domain_payload,
+    shape_from_hint,
+    sync_binding_vow_to_domain_id,
+)
 from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
 from swecc_mesocosm.settings import settings
 
@@ -118,6 +123,82 @@ def _client(base_url: str | None) -> BenchClient:
     return BenchClient(base_url=base_url) if base_url else BenchClient()
 
 
+_EPISODE_FAILURE_STATUSES = frozenset({"failed", "cancelled", "error"})
+_RUN_FAILURE_STATUSES = frozenset({"failed", "cancelled", "error"})
+
+
+def _effective_base_url(base_url: str | None) -> str:
+    return (base_url or settings.base_url).rstrip("/")
+
+
+async def _resolve_vow_version(
+    client: BenchClient,
+    domain_id: str,
+    vow_version: str | None,
+) -> str:
+    if vow_version:
+        return vow_version
+    domain = await client.get_domain(domain_id)
+    vow = domain.get("binding_vow")
+    if not isinstance(vow, dict):
+        _die(f"domain {domain_id!r} has no binding_vow; pass --vow-version explicitly")
+    version = vow.get("version")
+    if not version:
+        _die(f"domain {domain_id!r} binding_vow has no version; pass --vow-version")
+    return str(version)
+
+
+def _exit_if_episode_failed(episode: dict[str, Any]) -> None:
+    status = episode.get("status")
+    if status in _EPISODE_FAILURE_STATUSES:
+        err_console.print(
+            f"[red]episode {status}[/red]"
+            + (
+                f": {episode.get('terminal_info')}"
+                if episode.get("terminal_info")
+                else ""
+            )
+        )
+        raise typer.Exit(1)
+
+
+def _exit_if_run_unsuccessful(run: dict[str, Any], episodes: list[dict[str, Any]] | None) -> None:
+    status = run.get("status")
+    if status in _RUN_FAILURE_STATUSES:
+        err_console.print(f"[red]run {status}[/red]")
+        raise typer.Exit(1)
+    if episodes:
+        for ep in episodes:
+            if ep.get("status") in _EPISODE_FAILURE_STATUSES:
+                _exit_if_episode_failed(ep)
+
+
+def _print_register_next_steps(domain: dict[str, Any], base_url: str | None) -> None:
+    if not sys.stdout.isatty():
+        return
+    domain_id = str(domain.get("id", ""))
+    vow = domain.get("binding_vow") if isinstance(domain.get("binding_vow"), dict) else {}
+    vow_version = str(vow.get("version", "1.0.0"))
+    base = _effective_base_url(base_url)
+    console.print("\n[bold]Next steps[/bold] (copy/paste):")
+    console.print(f"  mesocosm publish {domain_id} --base-url {base}")
+    console.print(
+        f"  mesocosm eval test --domain-id {domain_id} --vow-version {vow_version} "
+        f"--model openai/gpt-4o-mini --base-url {base}"
+    )
+    console.print(
+        "  Use a public env URL in production (not localhost) so bench-api can reach your adapter."
+    )
+
+
+def _probe_url(url: str, *, timeout_s: float = 10.0) -> tuple[int | None, str | None]:
+    try:
+        response = httpx.get(url, timeout=timeout_s)
+        return response.status_code, None
+    except httpx.RequestError as exc:
+        return None, str(exc)
+
+
 BaseUrlOpt = typer.Option(
     None,
     "--base-url",
@@ -181,6 +262,47 @@ def cmd_validate(
     result = validation.validate_benchmark_config(body)
     _print_json(result)
     raise typer.Exit(0 if result.get("ok") else 1)
+
+
+@app.command("doctor")
+def cmd_doctor(
+    base_url: str | None = BaseUrlOpt,
+) -> None:
+    """Check bench-api reachability and whether the base URL includes /bench."""
+    base = _effective_base_url(base_url)
+    health_url = f"{base}/health"
+    openapi_url = f"{base}/openapi.json"
+
+    health_code, health_err = _probe_url(health_url)
+    openapi_code, openapi_err = _probe_url(openapi_url)
+
+    issues: list[str] = []
+    if health_err:
+        issues.append(f"health unreachable: {health_err}")
+    elif health_code != 200:
+        issues.append(f"GET /health returned {health_code}")
+
+    if openapi_err:
+        issues.append(f"openapi unreachable: {openapi_err}")
+    elif openapi_code != 200:
+        issues.append(f"GET /openapi.json returned {openapi_code}")
+        if not base.rstrip("/").endswith("/bench"):
+            issues.append(
+                "hint: production bench-api is at https://api.swecc.org/bench — "
+                "set MESOCOSM_BASE_URL to include the /bench prefix"
+            )
+
+    ok = not issues
+    _print_json(
+        {
+            "ok": ok,
+            "base_url": base,
+            "health": {"url": health_url, "status_code": health_code, "error": health_err},
+            "openapi": {"url": openapi_url, "status_code": openapi_code, "error": openapi_err},
+            "issues": issues,
+        }
+    )
+    raise typer.Exit(0 if ok else 1)
 
 
 # ── domain CRUD ────────────────────────────────────────────────────────
@@ -273,6 +395,8 @@ def cmd_register(
             scoring_source_override=src,
         )
 
+    sync_binding_vow_to_domain_id(body)
+
     if not skip_validation:
         v = validation.validate_benchmark_config(body)
         if not v.get("ok"):
@@ -289,6 +413,7 @@ def cmd_register(
 
     created = _run_with_http_errors(_go())
     _print_json(created)
+    _print_register_next_steps(created, base_url)
 
 
 @app.command("publish")
@@ -396,7 +521,11 @@ def cmd_list(
 @eval_app.command("test")
 def cmd_eval_test(
     domain_id: str = typer.Option(..., "--domain-id", help="Target domain id."),
-    binding_vow_version: str = typer.Option(..., "--vow-version", help="Binding vow version."),
+    binding_vow_version: str | None = typer.Option(
+        None,
+        "--vow-version",
+        help="binding_vow.version (e.g. 1.0.0). Omit to read from the domain record.",
+    ),
     model: str = typer.Option(..., "--model", help="Model identifier (e.g. openai/gpt-4o-mini)."),
     env_url: str | None = typer.Option(None, "--env-url", help="Override env URL."),
     seed: int | None = typer.Option(None, "--seed", help="Episode seed."),
@@ -405,34 +534,41 @@ def cmd_eval_test(
     base_url: str | None = BaseUrlOpt,
 ) -> None:
     """One-off test episode (POST /v1/test/episode)."""
-    body: dict[str, Any] = {
-        "domain_id": domain_id,
-        "binding_vow_version": binding_vow_version,
-        "agent_config": {
-            "model": model,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        },
-    }
-    if env_url is not None:
-        body["env_url"] = env_url
-    if seed is not None:
-        body["seed"] = seed
 
     async def _go() -> dict[str, Any]:
         c = _client(base_url)
         try:
+            vow_version = await _resolve_vow_version(c, domain_id, binding_vow_version)
+            body: dict[str, Any] = {
+                "domain_id": domain_id,
+                "binding_vow_version": vow_version,
+                "agent_config": {
+                    "model": model,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+            }
+            if env_url is not None:
+                body["env_url"] = env_url
+            if seed is not None:
+                body["seed"] = seed
             return await c.test_episode(body)
         finally:
             await c.aclose()
 
-    _print_json(_run_with_http_errors(_go()))
+    episode = _run_with_http_errors(_go())
+    _print_json(episode)
+    _exit_if_episode_failed(episode)
 
 
 @eval_app.command("run")
 def cmd_eval_run(
     domain_id: str = typer.Option(..., "--domain-id"),
-    binding_vow_version: str = typer.Option(..., "--vow-version"),
+    binding_vow_version: str | None = typer.Option(
+        None,
+        "--vow-version",
+        help="binding_vow.version (e.g. 1.0.0). Omit to read from the domain record.",
+    ),
     model: str = typer.Option(..., "--model"),
     num_episodes: int = typer.Option(1, "--num-episodes"),
     seed_set: str | None = typer.Option(
@@ -458,20 +594,6 @@ def cmd_eval_run(
         except Exception:
             _die("--seed-set must be a JSON array of integers, e.g. '[1,2,3]'")
 
-    body: dict[str, Any] = {
-        "domain_id": domain_id,
-        "binding_vow_version": binding_vow_version,
-        "agent_config": {
-            "model": model,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        },
-        "num_episodes": num_episodes,
-        "max_parallel": max_parallel,
-    }
-    if seeds is not None:
-        body["seed_set"] = seeds
-
     async def _go() -> dict[str, Any]:
         c = _client(base_url)
         try:
@@ -483,6 +605,20 @@ def cmd_eval_run(
                         "status": dom.get("status"),
                         "hint": "Use --allow-draft to bypass.",
                     }
+            vow_version = await _resolve_vow_version(c, domain_id, binding_vow_version)
+            body: dict[str, Any] = {
+                "domain_id": domain_id,
+                "binding_vow_version": vow_version,
+                "agent_config": {
+                    "model": model,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+                "num_episodes": num_episodes,
+                "max_parallel": max_parallel,
+            }
+            if seeds is not None:
+                body["seed_set"] = seeds
             return await c.create_run(body)
         finally:
             await c.aclose()
@@ -491,6 +627,10 @@ def cmd_eval_run(
     _print_json(result)
     if result.get("error") == "domain_not_published":
         raise typer.Exit(1)
+    if "episodes" in result:
+        _exit_if_run_unsuccessful(result, result.get("episodes"))
+    elif result.get("status") in _RUN_FAILURE_STATUSES:
+        _exit_if_run_unsuccessful(result, None)
 
 
 # ── run inspection ──────────────────────────────────────────────────────

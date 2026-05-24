@@ -69,6 +69,7 @@ def test_register_from_json_with_overrides(
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content.decode())
         assert body["id"] == "override-id"
+        assert body["binding_vow"]["domain_id"] == "override-id"
         return httpx.Response(201, json={**body, "status": "draft"})
 
     patch_bench_client(handler)
@@ -201,12 +202,13 @@ def test_publish_domain(
 
 
 def test_eval_test_episode(cli_runner: CliRunner, patch_bench_client: Any) -> None:
-    episode = {"episode_id": "ep-1", "reward": 1.0}
+    episode = {"id": "ep-1", "status": "completed", "reward": 1.0}
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/v1/test/episode")
         body = json.loads(request.content.decode())
         assert body["domain_id"] == "demo"
+        assert body["binding_vow_version"] == "1.0.0"
         return httpx.Response(200, json=episode)
 
     patch_bench_client(handler)
@@ -226,7 +228,73 @@ def test_eval_test_episode(cli_runner: CliRunner, patch_bench_client: Any) -> No
         ],
     )
     assert result.exit_code == 0, result.stderr
-    assert json.loads(result.stdout)["episode_id"] == "ep-1"
+    assert json.loads(result.stdout)["id"] == "ep-1"
+
+
+def test_eval_test_episode_fails_on_failed_status(
+    cli_runner: CliRunner,
+    patch_bench_client: Any,
+) -> None:
+    episode = {"id": "ep-1", "status": "failed", "terminal_info": {"error": "boom"}}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/v1/test/episode"):
+            return httpx.Response(200, json=episode)
+        return httpx.Response(404)
+
+    patch_bench_client(handler)
+    result = cli_runner.invoke(
+        app,
+        [
+            "eval",
+            "test",
+            "--domain-id",
+            "demo",
+            "--vow-version",
+            "1.0.0",
+            "--model",
+            "openai/gpt-4o-mini",
+            "--base-url",
+            "http://bench.test",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "failed" in result.stderr
+
+
+def test_eval_test_resolves_vow_version_from_domain(
+    cli_runner: CliRunner,
+    patch_bench_client: Any,
+) -> None:
+    domain = {
+        "id": "demo",
+        "status": "draft",
+        "binding_vow": {"version": "2.1.0", "domain_id": "demo"},
+    }
+    episode = {"id": "ep-1", "status": "completed"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith("/v1/domains/demo"):
+            return httpx.Response(200, json=domain)
+        body = json.loads(request.content.decode())
+        assert body["binding_vow_version"] == "2.1.0"
+        return httpx.Response(200, json=episode)
+
+    patch_bench_client(handler)
+    result = cli_runner.invoke(
+        app,
+        [
+            "eval",
+            "test",
+            "--domain-id",
+            "demo",
+            "--model",
+            "openai/gpt-4o-mini",
+            "--base-url",
+            "http://bench.test",
+        ],
+    )
+    assert result.exit_code == 0, result.stderr
 
 
 def test_eval_run_rejects_unpublished_domain(
