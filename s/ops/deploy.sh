@@ -13,10 +13,10 @@ Usage: $0 <service|all>
 Services: ${SERVICES[*]}
 
 This script performs a zero-downtime deployment to Docker Swarm:
-1. Creates a staging service with the new image
-2. Waits for staging to be healthy
-3. Promotes staging to production
-4. Removes the old production service
+1. (Existing service) Validates the new image on a staging task, then rolls
+   production forward with \`docker service update\` (start-first)
+2. (New service) Creates the production service on prod_swecc-network with
+   --network-alias swecc_stack_<service>
 
 Required environment:
   - DOCKERHUB_USERNAME: Docker Hub username
@@ -31,6 +31,8 @@ EOF
 
 deploy_service() {
   local svc="$1"
+  local gateway_alias
+  gateway_alias="$(swarm_gateway_dns "$svc")"
 
   log INFO "Deploying service: $svc"
 
@@ -38,13 +40,15 @@ deploy_service() {
 
   local image
   image="$(docker_image "$svc" "latest")"
-  local config_name="${svc}_env"
+  local config_name
+  config_name="$(swarm_env_config "$svc")"
   local staging_name="${svc}-staging"
 
   eval "$(get_resource_limits "$svc")"
 
   log INFO "Image: $image"
-  log INFO "Config: $config_name"
+  log INFO "Env config: $config_name"
+  log INFO "Gateway DNS alias: ${gateway_alias}"
   log INFO "Resources: CPU=$CPU_LIMIT/$CPU_RESERVE, Memory=$MEMORY_LIMIT/$MEMORY_RESERVE"
 
   log INFO "Pulling latest image"
@@ -76,46 +80,61 @@ deploy_service() {
 
     wait_for_service "$staging_name"
 
-    log INFO "Promoting staging to production"
-    docker service update --hostname "$svc" "$staging_name"
+    log INFO "Rolling update $svc (start-first)"
+    local -a update_args=(
+      --image "$image"
+      --limit-cpu "$CPU_LIMIT"
+      --limit-memory "$MEMORY_LIMIT"
+      --reserve-cpu "$CPU_RESERVE"
+      --reserve-memory "$MEMORY_RESERVE"
+      --update-order start-first
+      --update-delay 30s
+      --with-registry-auth
+    )
+    if docker service update --help 2>&1 | grep -q -- '--env-file'; then
+      update_args+=(--env-file /tmp/${svc}_env.tmp)
+      docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
+    else
+      swarm_service_update_with_env "$svc" /tmp/${svc}_env.tmp "${update_args[@]}" \
+        || die "Failed to update service $svc"
+    fi
 
-    log INFO "Removing old production service"
-    docker service rm "$svc" || true
+    docker service rm "$staging_name" 2>/dev/null || true
+  else
+    log INFO "Creating production service: $svc"
+
+    local extra_args=()
+
+    case "$svc" in
+      chronos|sockets)
+        extra_args+=(--mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
+        ;;
+      chronos)
+        extra_args+=(--mount "type=volume,source=chronos_data,target=/app")
+        ;;
+    esac
+
+    docker service create \
+      --name "$svc" \
+      --network "$SWARM_NETWORK" \
+      --network-alias "$gateway_alias" \
+      --env-file /tmp/${svc}_env.tmp \
+      --limit-cpu "$CPU_LIMIT" \
+      --limit-memory "$MEMORY_LIMIT" \
+      --reserve-cpu "$CPU_RESERVE" \
+      --reserve-memory "$MEMORY_RESERVE" \
+      --restart-condition any \
+      --update-order start-first \
+      --update-delay 30s \
+      --with-registry-auth \
+      "${extra_args[@]}" \
+      "$image"
   fi
 
-  log INFO "Creating production service: $svc"
-
-  local extra_args=()
-
-  case "$svc" in
-    chronos|sockets)
-      extra_args+=(--mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
-      ;;
-    chronos)
-      extra_args+=(--mount "type=volume,source=chronos_data,target=/app")
-      ;;
-  esac
-
-  docker service create \
-    --name "$svc" \
-    --network "$SWARM_NETWORK" \
-    --env-file /tmp/${svc}_env.tmp \
-    --limit-cpu "$CPU_LIMIT" \
-    --limit-memory "$MEMORY_LIMIT" \
-    --reserve-cpu "$CPU_RESERVE" \
-    --reserve-memory "$MEMORY_RESERVE" \
-    --restart-condition any \
-    --update-order start-first \
-    --update-delay 30s \
-    --with-registry-auth \
-    "${extra_args[@]}" \
-    "$image"
-
-  log INFO "Cleaning up"
-  docker service rm "$staging_name" 2>/dev/null || true
   rm -f /tmp/${svc}_env.tmp
-
   wait_for_service "$svc"
+  swarm_ensure_gateway_alias "$svc"
+
   log INFO "Successfully deployed $svc"
 }
 

@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Database — bench uses Django ORM against the swecc Postgres DB. Connection
-    # settings come from DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_PORT
-    # (read directly by app/django_settings.py), not from this Settings class.
+    # Database — Django ORM reads DB_* from server_env (see app/django_settings.py).
+    # This class only reads ORCH_* so server keys (JWT_SECRET, SENDGRID_*, …) never
+    # collide with bench field names.
 
     # Trace storage — local directory
     trace_dir: str = "./data/traces"
@@ -49,7 +49,10 @@ class Settings(BaseSettings):
     # Full bench — episodes per model when running a full 5-model bench
     full_bench_episodes_per_model: int = 5
 
-    model_config = {"env_prefix": "ORCH_"}
+    model_config = SettingsConfigDict(
+        env_prefix="ORCH_",
+        extra="ignore",
+    )
 
 
 settings = Settings()
