@@ -24,6 +24,14 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 log = structlog.get_logger()
 
+# Public URL prefix when bench-api sits behind api.swecc.org/bench/ (nginx strips
+# /bench before forwarding). Swagger UI must fetch /bench/openapi.json, not /openapi.json.
+ROOT_PATH = os.environ.get("ROOT_PATH", "").rstrip("/")
+
+
+def _public_path(path: str) -> str:
+    return f"{ROOT_PATH}{path}" if ROOT_PATH else path
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,6 +45,7 @@ app = FastAPI(
     version="0.1.0",
     description="Distributed evaluation protocol for AI agent benchmarks",
     lifespan=lifespan,
+    root_path=ROOT_PATH,
 )
 
 app.add_middleware(
@@ -61,9 +70,9 @@ async def root() -> dict:
     return {
         "service": "BenchAnything",
         "version": "0.1.0",
-        "docs": "/docs",
-        "redoc": "/redoc",
-        "health": "/health",
+        "docs": _public_path("/docs"),
+        "redoc": _public_path("/redoc"),
+        "health": _public_path("/health"),
     }
 
 
