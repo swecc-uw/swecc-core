@@ -10,10 +10,20 @@ from contextlib import asynccontextmanager
 # Django bootstrap MUST happen before importing anything that touches the
 # bench schema — bench_common.storage.database imports Django models at module
 # load time, and routers import bench_common.storage.database transitively.
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.django_settings")
+#
+# bench-api uses Docker config server_env (same file as swecc-server). Force our
+# settings module — do not use setdefault or server.settings would win if present.
+os.environ["DJANGO_SETTINGS_MODULE"] = "app.django_settings"
 import django  # noqa: E402
+from django.conf import settings as django_settings  # noqa: E402
 
 django.setup()
+
+if "bench.apps.BenchConfig" not in django_settings.INSTALLED_APPS:
+    raise RuntimeError(
+        "Wrong Django settings loaded (expected app.django_settings). "
+        "Unset DJANGO_SETTINGS_MODULE in server_env or ensure bench-api entrypoint runs first."
+    )
 
 import structlog  # noqa: E402
 from app.routes import bench, developer, domains, leaderboard, runs, techniques, test  # noqa: E402

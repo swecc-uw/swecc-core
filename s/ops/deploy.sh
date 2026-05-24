@@ -40,13 +40,14 @@ deploy_service() {
 
   local image
   image="$(docker_image "$svc" "latest")"
-  local config_name="${svc}_env"
+  local config_name
+  config_name="$(swarm_env_config "$svc")"
   local staging_name="${svc}-staging"
 
   eval "$(get_resource_limits "$svc")"
 
   log INFO "Image: $image"
-  log INFO "Config: $config_name"
+  log INFO "Env config: $config_name"
   log INFO "Gateway DNS alias: ${gateway_alias}"
   log INFO "Resources: CPU=$CPU_LIMIT/$CPU_RESERVE, Memory=$MEMORY_LIMIT/$MEMORY_RESERVE"
 
@@ -92,8 +93,11 @@ deploy_service() {
     )
     if docker service update --help 2>&1 | grep -q -- '--env-file'; then
       update_args+=(--env-file /tmp/${svc}_env.tmp)
+      docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
+    else
+      swarm_service_update_with_env "$svc" /tmp/${svc}_env.tmp "${update_args[@]}" \
+        || die "Failed to update service $svc"
     fi
-    docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
 
     docker service rm "$staging_name" 2>/dev/null || true
   else

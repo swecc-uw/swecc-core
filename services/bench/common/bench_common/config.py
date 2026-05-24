@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -8,18 +8,13 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Storage backend.
-    # "django" (default): Django ORM against the shared swecc Postgres DB.
-    #   Requires django.setup() to have been called and DB_HOST/DB_NAME/DB_USER/
-    #   DB_PASSWORD/DB_PORT to be set. Used by bench-api in Docker.
-    # "sqlite": aiosqlite against a local file. No external dependencies.
-    #   Use for local development and testing without a Postgres server.
-    #   Set ORCH_SQLITE_PATH to override the default path.
+    # Storage backend (ORCH_DB_BACKEND).
+    # "django" (default): Django ORM against shared swecc Postgres (bench-api in Docker).
+    # "sqlite": aiosqlite local file for dev/tests without Postgres (ORCH_SQLITE_PATH).
     db_backend: Literal["django", "sqlite"] = "django"
     sqlite_path: str = "./bench_dev.db"
 
-    # Postgres connection settings come from DB_HOST / DB_NAME / DB_USER /
-    # DB_PASSWORD / DB_PORT (read directly by app/django_settings.py), not here.
+    # Postgres connection: DB_* from server_env via app/django_settings.py (not ORCH_*).
 
     # Trace storage — local directory
     trace_dir: str = "./data/traces"
@@ -60,7 +55,10 @@ class Settings(BaseSettings):
     # Full bench — episodes per model when running a full 5-model bench
     full_bench_episodes_per_model: int = 5
 
-    model_config = {"env_prefix": "ORCH_"}
+    model_config = SettingsConfigDict(
+        env_prefix="ORCH_",
+        extra="ignore",
+    )
 
 
 settings = Settings()
