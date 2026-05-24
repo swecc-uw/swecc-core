@@ -203,7 +203,11 @@ test_bench_service() {
   cd "services/bench/$sub"
   python3 -m pip install -q -r requirements-test.txt 2>&1 | grep -v "Requirement already satisfied" || true
 
-  python3 run_tests.py
+  ORCH_DATABASE_URL="${ORCH_DATABASE_URL:-sqlite+aiosqlite:///./test.db}" \
+  ORCH_TRACE_DIR="${ORCH_TRACE_DIR:-/tmp/bench-traces}" \
+  ORCH_SANDBOX_URL="${ORCH_SANDBOX_URL:-http://localhost:8001}" \
+  WORKER_API_URL="${WORKER_API_URL:-http://localhost:8000}" \
+    python3 -m pytest tests/ -v
   local exit_code=$?
   cd "$SCRIPT_DIR"
   return $exit_code

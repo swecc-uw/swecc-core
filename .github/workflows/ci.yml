@@ -246,7 +246,24 @@ jobs:
       - name: Run tests
         if: steps.present.outputs.exists == 'true'
         working-directory: ./services/bench/${{ steps.svc.outputs.sub }}
-        run: python run_tests.py
+        env:
+          # bench-api uses Django ORM against Postgres in production. The smoke
+          # tests don't touch the DB; they just import the app and hit /health.
+          # We add services/server/server to PYTHONPATH so bench-api's
+          # django.setup() can find the bench Django app at boot time
+          # (production builds COPY this directory into the image instead).
+          PYTHONPATH: ${{ github.workspace }}/services/server/server:${{ github.workspace }}/services/bench/${{ steps.svc.outputs.sub }}
+          ORCH_TRACE_DIR: /tmp/bench-traces
+          ORCH_SANDBOX_URL: http://localhost:8001
+          WORKER_API_URL: http://localhost:8000
+          # django_settings.py reads DB_* / JWT_SECRET at import (smoke tests do not connect).
+          DB_HOST: localhost
+          DB_NAME: test
+          DB_PORT: "5432"
+          DB_USER: test
+          DB_PASSWORD: test
+          JWT_SECRET: test-jwt-secret
+        run: pytest tests/ -v
 
   build:
     name: Build Docker Images

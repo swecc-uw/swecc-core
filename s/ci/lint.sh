@@ -40,41 +40,22 @@ lint_python_service() {
   fi
 
   local exit_code=0
-  local pyproject=""
-  if [[ -f "pyproject.toml" ]]; then
-    pyproject="pyproject.toml"
-  elif [[ -f "../pyproject.toml" ]]; then
-    pyproject="../pyproject.toml"
-  fi
 
   if command -v black &>/dev/null; then
     log INFO "Running black"
-    local black_args=()
-    [[ -n "$pyproject" ]] && black_args+=(--config "$pyproject")
     if [[ "$FIX" == "true" ]]; then
-      black "${black_args[@]}" . || exit_code=$?
+      black . || exit_code=$?
     else
-      black --check "${black_args[@]}" . || exit_code=$?
+      black --check . || exit_code=$?
     fi
   fi
 
-  if command -v pre-commit &>/dev/null && [[ -f "${REPO_ROOT}/.pre-commit-config.yaml" ]]; then
-    log INFO "Running isort (pre-commit)"
-    local -a py_files=()
-    while IFS= read -r -d '' f; do
-      py_files+=("${f#${REPO_ROOT}/}")
-    done < <(find "$svc_dir" -name '*.py' -not -path '*/.venv/*' -print0)
-    if ((${#py_files[@]} > 0)); then
-      (cd "$REPO_ROOT" && pre-commit run isort --files "${py_files[@]}") || exit_code=$?
-    fi
-  elif command -v isort &>/dev/null; then
+  if command -v isort &>/dev/null; then
     log INFO "Running isort"
-    local isort_args=()
-    [[ -n "$pyproject" ]] && isort_args+=(--settings-path "$pyproject")
     if [[ "$FIX" == "true" ]]; then
-      isort "${isort_args[@]}" . || exit_code=$?
+      isort . || exit_code=$?
     else
-      isort --check-only "${isort_args[@]}" . || exit_code=$?
+      isort --check-only . || exit_code=$?
     fi
   fi
 
