@@ -3,7 +3,8 @@ Bench schema (BenchAnything backend) as Django models.
 
 The bench-api FastAPI service imports these models in standalone mode via
 `django.setup()` and queries them through Django's async ORM (Django 4.1+).
-swecc-server runs `python manage.py migrate` on startup, so the schema is
+swecc-server runs `python manage.py migrate` before gunicorn (prod entrypoint) or
+in local compose, so the schema is
 provisioned once and shared between both services with zero manual setup.
 
 Most rows store a JSON blob in `data` — the canonical schema lives in the

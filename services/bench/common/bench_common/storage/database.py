@@ -54,13 +54,16 @@ def _iso_dt(value: datetime | str | None) -> str | None:
 
 
 async def init_db() -> None:
-    """Verify the bench tables exist; they are created by `swecc-server`'s
-    `manage.py migrate` step. If we can't COUNT the simplest table, swecc-server
-    has not run yet — fail loudly so the user gets an actionable message."""
+    """Verify the bench tables exist; they are created by swecc-server
+    `manage.py migrate` (prod entrypoint or local compose). If we can't COUNT
+    the simplest table, migrations have not been applied — fail loudly."""
     try:
         await DomainRow.objects.acount()
     except Exception as exc:  # pragma: no cover - defensive
-        hint = "bench tables missing — run swecc-server `manage.py migrate` first."
+        hint = (
+            "bench tables missing — redeploy server (runs migrate on startup) "
+            "or run `python manage.py migrate` on a server container."
+        )
         err = str(exc).lower()
         if "tenant or user not found" in err or "password authentication failed" in err:
             hint = (
