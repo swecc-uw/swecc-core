@@ -1,0 +1,22 @@
+{
+  "rules_version": "0.1.0",
+  "description": "Example hackathon-style constraints. Edit for your event.",
+  "required_register_fields": [
+    "id",
+    "name",
+    "owner_id",
+    "binding_vow",
+    "endpoint",
+    "scoring"
+  ],
+  "allowed_model_prefixes": [
+    "ollama/",
+    "openai/",
+    "anthropic/",
+    "google/",
+    "gemini/",
+    "deepseek/",
+    "xai/"
+  ],
+  "scoring_source_allowed": ["terminal", "episode_reward"]
+}
