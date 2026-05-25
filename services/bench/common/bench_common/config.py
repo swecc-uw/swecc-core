@@ -1,3 +1,6 @@
+from urllib.parse import urlparse
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -5,6 +8,13 @@ class Settings(BaseSettings):
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+
+    # Gateway path prefix (e.g. when SWAG exposes bench-api under a subpath and strips
+    # it before proxying). Used for FastAPI root_path / Swagger OpenAPI URL. Empty when
+    # hitting the service directly (local :8010). Set ORCH_GATEWAY_PREFIX or
+    # ORCH_PUBLIC_BASE_URL (path component is used if prefix is unset).
+    gateway_prefix: str = ""
+    public_base_url: str = ""
 
     # Postgres: DB_* from server_env via app/django_settings.py (Django ORM / Supabase).
 
@@ -51,6 +61,15 @@ class Settings(BaseSettings):
         env_prefix="ORCH_",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _resolve_gateway_prefix(self) -> "Settings":
+        prefix = (self.gateway_prefix or "").strip().rstrip("/")
+        if not prefix and self.public_base_url:
+            path = urlparse(self.public_base_url.strip()).path.rstrip("/")
+            prefix = path
+        object.__setattr__(self, "gateway_prefix", prefix)
+        return self
 
 
 settings = Settings()

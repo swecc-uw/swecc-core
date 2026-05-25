@@ -205,8 +205,9 @@ services:
     env_file:
       - .env
     environment:
-      # Empty prefix: dev hits :8010 directly (/docs). Prod image sets BENCH_PUBLIC_PREFIX=/bench.
-      - BENCH_PUBLIC_PREFIX=
+      # Gateway prefix for Swagger when using nginx /bench/ routes (see .env.example).
+      - ORCH_GATEWAY_PREFIX=${ORCH_GATEWAY_PREFIX:-}
+      - ORCH_PUBLIC_BASE_URL=${ORCH_PUBLIC_BASE_URL:-}
       - ORCH_TRACE_DIR=/data/traces
       - ORCH_SANDBOX_URL=http://swecc-bench-sandbox:8001
       # LiteLLM expects GOOGLE_API_KEY for the google/gemini-* provider. The
