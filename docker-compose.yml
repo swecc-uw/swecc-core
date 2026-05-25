@@ -223,12 +223,14 @@ services:
 
   bench-worker:
     build:
-      context: ./services/bench
-      dockerfile: worker/Dockerfile
+      context: ./services
+      dockerfile: bench/worker/Dockerfile
     container_name: swecc-bench-worker
     networks:
       - swecc-network
     depends_on:
+      db:
+        condition: service_healthy
       bench-api:
         condition: service_healthy
     env_file:

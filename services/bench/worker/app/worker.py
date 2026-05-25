@@ -8,8 +8,6 @@ Required environment variables:
     ANTHROPIC_API_KEY     (and other model provider keys as needed)
 
 Optional environment variables:
-    ORCH_DB_BACKEND       Storage backend for local episode data (default: sqlite)
-    ORCH_SQLITE_PATH      Path for the local SQLite DB (default: bench_worker.db)
     WORKER_POLL_INTERVAL  Seconds between API polls (default: 10)
     WORKER_EPISODES_PER_MODEL  Episodes per model per job (default: 5)
     WORKER_RUN_POLL_TIMEOUT    Max seconds to wait for a run to complete (default: 300)
@@ -50,9 +48,19 @@ SUPPORTED_MODELS = [
 EPISODES_PER_MODEL = int(os.getenv("WORKER_EPISODES_PER_MODEL", "5"))
 RUN_POLL_TIMEOUT = int(os.getenv("WORKER_RUN_POLL_TIMEOUT", "300"))
 
-# Use SQLite locally — no Postgres required on the EC2 instance.
-os.environ.setdefault("ORCH_DB_BACKEND", "sqlite")
-os.environ.setdefault("ORCH_SQLITE_PATH", "./bench_worker.db")
+_django_ready = False
+
+
+def _ensure_django() -> None:
+    """Bootstrap Django ORM against shared Postgres (DB_* from server_env)."""
+    global _django_ready
+    if _django_ready:
+        return
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.django_settings")
+    import django
+
+    django.setup()
+    _django_ready = True
 
 
 def poll_and_process() -> None:
@@ -219,6 +227,7 @@ async def _bench_all_models(
     env_url: str,
 ) -> dict[str, Any]:
     """Register the domain locally and run each canonical model."""
+    _ensure_django()
     from bench_common.core.binding_vow import BindingVow
     from bench_common.core.domain import Domain, EnvironmentEndpoint
     from bench_common.core.scoring import ScoringConfig
@@ -229,7 +238,7 @@ async def _bench_all_models(
 
     # Build and persist a local domain record from the manifest so bench() can
     # look it up.  The domain_id comes from the API's record if available;
-    # otherwise we generate one for this worker's local SQLite.
+    # otherwise we generate one for this worker's local Postgres record.
     import uuid
 
     local_domain_id = domain_id or str(uuid.uuid4())

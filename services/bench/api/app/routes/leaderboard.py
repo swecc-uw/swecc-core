@@ -1,6 +1,6 @@
 """
 Leaderboard routes.
-Builds rankings dynamically from completed Run records in SQLite.
+Builds rankings dynamically from completed Run records in Postgres.
 """
 
 from bench_common.storage import database as db

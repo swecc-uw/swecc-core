@@ -6,8 +6,7 @@ invoked (bench-api does this in its main.py).  All DB credentials come from
 the DB_HOST / DB_NAME / DB_USER / DB_PASSWORD / DB_PORT environment variables
 read by app/django_settings.py.
 
-Do not import this module directly — import bench_common.storage.database,
-which routes to this backend when ORCH_DB_BACKEND=django (the default).
+Import bench_common.storage.database (re-exports this module).
 """
 
 from __future__ import annotations
