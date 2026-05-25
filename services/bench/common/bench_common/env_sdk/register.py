@@ -72,7 +72,7 @@ def _load_domain_config(path: str) -> DomainConfig:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="python -m src.env_sdk.register",
+        prog="python -m bench_common.env_sdk.register",
         description="Register any domain.py with the BenchAnything platform.",
     )
     parser.add_argument(
@@ -81,8 +81,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--api",
-        default="http://localhost:8000",
-        help="Platform API URL (default: http://localhost:8000)",
+        default="http://localhost:8010",
+        help="bench-api URL (default: http://localhost:8010)",
     )
     parser.add_argument(
         "--id",

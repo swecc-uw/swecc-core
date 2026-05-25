@@ -1,0 +1,1 @@
+"""Bench CLI entrypoints."""
