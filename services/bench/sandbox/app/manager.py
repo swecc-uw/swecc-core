@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 import structlog
+from bench_common.core.errors import EnvironmentStartupError, ManifestError
 
 log = structlog.get_logger()
 
@@ -54,25 +55,42 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
     )
     _, stderr = await clone_proc.communicate()
     if clone_proc.returncode != 0:
-        raise RuntimeError(f"git clone failed: {stderr.decode().strip()}")
+        raise EnvironmentStartupError(
+            f"git clone failed for {github_url!r}:\n{stderr.decode().strip()}"
+        )
 
     # Validate manifest
     manifest_path = env_dir / "benchanything.json"
     if not manifest_path.exists():
         shutil.rmtree(env_dir, ignore_errors=True)
-        raise RuntimeError(
+        raise ManifestError(
             "Repository must contain a benchanything.json at its root. "
-            "See docs for the required format."
+            "Copy the template from services/bench/template/ and fill it in."
         )
 
     try:
         manifest = json.loads(manifest_path.read_text())
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"benchanything.json is not valid JSON: {exc}") from exc
+        shutil.rmtree(env_dir, ignore_errors=True)
+        raise ManifestError(f"benchanything.json is not valid JSON: {exc}") from exc
 
-    for required in ("adapter", "name", "binding_vow", "scoring"):
-        if required not in manifest:
-            raise RuntimeError(f"benchanything.json is missing required key: {required!r}")
+    missing = [k for k in ("adapter", "name", "binding_vow", "scoring") if k not in manifest]
+    if missing:
+        shutil.rmtree(env_dir, ignore_errors=True)
+        raise ManifestError(
+            f"benchanything.json is missing required key(s): "
+            f"{', '.join(repr(k) for k in missing)}"
+        )
+
+    # Validate the binding vow schema before spinning up a subprocess
+    try:
+        from bench_common.core.binding_vow import BindingVow
+
+        vow_raw = {**manifest["binding_vow"], "id": "validate", "domain_id": "validate"}
+        BindingVow.model_validate(vow_raw).validate()
+    except Exception as exc:
+        shutil.rmtree(env_dir, ignore_errors=True)
+        raise ManifestError(f"binding_vow in benchanything.json is invalid: {exc}") from exc
 
     # Install dependencies
     req_file = env_dir / "requirements.txt"
@@ -95,7 +113,10 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
     adapter = manifest.get("adapter", "adapter.py")
     adapter_path = env_dir / adapter
     if not adapter_path.exists():
-        raise RuntimeError(f"Adapter {adapter!r} not found in repository root")
+        raise ManifestError(
+            f"Adapter {adapter!r} not found in repository root. "
+            f"Check the 'adapter' key in benchanything.json."
+        )
 
     log.info("starting_env_server", env_id=env_id, port=port)
     proc = await asyncio.create_subprocess_exec(
@@ -145,15 +166,15 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
                 if proc.returncode is not None:
                     await asyncio.sleep(0.2)  # let stderr_task flush
                     stderr_tail = _format_stderr(_registry[env_id]["stderr_lines"])
-                    raise RuntimeError(
-                        f"Adapter exited with code {proc.returncode} before /health responded.\n"
-                        f"{stderr_tail}"
+                    raise EnvironmentStartupError(
+                        f"Adapter exited with code {proc.returncode} before "
+                        f"GET /health responded.\n{stderr_tail}"
                     )
 
         await asyncio.sleep(0.2)
         stderr_tail = _format_stderr(_registry[env_id]["stderr_lines"])
         _registry[env_id]["status"] = "unhealthy"
-        raise RuntimeError(
+        raise EnvironmentStartupError(
             f"Adapter did not respond to GET /health within 30 s.\n"
             f"Make sure your adapter calls serve() and accepts --port.\n"
             f"{stderr_tail}"

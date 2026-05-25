@@ -232,7 +232,7 @@ jobs:
           fi
 
       - name: Install bench_common (shared kernel)
-        if: steps.present.outputs.exists == 'true' && matrix.service != 'bench-worker'
+        if: steps.present.outputs.exists == 'true'
         working-directory: ./services/bench/common
         run: |
           python -m pip install --upgrade pip
