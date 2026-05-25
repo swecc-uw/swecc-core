@@ -17,6 +17,10 @@ from datetime import datetime
 from typing import Any, TypeVar
 
 from asgiref.sync import sync_to_async
+from bench_common.core.domain import Domain
+from bench_common.core.run import Episode, Run
+from django.utils import timezone
+from pydantic import BaseModel
 
 # These imports require django.setup() to have been called already.
 from bench.models import BenchJob as BenchJobRow
@@ -25,10 +29,6 @@ from bench.models import Domain as DomainRow
 from bench.models import Episode as EpisodeRow
 from bench.models import Leaderboard as LeaderboardRow
 from bench.models import Run as RunRow
-from bench_common.core.domain import Domain
-from bench_common.core.run import Episode, Run
-from django.utils import timezone
-from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -192,7 +192,9 @@ async def get_developer_environment_by_github_repo(
     from bench_common.utils.github import normalize_github_url
 
     target = normalize_github_url(github_url)
-    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by("-created_at")
+    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by(
+        "-created_at"
+    )
     async for row in qs:
         if normalize_github_url(row.github_url) == target:
             return _dev_env_to_dict(row)
@@ -258,7 +260,9 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 # ── Bench Jobs ────────────────────────────────────────────────────────────────
 
 
-async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) -> dict[str, Any]:
+async def create_bench_job(
+    env_id: str, domain_id: str | None, github_url: str
+) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
     row = await BenchJobRow.objects.acreate(
         id=job_id,

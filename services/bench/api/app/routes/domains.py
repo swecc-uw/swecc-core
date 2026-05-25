@@ -4,7 +4,10 @@ from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
-from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
+from bench_common.storage.dev_sync import (
+    ensure_gallery_visible,
+    mirror_developer_env_from_domain,
+)
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 

@@ -62,7 +62,9 @@ async def create_run(config: RunConfig, requester_id: str) -> Run:
     declared_ids = {t.technique_id for t in vow.techniques}
     for tc in config.agent_config.techniques:
         if tc.technique_id not in declared_ids:
-            raise ValueError(f"Technique '{tc.technique_id}' not declared in binding vow")
+            raise ValueError(
+                f"Technique '{tc.technique_id}' not declared in binding vow"
+            )
 
     run = Run(config=config, requester_id=requester_id, status="running")
     await db.save_run(run)

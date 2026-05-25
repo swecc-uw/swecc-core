@@ -59,7 +59,9 @@ def _ensure_django() -> None:
 
 
 def poll_and_process() -> None:
-    resp = requests.get(f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=10)
+    resp = requests.get(
+        f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=10
+    )
     resp.raise_for_status()
     jobs = resp.json()
     if not jobs:
@@ -309,14 +311,18 @@ def _wait_for_api(max_attempts: int = 60, delay: float = 5.0) -> None:
     """Block until the API responds.  Prevents crashes on cold-start DNS races."""
     for attempt in range(1, max_attempts + 1):
         try:
-            resp = requests.get(f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=3)
+            resp = requests.get(
+                f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=3
+            )
             if resp.status_code < 500:
                 log.info(f"API reachable at {API_URL} after {attempt} attempt(s)")
                 return
         except requests.RequestException as exc:
             log.info(f"waiting for API ({attempt}/{max_attempts}): {exc}")
         time.sleep(delay)
-    raise RuntimeError(f"API at {API_URL} never became reachable after {max_attempts} attempts")
+    raise RuntimeError(
+        f"API at {API_URL} never became reachable after {max_attempts} attempts"
+    )
 
 
 def main() -> None:

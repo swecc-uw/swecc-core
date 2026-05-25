@@ -26,7 +26,15 @@ if "bench.apps.BenchConfig" not in django_settings.INSTALLED_APPS:
     )
 
 import structlog  # noqa: E402
-from app.routes import bench, developer, domains, leaderboard, runs, techniques, test  # noqa: E402
+from app.routes import leaderboard  # noqa: E402
+from app.routes import (
+    bench,
+    developer,
+    domains,
+    runs,
+    techniques,
+    test,
+)
 from bench_common.config import settings as bench_settings  # noqa: E402
 from bench_common.storage.database import init_db  # noqa: E402
 from bench_common.storage.trace_store import trace_store  # noqa: E402
