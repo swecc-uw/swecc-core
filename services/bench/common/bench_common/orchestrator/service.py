@@ -169,7 +169,11 @@ async def run_test_episode(
     if domain is None:
         raise ValueError(f"Domain '{domain_id}' not found")
 
-    effective_url = env_url or domain.endpoint.url
+    # Sandbox domains must hit the proxy (/envs/{id}), not a direct subprocess port.
+    if domain.endpoint.mode == "sandbox" and domain.endpoint.url:
+        effective_url = domain.endpoint.url
+    else:
+        effective_url = env_url or domain.endpoint.url
     if not effective_url:
         raise ValueError("No environment URL provided or configured on domain")
 
