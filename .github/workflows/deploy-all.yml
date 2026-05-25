@@ -81,7 +81,7 @@ jobs:
 
   deploy-bench-api:
     name: Deploy Bench API
-    needs: validate
+    needs: [validate, deploy-server]
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-api
@@ -105,7 +105,7 @@ jobs:
 
   deploy-bench-worker:
     name: Deploy Bench Worker
-    needs: validate
+    needs: [validate, deploy-server]
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-worker

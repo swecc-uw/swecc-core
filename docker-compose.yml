@@ -82,7 +82,7 @@ services:
       - REDIS_HOST=swecc-redis-instance
       - RABBIT_HOST=swecc-rabbitmq-instance
     command: >
-      bash -c "cd server && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+      bash -c "cd server && python manage.py makemigrations bench --noinput && python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
 
   sockets:
     build: ./services/sockets
@@ -198,7 +198,7 @@ services:
         condition: service_healthy
       bench-sandbox:
         condition: service_healthy
-      # swecc-server runs `manage.py migrate` on startup; bench-api needs the
+      # swecc-server runs makemigrations + migrate on startup; bench-api needs the
       # bench_* tables to exist before it boots.
       server:
         condition: service_started

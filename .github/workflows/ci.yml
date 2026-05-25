@@ -102,7 +102,10 @@ jobs:
           # bench-api also embeds the Django bench app from services/server/server/bench/
           # so changes there must trigger a rebuild.
           if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/api/\|^services/bench/common/\|^services/server/server/bench/"; then
-            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-api\"]")
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-api\", \"server\"]")
+          fi
+          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/server/server/bench/"; then
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"server\"]")
           fi
           if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/sandbox/\|^services/bench/common/"; then
             CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-sandbox\"]")
