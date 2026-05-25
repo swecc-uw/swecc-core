@@ -132,7 +132,10 @@ service_dir() {
 build_context() {
   local svc="$1"
   case "$svc" in
-    bench-api|bench-worker)
+    bench-api|sockets)
+      echo "${REPO_ROOT}"
+      ;;
+    bench-worker)
       echo "${REPO_ROOT}/services"
       ;;
     bench-*)
@@ -149,7 +152,10 @@ build_dockerfile() {
   local svc="$1"
   case "$svc" in
     bench-api)
-      echo "bench/api/Dockerfile"
+      echo "services/bench/api/Dockerfile"
+      ;;
+    sockets)
+      echo "services/sockets/Dockerfile"
       ;;
     bench-worker)
       echo "bench/worker/Dockerfile"

@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Shared runtime kernel for the BenchAnything services in swecc-core."
 requires-python = ">=3.11"
 dependencies = [
+    "swecc-jwt>=0.1.0",
+    "python-jose[cryptography]>=3.3",
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     # Bench storage uses Django ORM (the bench app lives in services/server/server/bench/).
@@ -22,9 +24,3 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["bench_common"]
-
-[tool.ruff]
-target-version = "py311"
-line-length = 120

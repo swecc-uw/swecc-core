@@ -11,7 +11,75 @@ Pydantic models in bench_common.core.* and is round-tripped through the
 ORM layer for storage. Indexed columns are surfaced for query filters.
 """
 
+import secrets
+import string
+import uuid
+
 from django.db import models
+
+JOIN_CODE_ALPHABET = string.ascii_uppercase + string.digits
+MAX_TEAM_MEMBERS = 4
+
+
+def generate_join_code() -> str:
+    return "".join(secrets.choice(JOIN_CODE_ALPHABET) for _ in range(4))
+
+
+class ActorType(models.TextChoices):
+    GUEST = "guest", "Guest"
+    MEMBER = "member", "Member"
+
+
+class Visibility(models.TextChoices):
+    PRIVATE = "private", "Private"
+    GALLERY_PUBLIC = "gallery_public", "Gallery public"
+
+
+class EnvScope(models.TextChoices):
+    SOLO = "solo", "Solo"
+    TEAM = "team", "Team"
+
+
+class BenchGuestSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "bench"
+
+
+class BenchTeam(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=64, unique=True)
+    join_code = models.CharField(max_length=4, unique=True, db_index=True)
+    created_by_user_id = models.IntegerField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = "bench"
+
+
+class TeamRole(models.TextChoices):
+    OWNER = "owner", "Owner"
+    MEMBER = "member", "Member"
+
+
+class BenchTeamMembership(models.Model):
+    team = models.ForeignKey(
+        BenchTeam,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    user_id = models.IntegerField(db_index=True)
+    role = models.CharField(max_length=16, choices=TeamRole.choices, default=TeamRole.MEMBER)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = "bench"
+        unique_together = [("team", "user_id")]
 
 
 class Domain(models.Model):
@@ -46,6 +114,28 @@ class Run(models.Model):
         db_index=True,
     )
     data = models.JSONField()
+    actor_type = models.CharField(
+        max_length=16,
+        choices=ActorType.choices,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    actor_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    team = models.ForeignKey(
+        BenchTeam,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="runs",
+    )
+    visibility = models.CharField(
+        max_length=32,
+        choices=Visibility.choices,
+        default=Visibility.PRIVATE,
+        db_index=True,
+    )
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         app_label = "bench"
@@ -113,7 +203,29 @@ class DeveloperEnvironmentStatus(models.TextChoices):
 
 class DeveloperEnvironment(models.Model):
     id = models.CharField(primary_key=True, max_length=255)
-    owner_id = models.CharField(max_length=255, db_index=True)
+    owner_id = models.CharField(max_length=255, db_index=True)  # legacy; use actor_* for new rows
+    scope = models.CharField(
+        max_length=16,
+        choices=EnvScope.choices,
+        default=EnvScope.SOLO,
+        db_index=True,
+    )
+    actor_type = models.CharField(
+        max_length=16,
+        choices=ActorType.choices,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    actor_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    team = models.ForeignKey(
+        BenchTeam,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="developer_environments",
+    )
+    created_by_user_id = models.IntegerField(null=True, blank=True, db_index=True)
     name = models.CharField(max_length=255)
     description = models.TextField(default="", blank=True)
     github_url = models.URLField(max_length=512)

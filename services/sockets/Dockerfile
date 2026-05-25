@@ -6,10 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-COPY socket.requirements.txt .
+COPY packages/swecc-jwt /tmp/swecc-jwt/
+RUN pip install --no-cache-dir /tmp/swecc-jwt && rm -rf /tmp/swecc-jwt
+
+COPY services/sockets/socket.requirements.txt .
 RUN pip install --no-cache-dir -r socket.requirements.txt
 
-COPY ./app/ /app/app/
+COPY services/sockets/app/ /app/app/
 
 EXPOSE 8004
 
