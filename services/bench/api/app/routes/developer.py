@@ -12,6 +12,7 @@ from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
+from bench_common.storage.dev_sync import ensure_gallery_visible
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -105,8 +106,10 @@ async def _onboard_environment(
             return
 
         payload = resp.json()
-        env_url: str = payload["url"]
         manifest: dict[str, Any] = payload["manifest"]
+        # Use the sandbox reverse-proxy path, not payload["url"] (direct subprocess
+        # port on localhost inside the sandbox container — unreachable from bench-api).
+        env_url = f"{settings.sandbox_url}/envs/{env_id}"
 
     except httpx.TransportError as exc:
         await _update("failed", error_message=f"Sandbox unreachable: {exc}")
@@ -139,6 +142,11 @@ async def _onboard_environment(
             detail=manifest.get("description", description),
         )
         await db.save_domain(domain)
+        domain = await ensure_gallery_visible(
+            domain,
+            env_row_id=env_id,
+            github_url=github_url,
+        )
     except Exception as exc:
         log.exception("domain_creation_failed", env_id=env_id)
         await _update("failed", error_message=f"Domain creation failed: {exc}")
@@ -146,11 +154,11 @@ async def _onboard_environment(
 
     await _update(
         "ready",
-        domain_id=domain_id,
+        domain_id=domain.id,
         env_url=env_url,
         error_message=None,
     )
-    log.info("onboarding_complete", env_id=env_id, domain_id=domain_id)
+    log.info("onboarding_complete", env_id=env_id, domain_id=domain.id)
 
 
 @router.get("/environments", response_model=list[DeveloperEnvironment])

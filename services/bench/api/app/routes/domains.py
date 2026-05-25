@@ -1,10 +1,10 @@
-from datetime import datetime
 from typing import Any
 
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
+from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -60,28 +60,7 @@ async def create_domain(req: CreateDomainRequest) -> Domain:
     _ensure_binding_vow_matches_domain(req.id, req.binding_vow)
     domain = Domain(**req.model_dump())
     await db.save_domain(domain)
-
-    # Mirror into the developer-environments table so the SPA's /developer page
-    # surfaces every Domain regardless of how it got registered (github clone,
-    # direct curl, MCP register_benchmark, future SDKs). The github_url stays
-    # blank for non-clone callers — the SPA card renders an "API / MCP" badge
-    # instead of a GitHub link when it sees an empty string.
-    existing_env = await db.get_developer_environment(domain.id)
-    if existing_env is None:
-        await db.save_developer_environment(
-            {
-                "id": domain.id,
-                "owner_id": domain.owner_id,
-                "name": domain.name,
-                "description": domain.detail,
-                "github_url": "",
-                "status": "ready",
-                "domain_id": domain.id,
-                "env_url": domain.endpoint.url,
-                "error_message": None,
-                "created_at": datetime.utcnow().isoformat(),
-            }
-        )
+    domain = await ensure_gallery_visible(domain, github_url="")
     return domain
 
 
@@ -113,7 +92,7 @@ async def update_domain(domain_id: str, req: UpdateDomainRequest) -> Domain:
         _ensure_binding_vow_matches_domain(domain_id, updates["binding_vow"])
     updated = domain.model_copy(update=updates)
     await db.save_domain(updated)
-    return updated
+    return await ensure_gallery_visible(updated)
 
 
 @router.post("/{domain_id}/publish", response_model=Domain)
@@ -123,4 +102,5 @@ async def publish_domain(domain_id: str) -> Domain:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
     updated = domain.model_copy(update={"status": "published"})
     await db.save_domain(updated)
+    await mirror_developer_env_from_domain(updated)
     return updated
