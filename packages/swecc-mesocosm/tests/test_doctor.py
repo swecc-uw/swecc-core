@@ -4,9 +4,8 @@ import json
 
 import httpx
 import pytest
-from typer.testing import CliRunner
-
 from swecc_mesocosm.cli import _probe_url, app
+from typer.testing import CliRunner
 
 
 @pytest.fixture

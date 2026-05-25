@@ -7,10 +7,9 @@ from typing import Any
 
 import httpx
 import pytest
-from typer.testing import CliRunner
-
 from swecc_mesocosm.cli import app
 from tests.conftest import bench_client_with_handler
+from typer.testing import CliRunner
 
 
 @pytest.fixture
@@ -380,9 +379,7 @@ def test_run_get(cli_runner: CliRunner, patch_bench_client: Any) -> None:
     assert body["aggregate_scores"] == run["scores"]
 
 
-def test_run_episodes_with_traces(
-    cli_runner: CliRunner, patch_bench_client: Any
-) -> None:
+def test_run_episodes_with_traces(cli_runner: CliRunner, patch_bench_client: Any) -> None:
     episodes = [{"id": "ep-1"}]
     traces = {"ep-1": {"steps": []}}
 

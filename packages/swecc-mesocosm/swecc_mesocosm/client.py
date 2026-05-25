@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, cast
 
 import httpx
-
 from swecc_mesocosm.settings import settings
 
 
@@ -28,9 +27,7 @@ class BenchClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def list_domains(
-        self, *, published_only: bool | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_domains(self, *, published_only: bool | None = None) -> list[dict[str, Any]]:
         params: dict[str, str] = {}
         if published_only is True:
             params["published"] = "true"

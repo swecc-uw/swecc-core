@@ -42,16 +42,10 @@ def validate_benchmark_config(
     for field in required:
         if field not in domain_payload or domain_payload[field] in (None, ""):
             issues.append(f"Missing or empty field: {field}")
-            fixes.append(
-                f"Set `{field}` in the register payload (see GET /v1/domains schema)."
-            )
+            fixes.append(f"Set `{field}` in the register payload (see GET /v1/domains schema).")
 
     model = None
-    ac = (
-        domain_payload.get("inferred_agent", {})
-        if "inferred_agent" in domain_payload
-        else None
-    )
+    ac = domain_payload.get("inferred_agent", {}) if "inferred_agent" in domain_payload else None
     if isinstance(ac, dict):
         model = ac.get("model")
 

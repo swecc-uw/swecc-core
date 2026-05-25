@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from swecc_mesocosm import validation
 from swecc_mesocosm.infer import build_domain_payload
 
@@ -62,9 +61,7 @@ def test_validate_benchmark_config_disallowed_model_prefix(
     assert any("allowed_model_prefixes" in issue for issue in result["issues"])
 
 
-def test_load_constraints_invalid_json(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_load_constraints_invalid_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     policy = tmp_path / "constraints.json"
     policy.write_text("{not json", encoding="utf-8")
     monkeypatch.setattr(validation.settings, "policy_dir", tmp_path)
