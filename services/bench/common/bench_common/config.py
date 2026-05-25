@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,13 +6,9 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Storage backend (ORCH_DB_BACKEND).
-    # "django" (default): Django ORM against shared swecc Postgres (bench-api in Docker).
-    # "sqlite": aiosqlite local file for dev/tests without Postgres (ORCH_SQLITE_PATH).
-    db_backend: Literal["django", "sqlite"] = "django"
-    sqlite_path: str = "./bench_dev.db"
-
-    # Postgres connection: DB_* from server_env via app/django_settings.py (not ORCH_*).
+    # Database — Django ORM reads DB_* from server_env (see app/django_settings.py).
+    # This class only reads ORCH_* so server keys (JWT_SECRET, SENDGRID_*, …) never
+    # collide with bench field names.
 
     # Trace storage — local directory
     trace_dir: str = "./data/traces"

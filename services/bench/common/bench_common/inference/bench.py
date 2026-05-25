@@ -1,9 +1,8 @@
 """
-Model benchmarking runner — no API server required.
+Model benchmarking runner.
 
-Runs a model against a registered domain directly.  Designed for fast local
-iteration and for the EC2 worker, with any LiteLLM-compatible model as the
-target.
+Runs a model against a registered domain directly — no API server required.
+Designed for fast local iteration, with Ollama as the primary target.
 
 Programmatic usage:
     from bench_common.inference.bench import bench
@@ -17,28 +16,40 @@ Programmatic usage:
     print(result)
 
 CLI usage:
-    python -m bench_common.inference.bench \\
+    uv run python -m src.inference.bench \\
         --model ollama/llama3.2 \\
         --domain simple-trivia \\
         --env-url http://localhost:8765 \\
         --episodes 10
+
+    # Override system prompt inline
+    uv run python -m src.inference.bench \\
+        --model ollama/mistral \\
+        --domain simple-trivia \\
+        --env-url http://localhost:8765 \\
+        --system "Answer with only the letter A, B, C, or D."
 """
 
 from __future__ import annotations
 
-import asyncio
-import statistics
-import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
+from threading import Semaphore
 
-import structlog
+import requests
+
+
+# Replace async HttpEnvClient with synchronous requests
+class HttpEnvClient:
+    def __init__(self, env_url, timeout=5.0):
+        self.env_url = env_url
+        self.timeout = timeout
+
+    def health(self):
+        response = requests.get(f"{self.env_url}/health", timeout=self.timeout)
+        return response.ok
+
+
 from bench_common.core.run import AgentConfig, Episode, TechniqueConfig
-from bench_common.eval.metrics import compute_scores
 from bench_common.runtime.agent_loop import AgentLoop
-from bench_common.runtime.env_client import HttpEnvClient
-from bench_common.runtime.inference import InferenceRouter
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import TraceStore
 from bench_common.techniques import TECHNIQUE_REGISTRY
@@ -48,18 +59,19 @@ log = structlog.get_logger()
 
 
 def _build_techniques(domain_vow: Any) -> list[Technique]:
-    return [
-        TECHNIQUE_REGISTRY[d.technique_id]()
-        for d in domain_vow.techniques
-        if d.technique_id in TECHNIQUE_REGISTRY
-    ]
+    techniques: list[Technique] = []
+    for declaration in domain_vow.techniques:
+        technique_cls = TECHNIQUE_REGISTRY.get(declaration.technique_id)
+        if technique_cls is not None:
+            techniques.append(technique_cls())
+    return techniques
 
 
 def _build_agent_techniques(domain_vow: Any) -> list[TechniqueConfig]:
     return [
-        TechniqueConfig(technique_id=d.technique_id, params={})
-        for d in domain_vow.techniques
-        if d.technique_id in TECHNIQUE_REGISTRY
+        TechniqueConfig(technique_id=declaration.technique_id, params={})
+        for declaration in domain_vow.techniques
+        if declaration.technique_id in TECHNIQUE_REGISTRY
     ]
 
 
@@ -71,6 +83,8 @@ class BenchResult:
     episodes: list[Episode]
     elapsed_seconds: float
     scores: dict[str, float] = field(default_factory=dict)
+
+    # ── derived stats ──────────────────────────────────────────────────────────
 
     @property
     def completed(self) -> int:
@@ -91,9 +105,11 @@ class BenchResult:
         return statistics.mean(steps) if steps else 0.0
 
     def __str__(self) -> str:
+        # Box inner width = 38 chars.  Label prefix = 14 chars → value field = 24.
         W = 24
 
         def row(label: str, value: str) -> str:
+            # label is already 14 chars (padded by caller); value truncated to W
             v = value[:W] if len(value) > W else value
             return f"║{label}{v:<{W}}║"
 
@@ -114,6 +130,7 @@ class BenchResult:
             lines.append("╠══════════════════════════════════════╣")
             lines.append("║  domain scores:                      ║")
             for name, val in self.scores.items():
+                # label "    {name:<12} " = 4+12+1 = 17 chars, value field = 21
                 n_str = name[:12]
                 lines.append(f"║    {n_str:<12} {val:<21.4f}║")
         if self.failed:
@@ -123,55 +140,47 @@ class BenchResult:
         return "\n".join(lines)
 
 
-async def bench(
-    model: str,
-    domain_id: str,
-    env_url: str,
-    num_episodes: int = 5,
-    seed_set: list[int] | None = None,
-    system_prompt: str | None = None,
-    temperature: float = 0.0,
-    max_tokens: int = 512,
-    max_parallel: int = 1,
-    quiet: bool = False,
-) -> BenchResult:
+def bench(model, domain_id, env_url, num_episodes):
     """
     Run *model* against *domain_id* for *num_episodes* episodes.
 
     Args:
-        model:         LiteLLM model string, e.g. "ollama/llama3.2".
-        domain_id:     ID of a registered Domain (must be in the configured DB).
-        env_url:       Base URL of the environment's HTTP server.
-        num_episodes:  How many episodes to run (default 5).
-        seed_set:      Explicit seeds — overrides num_episodes if given.
-        system_prompt: Override the system prompt; uses Domain description if None.
-        temperature:   Model temperature (default 0.0 for reproducibility).
-        max_tokens:    Max tokens per model call (default 512).
-        max_parallel:  Episode concurrency (default 1 — sequential).
-        quiet:         Suppress per-episode progress output.
+        model:          LiteLLM model string — e.g. "ollama/llama3.2",
+                        "ollama/mistral", "openai/gpt-4o-mini".
+        domain_id:      ID of a registered Domain (must be in the local DB).
+        env_url:        Base URL of the environment's HTTP server.
+        num_episodes:   How many episodes to run (default 5).
+        seed_set:       Explicit seeds — overrides num_episodes if provided.
+        system_prompt:  Override the system prompt (otherwise uses Domain description).
+        temperature:    Model temperature (default 0.0 for reproducibility).
+        max_tokens:     Max tokens per model call (default 512).
+        max_parallel:   Episode concurrency (default 1 — sequential).
+        quiet:          Suppress per-episode progress output.
 
     Returns:
-        BenchResult with episode list and computed domain scores.
-
-    Raises:
-        ValueError:       Domain not found or model not supported.
-        ConnectionError:  Environment server not reachable at env_url.
+        BenchResult with episode list + computed scores.
     """
-    await db.init_db()
+    db.init_db()
 
-    domain = await db.get_domain(domain_id)
+    domain = db.get_domain(domain_id)
     if domain is None:
         raise ValueError(
             f"Domain '{domain_id}' not found.\n"
-            f"Register it first with POST /v1/domains or by submitting a GitHub env."
+            f"Register it first:\n"
+            f"  uv run python docs/examples/simple_trivia/register.py\n"
+            f"  # or POST /v1/domains"
         )
 
-    async with HttpEnvClient(env_url, timeout=5.0) as probe:
-        if not await probe.health():
-            raise ConnectionError(
-                f"Environment server not reachable at {env_url}\n"
-                f"Start the adapter first, then re-run."
-            )
+    # ── pre-flight: check env server is reachable ─────────────────────────────
+    probe = HttpEnvClient(env_url)
+    reachable = probe.health()
+    if not reachable:
+        raise ConnectionError(
+            f"Environment server not reachable at {env_url}\n\n"
+            f"Start it first, e.g.:\n"
+            f"  uv run python docs/examples/simple_trivia/adapter.py\n"
+            f"\nThen re-run this command."
+        )
 
     seeds = seed_set if seed_set is not None else list(range(num_episodes))
     n = len(seeds)
@@ -184,17 +193,14 @@ async def bench(
         max_tokens=max_tokens,
     )
 
+    # Ephemeral trace store (writes to ./data/traces/ but not persisted to a Run)
     trace = TraceStore()
     inference = InferenceRouter()
-    sem = asyncio.Semaphore(max(1, max_parallel))
 
-    if not quiet:
-        print(f"\nBenching  model={model}  domain={domain_id}  episodes={n}")
-        print(f"env →  {env_url}\n")
-
+    sem = Semaphore(max(1, max_parallel))
     start = time.monotonic()
 
-    async def _run_one(seed: int, idx: int) -> Episode:
+    def _run_one(seed: int, idx: int) -> Episode:
         episode = Episode(
             run_id="bench",
             seed=seed,
@@ -203,7 +209,7 @@ async def bench(
         )
         async with sem:
             if not quiet:
-                print(f"  [{idx + 1}/{n}] seed={seed} …", end=" ", flush=True)
+                print(f"  [{idx+1}/{n}] seed={seed} …", end=" ", flush=True)
             try:
                 loop = AgentLoop(
                     binding_vow=domain.binding_vow,
@@ -233,11 +239,18 @@ async def bench(
                     print(f"FAILED: {exc}")
         return episode
 
-    episodes: list[Episode] = await asyncio.gather(
-        *[_run_one(seed, i) for i, seed in enumerate(seeds)]
-    )
+    if not quiet:
+        print(f"\nBenching  model={model}  domain={domain_id}  episodes={n}")
+        print(f"env →  {env_url}\n")
+
+    tasks = [_run_one(seed, i) for i, seed in enumerate(seeds)]
+    episodes = list(await asyncio.gather(*tasks))
 
     elapsed = time.monotonic() - start
+
+    # Compute domain scores over completed episodes
+    from bench_common.eval.metrics import compute_scores
+
     completed_eps = [e for e in episodes if e.status == "completed"]
     scores = compute_scores(domain.scoring, completed_eps) if completed_eps else {}
 
@@ -245,7 +258,7 @@ async def bench(
         model=model,
         domain_id=domain_id,
         num_episodes=n,
-        episodes=list(episodes),
+        episodes=episodes,
         elapsed_seconds=elapsed,
         scores=scores,
     )
@@ -258,36 +271,65 @@ def _parse_args():
     import argparse
 
     p = argparse.ArgumentParser(
-        prog="python -m bench_common.inference.bench",
-        description="Bench a model against a BenchAnything domain.",
+        prog="python -m src.inference.bench",
+        description="Bench a model against a BenchAnything domain via Ollama (or any LiteLLM model).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 examples:
   # Ollama (local)
-  python -m bench_common.inference.bench \\
-      --model ollama/llama3.2 --domain simple-trivia --env-url http://localhost:8765
+  uv run python -m src.inference.bench --model ollama/llama3.2 --domain simple-trivia --env-url http://localhost:8765
 
-  # OpenAI (requires OPENAI_API_KEY)
-  python -m bench_common.inference.bench \\
-      --model openai/gpt-4o --domain simple-trivia --env-url http://localhost:8765
+  # Any LiteLLM model
+  uv run python -m src.inference.bench --model openai/gpt-4o-mini --domain simple-trivia --env-url http://localhost:8765
 
-  # More episodes, custom system prompt
-  python -m bench_common.inference.bench \\
-      --model ollama/mistral --domain simple-trivia \\
+  # More episodes, custom prompt
+  uv run python -m src.inference.bench --model ollama/mistral --domain simple-trivia \\
       --env-url http://localhost:8765 --episodes 20 \\
       --system "Reply with only the letter A, B, C, or D."
-""",
+        """,
     )
-    p.add_argument("--model", required=True, help="LiteLLM model string")
-    p.add_argument("--domain", required=True, dest="domain_id", help="Domain ID")
-    p.add_argument("--env-url", required=True, help="Environment HTTP server base URL")
-    p.add_argument("--episodes", type=int, default=5, dest="num_episodes")
-    p.add_argument("--seeds", type=int, nargs="+", default=None, dest="seed_set")
-    p.add_argument("--system", default=None, dest="system_prompt")
+    p.add_argument(
+        "--model",
+        required=True,
+        help='LiteLLM model string, e.g. "ollama/llama3.2", "ollama/mistral"',
+    )
+    p.add_argument(
+        "--domain",
+        required=True,
+        dest="domain_id",
+        help="Domain ID (must be registered in the local DB)",
+    )
+    p.add_argument(
+        "--env-url",
+        required=True,
+        help="Base URL of the environment HTTP server, e.g. http://localhost:8765",
+    )
+    p.add_argument(
+        "--episodes",
+        type=int,
+        default=5,
+        dest="num_episodes",
+        help="Number of episodes to run (default: 5)",
+    )
+    p.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Explicit seed list (overrides --episodes)",
+    )
+    p.add_argument(
+        "--system", default=None, dest="system_prompt", help="Override the system prompt"
+    )
     p.add_argument("--temperature", type=float, default=0.0)
     p.add_argument("--max-tokens", type=int, default=512)
-    p.add_argument("--parallel", type=int, default=1, dest="max_parallel")
-    p.add_argument("--quiet", action="store_true")
+    p.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        dest="max_parallel",
+        help="Episode concurrency (default: 1)",
+    )
     return p.parse_args()
 
 
@@ -298,12 +340,11 @@ async def _main() -> None:
         domain_id=args.domain_id,
         env_url=args.env_url,
         num_episodes=args.num_episodes,
-        seed_set=args.seed_set,
+        seed_set=args.seeds,
         system_prompt=args.system_prompt,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         max_parallel=args.max_parallel,
-        quiet=args.quiet,
     )
     print(result)
 

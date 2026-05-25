@@ -10,8 +10,8 @@ from typing import Any
 import httpx
 import structlog
 from app import manager
-from bench_common.core.errors import EnvironmentStartupError, ManifestError
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 log = structlog.get_logger()
@@ -35,11 +35,8 @@ async def health() -> dict[str, str]:
 @app.post("/clone")
 async def clone(req: CloneRequest) -> dict[str, Any]:
     try:
-        return await manager.clone_and_start(req.env_id, req.github_url)
-    except ManifestError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-    except EnvironmentStartupError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        result = await manager.clone_and_start(req.env_id, req.github_url)
+        return result
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
