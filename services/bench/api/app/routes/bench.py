@@ -13,6 +13,7 @@ import structlog
 from app.auth.access import assert_dev_env_access
 from app.auth.deps import require_member
 from app.auth.worker import require_worker
+from bench.models import ActorType, Visibility
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
@@ -89,6 +90,17 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
+
+        # run_test_episode saves the Run without actor metadata; attach member so
+        # GET /v1/runs?domain_id=… returns dev test bench runs in Recent activity.
+        run = await db.get_run(episode.run_id)
+        if run is not None:
+            await db.save_run(
+                run,
+                actor_type=ActorType.MEMBER,
+                actor_id=str(member.user_id),
+                visibility=Visibility.PRIVATE,
+            )
 
     return episode
 
