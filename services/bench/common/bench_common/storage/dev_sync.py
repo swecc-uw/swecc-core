@@ -12,10 +12,9 @@ from datetime import datetime
 from typing import Any
 
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
-from django.db.models import Q
-
 from bench_common.core.domain import Domain
 from bench_common.storage import django_store as store
+from django.db.models import Q
 
 
 async def publish_domain_if_needed(domain: Domain) -> Domain:

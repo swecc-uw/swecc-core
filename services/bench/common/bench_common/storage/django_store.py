@@ -28,11 +28,10 @@ from bench.models import Episode as EpisodeRow
 from bench.models import Leaderboard as LeaderboardRow
 from bench.models import Run as RunRow
 from bench.models import Visibility
-from django.utils import timezone
-from pydantic import BaseModel
-
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
+from django.utils import timezone
+from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -161,9 +160,7 @@ async def list_runs(
         qs = qs.filter(team_id=team_id)
     if visibility:
         qs = qs.filter(visibility=visibility)
-    return [
-        _model_from_row_data(Run, row.data) async for row in qs.order_by("-id")[:limit]
-    ]
+    return [_model_from_row_data(Run, row.data) async for row in qs.order_by("-id")[:limit]]
 
 
 async def list_gallery_runs(
@@ -231,9 +228,7 @@ async def save_developer_environment(env: dict[str, Any]) -> None:
         "created_by_user_id": env.get("created_by_user_id"),
         "team_id": env.get("team_id"),
     }
-    await DeveloperEnvironmentRow.objects.aupdate_or_create(
-        id=env["id"], defaults=defaults
-    )
+    await DeveloperEnvironmentRow.objects.aupdate_or_create(id=env["id"], defaults=defaults)
 
 
 async def get_developer_environment(env_id: str) -> dict[str, Any] | None:
@@ -252,9 +247,7 @@ async def get_developer_environment_by_github_repo(
     from bench_common.utils.github import normalize_github_url
 
     target = normalize_github_url(github_url)
-    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by(
-        "-created_at"
-    )
+    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by("-created_at")
     async for row in qs:
         if normalize_github_url(row.github_url) == target:
             return _dev_env_to_dict(row)
@@ -286,9 +279,7 @@ async def list_developer_environments(
 
 
 async def count_dev_envs(*, actor_id: str, scope: str) -> int:
-    return await DeveloperEnvironmentRow.objects.filter(
-        actor_id=actor_id, scope=scope
-    ).acount()
+    return await DeveloperEnvironmentRow.objects.filter(actor_id=actor_id, scope=scope).acount()
 
 
 def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
@@ -340,9 +331,7 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 # ── Bench Jobs ────────────────────────────────────────────────────────────────
 
 
-async def create_bench_job(
-    env_id: str, domain_id: str | None, github_url: str
-) -> dict[str, Any]:
+async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
     row = await BenchJobRow.objects.acreate(
         id=job_id,
