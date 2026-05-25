@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from bench_common.model_catalog import ALLOWED_MODELS, FULL_BENCH_MODELS
 from litellm import get_llm_provider
 from litellm.exceptions import BadRequestError
+
+from bench_common.model_catalog import ALLOWED_MODELS, FULL_BENCH_MODELS
 
 
 @pytest.mark.parametrize("model_id", ALLOWED_MODELS)
