@@ -6,14 +6,11 @@ from app.auth.access import parse_team_id
 from app.auth.deps import get_optional_principal, require_member
 from app.auth.policy import assert_can_manage_teams
 from app.services import teams as team_svc
-from bench.models import (
-    ActorType,
-    DeveloperEnvironment as DevEnvRow,
-    EnvScope,
-    MAX_TEAM_MEMBERS,
-    Run as RunRow,
-    Visibility,
-)
+from bench.models import MAX_TEAM_MEMBERS, ActorType
+from bench.models import DeveloperEnvironment as DevEnvRow
+from bench.models import EnvScope
+from bench.models import Run as RunRow
+from bench.models import Visibility
 from bench_common.core.domain import Domain
 from bench_common.core.run import Run
 from bench_common.storage.django_store import _model_from_row_data
@@ -175,8 +172,7 @@ async def team_leaderboard(team_id: str, member=Depends(require_member), limit: 
     if not await team_svc.is_member(tid, member.user_id):
         raise HTTPException(status_code=403, detail="Not a member of this team")
     rows = [
-        row
-        async for row in RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")
+        row async for row in RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")
     ]
     entries: list[LeaderboardEntry] = []
     for row in rows[:limit]:
