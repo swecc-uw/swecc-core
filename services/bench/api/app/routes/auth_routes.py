@@ -40,5 +40,3 @@ async def create_guest(response: Response) -> GuestResponse:
 async def guest_logout(response: Response) -> dict:
     response.delete_cookie("bench_guest", path="/bench/")
     return {"detail": "ok"}
-
-
