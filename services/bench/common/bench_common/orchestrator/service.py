@@ -11,7 +11,9 @@ import asyncio
 import uuid
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 import structlog
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode, Run, RunConfig, TechniqueConfig
@@ -43,6 +45,46 @@ def _build_techniques(agent_config: AgentConfig) -> list[Technique]:
         if cls:
             techniques.append(cls())
     return techniques
+
+
+def _sandbox_env_id_from_url(env_url: str) -> str | None:
+    """Extract env id from ``{sandbox}/envs/{id}`` proxy URLs."""
+    path = urlparse(env_url).path.rstrip("/")
+    parts = path.split("/")
+    if len(parts) >= 2 and parts[-2] == "envs":
+        return parts[-1]
+    return None
+
+
+async def _ensure_sandbox_env_running(env_url: str, github_url: str | None) -> None:
+    """Re-clone dev env subprocesses after bench-sandbox restarts (in-memory state is lost)."""
+    if not github_url:
+        return
+    env_id = _sandbox_env_id_from_url(env_url)
+    if not env_id:
+        return
+    health_url = f"{settings.sandbox_url.rstrip('/')}/envs/{env_id}/health"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(health_url)
+            if resp.status_code == 200:
+                return
+        except httpx.TransportError:
+            pass
+        clone_resp = await client.post(
+            f"{settings.sandbox_url.rstrip('/')}/clone",
+            json={"env_id": env_id, "github_url": github_url},
+            timeout=120.0,
+        )
+        clone_resp.raise_for_status()
+    log.info("sandbox_env_recloned", env_id=env_id)
+
+
+async def _github_url_for_domain(domain_id: str) -> str | None:
+    for env in await db.list_developer_environments():
+        if env.get("domain_id") == domain_id:
+            return env.get("github_url")
+    return None
 
 
 async def create_run(config: RunConfig, requester_id: str) -> Run:
@@ -124,6 +166,10 @@ async def _run_episode(
             return episode
 
         try:
+            await _ensure_sandbox_env_running(
+                env_url,
+                await _github_url_for_domain(domain.id),
+            )
             techniques = _build_techniques(agent_config)
             inference = InferenceRouter()
             loop = AgentLoop(
@@ -163,6 +209,7 @@ async def run_test_episode(
     agent_config: AgentConfig,
     env_url: str | None = None,
     seed: int | None = None,
+    github_url: str | None = None,
 ) -> Episode:
     """Run a single ephemeral episode (Development Mode)."""
     domain = await db.get_domain(domain_id)
@@ -176,6 +223,9 @@ async def run_test_episode(
         effective_url = env_url or domain.endpoint.url
     if not effective_url:
         raise ValueError("No environment URL provided or configured on domain")
+
+    repo_url = github_url or await _github_url_for_domain(domain_id)
+    await _ensure_sandbox_env_running(effective_url, repo_url)
 
     run = Run(
         config=RunConfig(

@@ -81,6 +81,7 @@ async def test_bench(req: TestBenchRequest) -> Episode:
                 agent_config=AgentConfig(model=req.model),
                 env_url=env.get("env_url"),
                 seed=req.seed,
+                github_url=env.get("github_url"),
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
