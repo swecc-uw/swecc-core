@@ -13,7 +13,8 @@ from bench_common.core.domain import Domain, EnvironmentEndpoint
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible
-from fastapi import APIRouter, HTTPException
+from bench_common.utils.github import normalize_github_url
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 log = structlog.get_logger()
@@ -52,15 +53,23 @@ class EnvPollResponse(BaseModel):
     error_message: str | None
 
 
-@router.post("/environments", response_model=DeveloperEnvironment, status_code=201)
-async def submit_environment(req: SubmitEnvironmentRequest) -> dict[str, Any]:
+@router.post("/environments", response_model=DeveloperEnvironment)
+async def submit_environment(
+    req: SubmitEnvironmentRequest,
+    response: Response,
+) -> dict[str, Any]:
+    github_url = normalize_github_url(req.github_url)
+    existing = await db.get_developer_environment_by_github_repo(req.owner_id, github_url)
+    if existing is not None:
+        return await _handle_duplicate_submission(existing, req, github_url, response)
+
     env_id = str(uuid.uuid4())
     env: dict[str, Any] = {
         "id": env_id,
         "owner_id": req.owner_id,
         "name": req.name,
         "description": req.description,
-        "github_url": req.github_url,
+        "github_url": github_url,
         "status": "pending",
         "domain_id": None,
         "env_url": None,
@@ -68,8 +77,53 @@ async def submit_environment(req: SubmitEnvironmentRequest) -> dict[str, Any]:
         "created_at": datetime.utcnow().isoformat(),
     }
     await db.save_developer_environment(env)
+    response.status_code = 201
     asyncio.create_task(
-        _onboard_environment(env_id, req.github_url, req.owner_id, req.name, req.description)
+        _onboard_environment(env_id, github_url, req.owner_id, req.name, req.description)
+    )
+    return env
+
+
+async def _handle_duplicate_submission(
+    env: dict[str, Any],
+    req: SubmitEnvironmentRequest,
+    github_url: str,
+    response: Response,
+) -> dict[str, Any]:
+    """Re-submitting the same repo for the same owner updates one row instead of creating another."""
+    if env["status"] == "cloning":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "This repository is already being onboarded",
+                "environment_id": env["id"],
+            },
+        )
+
+    env["name"] = req.name
+    env["description"] = req.description
+    env["github_url"] = github_url
+
+    if env["status"] == "ready":
+        await db.save_developer_environment(env)
+        response.status_code = 200
+        return env
+
+    # failed or pending — re-run onboarding on the existing row
+    env["status"] = "pending"
+    env["error_message"] = None
+    env["domain_id"] = None
+    env["env_url"] = None
+    await db.save_developer_environment(env)
+    response.status_code = 200
+    asyncio.create_task(
+        _onboard_environment(
+            env["id"],
+            github_url,
+            env["owner_id"],
+            env["name"],
+            env["description"],
+        )
     )
     return env
 
