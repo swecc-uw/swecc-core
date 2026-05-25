@@ -13,9 +13,17 @@ from bench_common.auth.session import get_bench_session
 from bench_common.auth.swecc_server import fetch_jwt, login
 
 
+def _default_bench_url() -> str:
+    return os.environ.get("SWECC_BENCH_URL", "https://api.swecc.org/bench").rstrip("/")
+
+
+def _default_server_url() -> str:
+    return os.environ.get("SWECC_SERVER_URL", "https://api.swecc.org").rstrip("/")
+
+
 def _bench_url(args: argparse.Namespace) -> str:
     creds = load_credentials() or {}
-    return (args.bench_url or creds.get("bench_url") or "http://localhost:8010").rstrip("/")
+    return (args.bench_url or creds.get("bench_url") or _default_bench_url()).rstrip("/")
 
 
 def _active_team_id(args: argparse.Namespace) -> str | None:
@@ -28,7 +36,7 @@ def _active_team_id(args: argparse.Namespace) -> str | None:
 
 
 def _cmd_auth_login(args: argparse.Namespace) -> None:
-    server = args.server_url.rstrip("/")
+    server = (args.server_url or _default_server_url()).rstrip("/")
     with httpx.Client(base_url=server, follow_redirects=True) as client:
         login(client, server, args.username, args.password)
         token = fetch_jwt(client, server)
@@ -62,6 +70,15 @@ def _cmd_auth_whoami(args: argparse.Namespace) -> None:
 def _cmd_auth_logout(_args: argparse.Namespace) -> None:
     clear_credentials()
     print("Credentials cleared.")
+
+
+def _cmd_auth_token(_args: argparse.Namespace) -> None:
+    """Print member JWT for curl/scripts (run auth login first)."""
+    creds = load_credentials()
+    if not creds or creds.get("mode") != "member" or not creds.get("token"):
+        print("No member session. Run: bench auth login --username USER --password PASS", file=sys.stderr)
+        sys.exit(1)
+    print(creds["token"])
 
 
 def _require_member_session(args: argparse.Namespace):
@@ -248,16 +265,27 @@ def _cmd_register(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="bench", description="SWECC Bench CLI")
-    parser.add_argument("--bench-url", default=None, help="bench-api base URL")
+    parser.add_argument(
+        "--bench-url",
+        default=None,
+        help=f"bench-api base URL (default: {_default_bench_url()} or saved credentials)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     auth = sub.add_parser("auth")
     auth_sub = auth.add_subparsers(dest="auth_cmd", required=True)
     p = auth_sub.add_parser("login")
-    p.add_argument("--server-url", default="http://localhost:8000")
+    p.add_argument(
+        "--server-url",
+        default=None,
+        help=f"swecc-server base URL (default: {_default_server_url()} or SWECC_SERVER_URL)",
+    )
     p.add_argument("--username", required=True)
     p.add_argument("--password", required=True)
     p.set_defaults(func=_cmd_auth_login)
+    p = auth_sub.add_parser("token")
+    p.help = "Print saved member JWT (for curl); login first"
+    p.set_defaults(func=_cmd_auth_token)
     p = auth_sub.add_parser("guest")
     p.set_defaults(func=_cmd_auth_guest)
     p = auth_sub.add_parser("whoami")
