@@ -7,17 +7,17 @@ from typing import Any
 
 import httpx
 import structlog
-from bench_common.config import settings
-from bench_common.core.binding_vow import BindingVow
-from bench_common.core.domain import Domain, EnvironmentEndpoint
-from bench_common.core.scoring import ScoringConfig
-from bench_common.storage import database as db
 from app.auth.access import assert_dev_env_access, parse_team_id
 from app.auth.deps import get_optional_principal, require_member
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
 from app.services import teams as team_svc
 from bench.models import ActorType, EnvScope
+from bench_common.config import settings
+from bench_common.core.binding_vow import BindingVow
+from bench_common.core.domain import Domain, EnvironmentEndpoint
+from bench_common.core.scoring import ScoringConfig
+from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible
 from bench_common.utils.github import normalize_github_url
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -98,7 +98,9 @@ async def submit_environment(
     await db.save_developer_environment(env)
     response.status_code = 201
     asyncio.create_task(
-        _onboard_environment(env_id, github_url, owner_key, req.name, req.description, scope, team_uuid)
+        _onboard_environment(
+            env_id, github_url, owner_key, req.name, req.description, scope, team_uuid
+        )
     )
     return env
 

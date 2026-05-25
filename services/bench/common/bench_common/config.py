@@ -1,10 +1,9 @@
 import os
 from urllib.parse import urlparse
 
+from bench_common.model_catalog import EXTRA_MODEL_ALIASES, FULL_BENCH_MODELS
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from bench_common.model_catalog import EXTRA_MODEL_ALIASES, FULL_BENCH_MODELS
 
 
 class Settings(BaseSettings):

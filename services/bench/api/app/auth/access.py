@@ -7,7 +7,10 @@ import uuid
 from app.auth.principal import Guest, Member, Principal
 from app.auth.resolve import auth_disabled
 from app.services import teams as team_svc
-from bench.models import ActorType, DeveloperEnvironment as DevEnvRow, EnvScope, Run as RunRow
+from bench.models import ActorType
+from bench.models import DeveloperEnvironment as DevEnvRow
+from bench.models import EnvScope
+from bench.models import Run as RunRow
 from fastapi import HTTPException
 
 
