@@ -11,9 +11,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-COPY worker/requirements.txt .
+COPY bench/common/ /tmp/bench-common/
+RUN pip install --no-cache-dir /tmp/bench-common && rm -rf /tmp/bench-common
+
+COPY bench/worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY worker/app/ /app/app/
+COPY bench/worker/app/ /app/app/
+
+# Django bench app — same as bench-api; schema from swecc-server migrate.
+COPY server/server/bench/ /app/bench/
 
 CMD ["python", "-m", "app.worker"]

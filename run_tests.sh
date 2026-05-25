@@ -195,15 +195,12 @@ test_bench_service() {
     return 1
   fi
 
-  if [ "$svc" != "bench-worker" ]; then
-    log INFO "Installing bench_common (shared kernel)..."
-    python3 -m pip install -q -e ./services/bench/common 2>&1 | grep -v "Requirement already satisfied" || true
-  fi
+  log INFO "Installing bench_common (shared kernel)..."
+  python3 -m pip install -q -e ./services/bench/common 2>&1 | grep -v "Requirement already satisfied" || true
 
   cd "services/bench/$sub"
   python3 -m pip install -q -r requirements-test.txt 2>&1 | grep -v "Requirement already satisfied" || true
 
-  ORCH_DATABASE_URL="${ORCH_DATABASE_URL:-sqlite+aiosqlite:///./test.db}" \
   ORCH_TRACE_DIR="${ORCH_TRACE_DIR:-/tmp/bench-traces}" \
   ORCH_SANDBOX_URL="${ORCH_SANDBOX_URL:-http://localhost:8001}" \
   WORKER_API_URL="${WORKER_API_URL:-http://localhost:8000}" \

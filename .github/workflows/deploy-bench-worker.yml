@@ -5,6 +5,7 @@ on:
     branches: [main, master]
     paths:
       - 'services/bench/worker/**'
+      - 'services/server/server/bench/**'
       - 's/ops/**'
       - 's/lib.sh'
       - '.github/workflows/deploy-bench-worker.yml'
@@ -12,12 +13,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  deploy-server:
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      service: server
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
   deploy:
+    needs: deploy-server
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-worker
-      context: ./services/bench
-      dockerfile: worker/Dockerfile
+      context: ./services
+      dockerfile: bench/worker/Dockerfile
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

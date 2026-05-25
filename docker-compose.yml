@@ -82,7 +82,7 @@ services:
       - REDIS_HOST=swecc-redis-instance
       - RABBIT_HOST=swecc-rabbitmq-instance
     command: >
-      bash -c "cd server && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+      bash -c "cd server && python manage.py makemigrations bench --noinput && python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
 
   sockets:
     build: ./services/sockets
@@ -198,13 +198,15 @@ services:
         condition: service_healthy
       bench-sandbox:
         condition: service_healthy
-      # swecc-server runs `manage.py migrate` on startup; bench-api needs the
+      # swecc-server runs makemigrations + migrate on startup; bench-api needs the
       # bench_* tables to exist before it boots.
       server:
         condition: service_started
     env_file:
       - .env
     environment:
+      # Empty ROOT_PATH: dev hits :8010 directly (/docs). Prod image sets /bench.
+      - ROOT_PATH=
       - ORCH_TRACE_DIR=/data/traces
       - ORCH_SANDBOX_URL=http://swecc-bench-sandbox:8001
       # LiteLLM expects GOOGLE_API_KEY for the google/gemini-* provider. The
@@ -221,12 +223,14 @@ services:
 
   bench-worker:
     build:
-      context: ./services/bench
-      dockerfile: worker/Dockerfile
+      context: ./services
+      dockerfile: bench/worker/Dockerfile
     container_name: swecc-bench-worker
     networks:
       - swecc-network
     depends_on:
+      db:
+        condition: service_healthy
       bench-api:
         condition: service_healthy
     env_file:

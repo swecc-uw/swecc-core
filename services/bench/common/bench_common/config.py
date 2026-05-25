@@ -6,9 +6,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Database — Django ORM reads DB_* from server_env (see app/django_settings.py).
-    # This class only reads ORCH_* so server keys (JWT_SECRET, SENDGRID_*, …) never
-    # collide with bench field names.
+    # Postgres: DB_* from server_env via app/django_settings.py (Django ORM / Supabase).
 
     # Trace storage — local directory
     trace_dir: str = "./data/traces"

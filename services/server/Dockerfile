@@ -8,4 +8,4 @@ COPY . .
 FROM development AS production
 
 WORKDIR /app/server
-CMD ["bash", "-c", "python manage.py migrate --noinput && exec gunicorn --bind 0.0.0.0:8000 server.wsgi --workers 5"]
+CMD ["bash", "-c", "python manage.py makemigrations bench --noinput && python manage.py migrate --noinput && exec gunicorn --bind 0.0.0.0:8000 server.wsgi --workers 5"]

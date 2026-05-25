@@ -81,7 +81,7 @@ jobs:
 
   deploy-bench-api:
     name: Deploy Bench API
-    needs: validate
+    needs: [validate, deploy-server]
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-api
@@ -105,12 +105,12 @@ jobs:
 
   deploy-bench-worker:
     name: Deploy Bench Worker
-    needs: validate
+    needs: [validate, deploy-server]
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: bench-worker
-      context: ./services/bench
-      dockerfile: worker/Dockerfile
+      context: ./services
+      dockerfile: bench/worker/Dockerfile
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

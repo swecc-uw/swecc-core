@@ -126,14 +126,13 @@ service_dir() {
 }
 
 # Where docker build should run from. For most services this is the same as
-# service_dir; for bench-sandbox/bench-worker it's services/bench/ so the
-# Dockerfile can COPY the shared common/ kernel; for bench-api it's
-# services/ so the Dockerfile can ALSO COPY the Django bench app from
-# services/server/server/bench/.
+# service_dir; for bench-sandbox it's services/bench/ so the Dockerfile can
+# COPY common/; bench-api and bench-worker use services/ so they can also
+# COPY server/server/bench/ (Django app).
 build_context() {
   local svc="$1"
   case "$svc" in
-    bench-api)
+    bench-api|bench-worker)
       echo "${REPO_ROOT}/services"
       ;;
     bench-*)
@@ -151,6 +150,9 @@ build_dockerfile() {
   case "$svc" in
     bench-api)
       echo "bench/api/Dockerfile"
+      ;;
+    bench-worker)
+      echo "bench/worker/Dockerfile"
       ;;
     bench-*)
       echo "${svc#bench-}/Dockerfile"

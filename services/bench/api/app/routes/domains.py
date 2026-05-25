@@ -27,6 +27,17 @@ class CreateDomainRequest(BaseModel):
     has_gold_benchmark: bool = False
 
 
+def _ensure_binding_vow_matches_domain(domain_id: str, vow: BindingVow) -> None:
+    if vow.domain_id != domain_id:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"binding_vow.domain_id must match domain id: "
+                f"got {vow.domain_id!r}, expected {domain_id!r}"
+            ),
+        )
+
+
 class UpdateDomainRequest(BaseModel):
     name: str | None = None
     binding_vow: BindingVow | None = None
@@ -46,6 +57,7 @@ async def create_domain(req: CreateDomainRequest) -> Domain:
     existing = await db.get_domain(req.id)
     if existing is not None:
         raise HTTPException(status_code=409, detail=f"Domain '{req.id}' already exists")
+    _ensure_binding_vow_matches_domain(req.id, req.binding_vow)
     domain = Domain(**req.model_dump())
     await db.save_domain(domain)
 
@@ -97,6 +109,8 @@ async def update_domain(domain_id: str, req: UpdateDomainRequest) -> Domain:
             detail="Only draft domains can be updated",
         )
     updates = req.model_dump(exclude_none=True)
+    if "binding_vow" in updates:
+        _ensure_binding_vow_matches_domain(domain_id, updates["binding_vow"])
     updated = domain.model_copy(update=updates)
     await db.save_domain(updated)
     return updated
