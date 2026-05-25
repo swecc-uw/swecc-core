@@ -195,10 +195,8 @@ test_bench_service() {
     return 1
   fi
 
-  if [ "$svc" != "bench-worker" ]; then
-    log INFO "Installing bench_common (shared kernel)..."
-    python3 -m pip install -q -e ./services/bench/common 2>&1 | grep -v "Requirement already satisfied" || true
-  fi
+  log INFO "Installing bench_common (shared kernel)..."
+  python3 -m pip install -q -e ./services/bench/common 2>&1 | grep -v "Requirement already satisfied" || true
 
   cd "services/bench/$sub"
   python3 -m pip install -q -r requirements-test.txt 2>&1 | grep -v "Requirement already satisfied" || true

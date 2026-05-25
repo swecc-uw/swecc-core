@@ -11,6 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
+COPY common/ /tmp/bench-common/
+RUN pip install --no-cache-dir /tmp/bench-common && rm -rf /tmp/bench-common
+
 COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
