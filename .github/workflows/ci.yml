@@ -292,7 +292,7 @@ jobs:
             # bench app from services/server/server/bench/.
             bench-api)     echo "context=./services" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/api/Dockerfile" >> "$GITHUB_OUTPUT" ;;
             bench-sandbox) echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/sandbox/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-            bench-worker)  echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/worker/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+            bench-worker)  echo "context=./services" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/worker/Dockerfile" >> "$GITHUB_OUTPUT" ;;
             *)             echo "context=./services/${{ matrix.service }}" >> "$GITHUB_OUTPUT"; echo "file=./services/${{ matrix.service }}/Dockerfile" >> "$GITHUB_OUTPUT" ;;
           esac
 
