@@ -182,10 +182,10 @@ services:
 
   bench-api:
     build:
-      # Expanded context (services/) so the Dockerfile can pull both
-      # bench/ and the Django app at server/server/bench/.
-      context: ./services
-      dockerfile: bench/api/Dockerfile
+      # Repo root context so the image can install packages/swecc-jwt and COPY
+      # services/bench + services/server/server/bench/.
+      context: .
+      dockerfile: services/bench/api/Dockerfile
     container_name: swecc-bench-api
     networks:
       - swecc-network
@@ -210,7 +210,7 @@ services:
       - ORCH_PUBLIC_BASE_URL=${ORCH_PUBLIC_BASE_URL:-}
       - ORCH_TRACE_DIR=/data/traces
       - ORCH_SANDBOX_URL=http://swecc-bench-sandbox:8001
-      # LiteLLM expects GOOGLE_API_KEY for the google/gemini-* provider. The
+      # LiteLLM expects GOOGLE_API_KEY for the gemini/* provider. The
       # rest of swecc-core (services/ai) uses GEMINI_API_KEY for the same
       # Google AI Studio key — fall back to it so a single key in .env covers
       # both services.
@@ -240,7 +240,7 @@ services:
       - WORKER_API_URL=http://swecc-bench-api:8000
       - WORKER_POLL_INTERVAL=${WORKER_POLL_INTERVAL:-10}
       # Same GEMINI_API_KEY → GOOGLE_API_KEY fallback as bench-api, so the
-      # worker can call google/gemini-* models when its run_full_bench loop
+      # worker can call gemini/* models when its run_full_bench loop
       # eventually invokes litellm directly.
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
     profiles:
