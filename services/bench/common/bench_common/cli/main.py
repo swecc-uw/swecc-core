@@ -8,7 +8,6 @@ import os
 import sys
 
 import httpx
-
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
 from bench_common.auth.session import get_bench_session
 from bench_common.auth.swecc_server import fetch_jwt, login
@@ -79,7 +78,9 @@ def _cmd_team_create(args: argparse.Namespace) -> None:
         r.raise_for_status()
         data = r.json()
         print(f"team_id={data['team_id']}")
-        print(f"join_code={data['join_code']}  ({data['member_count']}/{data['max_members']} members)")
+        print(
+            f"join_code={data['join_code']}  ({data['member_count']}/{data['max_members']} members)"
+        )
         if args.use:
             creds = load_credentials() or {}
             creds["active_team_id"] = data["team_id"]
@@ -91,7 +92,9 @@ def _cmd_team_join(args: argparse.Namespace) -> None:
         r = session.client.post("/v1/teams/join", json={"code": args.code.upper()})
         r.raise_for_status()
         data = r.json()
-        print(f"Joined {data['name']} ({data['member_count']}/{data['max_members']}) team_id={data['team_id']}")
+        print(
+            f"Joined {data['name']} ({data['member_count']}/{data['max_members']}) team_id={data['team_id']}"
+        )
 
 
 def _cmd_team_list(args: argparse.Namespace) -> None:
@@ -100,7 +103,9 @@ def _cmd_team_list(args: argparse.Namespace) -> None:
         r.raise_for_status()
         for t in r.json():
             code = f"  code={t['join_code']}" if t.get("join_code") else ""
-            print(f"{t['team_id']}  {t['name']}  ({t['member_count']}/{t['max_members']})  {t['role']}{code}")
+            print(
+                f"{t['team_id']}  {t['name']}  ({t['member_count']}/{t['max_members']})  {t['role']}{code}"
+            )
 
 
 def _cmd_team_show(args: argparse.Namespace) -> None:
