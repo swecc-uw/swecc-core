@@ -36,11 +36,17 @@ log = structlog.get_logger()
 
 # Public URL prefix when bench-api sits behind api.swecc.org/bench/ (nginx strips
 # /bench before forwarding). Swagger UI must fetch /bench/openapi.json, not /openapi.json.
-ROOT_PATH = os.environ.get("ROOT_PATH", "").rstrip("/")
+#
+# Use BENCH_PUBLIC_PREFIX (set in the prod image). bench-api shares server_env with
+# Django; do not put ROOT_PATH="" there — it breaks /bench/docs. Legacy ROOT_PATH
+# is still read as a fallback.
+PUBLIC_PREFIX = (
+    os.environ.get("BENCH_PUBLIC_PREFIX") or os.environ.get("ROOT_PATH") or ""
+).rstrip("/")
 
 
 def _public_path(path: str) -> str:
-    return f"{ROOT_PATH}{path}" if ROOT_PATH else path
+    return f"{PUBLIC_PREFIX}{path}" if PUBLIC_PREFIX else path
 
 
 @asynccontextmanager
@@ -55,7 +61,7 @@ app = FastAPI(
     version="0.1.0",
     description="Distributed evaluation protocol for AI agent benchmarks",
     lifespan=lifespan,
-    root_path=ROOT_PATH,
+    root_path=PUBLIC_PREFIX,
 )
 
 app.add_middleware(
