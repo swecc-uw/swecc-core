@@ -184,6 +184,21 @@ async def get_developer_environment(env_id: str) -> dict[str, Any] | None:
     return _dev_env_to_dict(row)
 
 
+async def get_developer_environment_by_github_repo(
+    owner_id: str,
+    github_url: str,
+) -> dict[str, Any] | None:
+    """Return the newest developer env for this owner + repo URL (normalized)."""
+    from bench_common.utils.github import normalize_github_url
+
+    target = normalize_github_url(github_url)
+    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by("-created_at")
+    async for row in qs:
+        if normalize_github_url(row.github_url) == target:
+            return _dev_env_to_dict(row)
+    return None
+
+
 async def delete_developer_environment(env_id: str) -> bool:
     deleted, _ = await DeveloperEnvironmentRow.objects.filter(id=env_id).adelete()
     return deleted > 0
