@@ -1,29 +1,115 @@
+from datetime import timedelta
+
+from app.auth.access import assert_run_read, parse_team_id
+from app.auth.deps import get_optional_principal, get_principal
+from app.auth.policy import assert_guest_can_create_run, assert_guest_rate_limit
+from app.auth.principal import Guest, Member
+from app.auth.resolve import auth_disabled
+from app.services import teams as team_svc
+from bench.models import ActorType, DeveloperEnvironment as DevEnvRow, EnvScope, Visibility
 from bench_common.core.run import Episode, Run, RunConfig
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import trace_store
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from django.utils import timezone
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 
 
+class CreateRunBody(RunConfig):
+    team_id: str | None = None
+    visibility: str | None = None
+
+
+def _requester_id(principal: Guest | Member) -> str:
+    if isinstance(principal, Member):
+        return str(principal.user_id)
+    return f"guest:{principal.session_id}"
+
+
 @router.get("", response_model=list[Run])
-async def list_runs(domain_id: str | None = None) -> list[Run]:
-    return await db.list_runs(domain_id=domain_id)
+async def list_runs(
+    domain_id: str | None = None,
+    principal=Depends(get_optional_principal),
+) -> list[Run]:
+    from bench.models import Run as RunRow
+
+    if auth_disabled():
+        return await db.list_runs(domain_id=domain_id)
+
+    if isinstance(principal, Guest):
+        return await db.list_runs(
+            domain_id=domain_id,
+            actor_type=ActorType.GUEST,
+            actor_id=principal.session_id,
+        )
+    if isinstance(principal, Member):
+        return await db.list_runs(
+            domain_id=domain_id,
+            actor_type=ActorType.MEMBER,
+            actor_id=str(principal.user_id),
+        )
+    # Anonymous: only gallery-visible completed runs
+    rows = await db.list_gallery_runs(domain_id=domain_id, limit=50)
+    return [r for r, _ in rows]
 
 
 @router.post("", response_model=Run, status_code=202)
-async def create_run(config: RunConfig) -> Run:
+async def create_run(
+    config: CreateRunBody,
+    principal=Depends(get_principal),
+) -> Run:
+    if isinstance(principal, Guest):
+        await assert_guest_rate_limit(principal.session_id)
+        assert_guest_can_create_run(config.domain_id)
+
+    team_uuid = None
+    if config.team_id:
+        if isinstance(principal, Guest):
+            raise HTTPException(status_code=403, detail="Teams require member login")
+        team_uuid = parse_team_id(config.team_id)
+        if not await team_svc.is_member(team_uuid, principal.user_id):
+            raise HTTPException(status_code=403, detail="Not a member of this team")
+
+    run_config = RunConfig(**config.model_dump(exclude={"team_id", "visibility"}))
+    req_id = "local" if auth_disabled() else _requester_id(principal)
     try:
-        run = await orchestrator.create_run(config, requester_id="local")
+        run = await orchestrator.create_run(run_config, requester_id=req_id)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    actor_type = ActorType.MEMBER if isinstance(principal, Member) else ActorType.GUEST
+    actor_id = (
+        str(principal.user_id) if isinstance(principal, Member) else principal.session_id
+    )
+    if isinstance(principal, Guest):
+        visibility = Visibility.GALLERY_PUBLIC
+        expires = timezone.now() + timedelta(days=7)
+    else:
+        visibility = config.visibility or Visibility.PRIVATE
+        if visibility not in (Visibility.PRIVATE, Visibility.GALLERY_PUBLIC):
+            visibility = Visibility.PRIVATE
+        expires = None
+
+    await db.save_run(
+        run,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        team_id=str(team_uuid) if team_uuid else None,
+        visibility=visibility,
+        expires_at=expires,
+    )
     return run
 
 
 @router.get("/{run_id}", response_model=Run)
-async def get_run(run_id: str) -> Run:
+async def get_run(
+    run_id: str,
+    principal=Depends(get_optional_principal),
+) -> Run:
+    await assert_run_read(run_id, principal)
     run = await db.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
@@ -31,18 +117,20 @@ async def get_run(run_id: str) -> Run:
 
 
 @router.get("/{run_id}/episodes", response_model=list[Episode])
-async def list_episodes(run_id: str) -> list[Episode]:
-    run = await db.get_run(run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+async def list_episodes(
+    run_id: str,
+    principal=Depends(get_optional_principal),
+) -> list[Episode]:
+    await assert_run_read(run_id, principal)
     return await db.get_episodes(run_id)
 
 
 @router.get("/{run_id}/traces")
-async def get_traces(run_id: str) -> dict:
-    run = await db.get_run(run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+async def get_traces(
+    run_id: str,
+    principal=Depends(get_optional_principal),
+) -> dict:
+    await assert_run_read(run_id, principal)
     episodes = await db.get_episodes(run_id)
     result = {}
     for ep in episodes:
