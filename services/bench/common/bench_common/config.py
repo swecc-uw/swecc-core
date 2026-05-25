@@ -1,9 +1,10 @@
 import os
 from urllib.parse import urlparse
 
-from bench_common.model_catalog import EXTRA_MODEL_ALIASES, FULL_BENCH_MODELS
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from bench_common.model_catalog import EXTRA_MODEL_ALIASES, FULL_BENCH_MODELS
 
 
 class Settings(BaseSettings):
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     # Full bench — episodes per model when running a full 5-model bench
     full_bench_episodes_per_model: int = 5
 
-    # Auth — guest demo runs (comma-separated domain IDs; empty = no guest runs)
+    # Auth — guest demo runs (comma-separated domain IDs; empty = all domains allowed)
     guest_runs_per_day: int = 5
     demo_domain_ids: list[str] = []
 

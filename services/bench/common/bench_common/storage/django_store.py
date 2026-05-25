@@ -19,16 +19,20 @@ from typing import Any, TypeVar
 from asgiref.sync import sync_to_async
 
 # These imports require django.setup() to have been called already.
+from bench.models import ActorType
 from bench.models import BenchJob as BenchJobRow
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
 from bench.models import Domain as DomainRow
+from bench.models import EnvScope
 from bench.models import Episode as EpisodeRow
 from bench.models import Leaderboard as LeaderboardRow
 from bench.models import Run as RunRow
-from bench_common.core.domain import Domain
-from bench_common.core.run import Episode, Run
+from bench.models import Visibility
 from django.utils import timezone
 from pydantic import BaseModel
+
+from bench_common.core.domain import Domain
+from bench_common.core.run import Episode, Run
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -102,15 +106,31 @@ async def list_domains(*, published_only: bool = False) -> list[Domain]:
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 
-async def save_run(run: Run) -> None:
-    await RunRow.objects.aupdate_or_create(
-        id=run.id,
-        defaults={
-            "data": run.model_dump(mode="json"),
-            "domain_id": run.config.domain_id,
-            "status": run.status,
-        },
-    )
+async def save_run(
+    run: Run,
+    *,
+    actor_type: str | None = None,
+    actor_id: str | None = None,
+    team_id: str | None = None,
+    visibility: str | None = None,
+    expires_at: datetime | None = None,
+) -> None:
+    defaults: dict[str, Any] = {
+        "data": run.model_dump(mode="json"),
+        "domain_id": run.config.domain_id,
+        "status": run.status,
+    }
+    if actor_type is not None:
+        defaults["actor_type"] = actor_type
+    if actor_id is not None:
+        defaults["actor_id"] = actor_id
+    if team_id is not None:
+        defaults["team_id"] = team_id
+    if visibility is not None:
+        defaults["visibility"] = visibility
+    if expires_at is not None:
+        defaults["expires_at"] = expires_at
+    await RunRow.objects.aupdate_or_create(id=run.id, defaults=defaults)
 
 
 async def get_run(run_id: str) -> Run | None:
@@ -121,11 +141,46 @@ async def get_run(run_id: str) -> Run | None:
     return _model_from_row_data(Run, row.data)
 
 
-async def list_runs(domain_id: str | None = None) -> list[Run]:
+async def list_runs(
+    domain_id: str | None = None,
+    *,
+    actor_type: str | None = None,
+    actor_id: str | None = None,
+    team_id: str | None = None,
+    visibility: str | None = None,
+    limit: int = 100,
+) -> list[Run]:
     qs = RunRow.objects.all()
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
-    return [_model_from_row_data(Run, row.data) async for row in qs]
+    if actor_type:
+        qs = qs.filter(actor_type=actor_type)
+    if actor_id:
+        qs = qs.filter(actor_id=actor_id)
+    if team_id:
+        qs = qs.filter(team_id=team_id)
+    if visibility:
+        qs = qs.filter(visibility=visibility)
+    return [
+        _model_from_row_data(Run, row.data) async for row in qs.order_by("-id")[:limit]
+    ]
+
+
+async def list_gallery_runs(
+    *,
+    domain_id: str | None = None,
+    limit: int = 50,
+) -> list[tuple[Run, RunRow]]:
+    qs = RunRow.objects.filter(
+        visibility=Visibility.GALLERY_PUBLIC,
+        status="completed",
+    )
+    if domain_id:
+        qs = qs.filter(domain_id=domain_id)
+    out: list[tuple[Run, RunRow]] = []
+    async for row in qs.order_by("-id")[:limit]:
+        out.append((_model_from_row_data(Run, row.data), row))
+    return out
 
 
 # ── Episode ───────────────────────────────────────────────────────────────────
@@ -161,18 +216,23 @@ async def get_episodes(run_id: str) -> list[Episode]:
 
 
 async def save_developer_environment(env: dict[str, Any]) -> None:
+    defaults: dict[str, Any] = {
+        "owner_id": env["owner_id"],
+        "name": env["name"],
+        "description": env.get("description", ""),
+        "github_url": env["github_url"],
+        "status": env.get("status", "pending"),
+        "domain_id": env.get("domain_id"),
+        "env_url": env.get("env_url"),
+        "error_message": env.get("error_message"),
+        "scope": env.get("scope", EnvScope.SOLO),
+        "actor_type": env.get("actor_type"),
+        "actor_id": env.get("actor_id"),
+        "created_by_user_id": env.get("created_by_user_id"),
+        "team_id": env.get("team_id"),
+    }
     await DeveloperEnvironmentRow.objects.aupdate_or_create(
-        id=env["id"],
-        defaults={
-            "owner_id": env["owner_id"],
-            "name": env["name"],
-            "description": env.get("description", ""),
-            "github_url": env["github_url"],
-            "status": env.get("status", "pending"),
-            "domain_id": env.get("domain_id"),
-            "env_url": env.get("env_url"),
-            "error_message": env.get("error_message"),
-        },
+        id=env["id"], defaults=defaults
     )
 
 
@@ -192,7 +252,9 @@ async def get_developer_environment_by_github_repo(
     from bench_common.utils.github import normalize_github_url
 
     target = normalize_github_url(github_url)
-    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by("-created_at")
+    qs = DeveloperEnvironmentRow.objects.filter(owner_id=owner_id).order_by(
+        "-created_at"
+    )
     async for row in qs:
         if normalize_github_url(row.github_url) == target:
             return _dev_env_to_dict(row)
@@ -205,12 +267,28 @@ async def delete_developer_environment(env_id: str) -> bool:
 
 
 async def list_developer_environments(
+    *,
     owner_id: str | None = None,
+    scope: str | None = None,
+    team_id: str | None = None,
+    actor_id: str | None = None,
 ) -> list[dict[str, Any]]:
     qs = DeveloperEnvironmentRow.objects.all().order_by("-created_at")
     if owner_id:
         qs = qs.filter(owner_id=owner_id)
+    if scope:
+        qs = qs.filter(scope=scope)
+    if team_id:
+        qs = qs.filter(team_id=team_id)
+    if actor_id:
+        qs = qs.filter(actor_id=actor_id)
     return [_dev_env_to_dict(row) async for row in qs]
+
+
+async def count_dev_envs(*, actor_id: str, scope: str) -> int:
+    return await DeveloperEnvironmentRow.objects.filter(
+        actor_id=actor_id, scope=scope
+    ).acount()
 
 
 def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
@@ -225,6 +303,10 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
         "env_url": row.env_url,
         "error_message": row.error_message,
         "created_at": _iso_dt(row.created_at),
+        "scope": row.scope,
+        "team_id": str(row.team_id) if row.team_id else None,
+        "actor_type": row.actor_type,
+        "actor_id": row.actor_id,
     }
 
 
@@ -258,7 +340,9 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 # ── Bench Jobs ────────────────────────────────────────────────────────────────
 
 
-async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) -> dict[str, Any]:
+async def create_bench_job(
+    env_id: str, domain_id: str | None, github_url: str
+) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
     row = await BenchJobRow.objects.acreate(
         id=job_id,
