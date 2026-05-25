@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from bench_common.model_catalog import ALLOWED_MODELS, FULL_BENCH_MODELS
 from litellm import get_llm_provider
+from litellm.exceptions import BadRequestError
 
 
 @pytest.mark.parametrize("model_id", ALLOWED_MODELS)
@@ -18,5 +19,5 @@ def test_full_bench_gemini_uses_gemini_prefix_not_google() -> None:
     gemini_models = [m for m in FULL_BENCH_MODELS if "gemini" in m]
     assert len(gemini_models) == 1
     assert gemini_models[0].startswith("gemini/")
-    with pytest.raises(Exception):
+    with pytest.raises(BadRequestError):
         get_llm_provider("google/gemini-2.0-flash")

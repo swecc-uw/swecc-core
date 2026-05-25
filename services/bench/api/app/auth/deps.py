@@ -27,5 +27,3 @@ async def require_member(request: Request) -> Member:
     if not isinstance(p, Member):
         raise HTTPException(status_code=403, detail="SWECC member account required")
     return p
-
-

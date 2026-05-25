@@ -34,7 +34,8 @@ def assert_guest_can_create_run(domain_id: str) -> None:
 
 
 async def assert_guest_rate_limit(guest_session_id: str) -> None:
-    from bench.models import ActorType, Run as RunRow
+    from bench.models import ActorType
+    from bench.models import Run as RunRow
 
     limit = settings.guest_runs_per_day
     if limit <= 0:
