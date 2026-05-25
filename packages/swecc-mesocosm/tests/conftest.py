@@ -7,9 +7,10 @@ from typing import Any
 
 import httpx
 import pytest
+from typer.testing import CliRunner
+
 from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.infer import build_domain_payload
-from typer.testing import CliRunner
 
 
 @pytest.fixture

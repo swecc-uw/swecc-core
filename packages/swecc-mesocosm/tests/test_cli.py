@@ -6,9 +6,10 @@ from typing import Any
 
 import httpx
 import pytest
+from typer.testing import CliRunner
+
 from swecc_mesocosm import __version__
 from swecc_mesocosm.cli import _connection_error_payload, _http_error_payload, app
-from typer.testing import CliRunner
 
 
 def test_version_flag(cli_runner: CliRunner) -> None:
@@ -109,7 +110,9 @@ def test_register_invalid_scoring_source(cli_runner: CliRunner) -> None:
     assert "terminal" in result.stderr or "episode_reward" in result.stderr
 
 
-def test_register_validation_failure_without_skip(cli_runner: CliRunner, tmp_path: Path) -> None:
+def test_register_validation_failure_without_skip(
+    cli_runner: CliRunner, tmp_path: Path
+) -> None:
     path = tmp_path / "domain.json"
     path.write_text(json.dumps({"id": "x"}), encoding="utf-8")
     result = cli_runner.invoke(app, ["register", "--from-json", str(path)])

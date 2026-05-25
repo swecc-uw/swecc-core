@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from swecc_mesocosm.infer import build_domain_payload, suggest_benchmark_shape, sync_binding_vow_to_domain_id
+from swecc_mesocosm.infer import (
+    build_domain_payload,
+    suggest_benchmark_shape,
+    sync_binding_vow_to_domain_id,
+)
 
 
 def test_sync_binding_vow_to_domain_id() -> None:

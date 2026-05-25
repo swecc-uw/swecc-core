@@ -16,6 +16,7 @@ import typer
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
+
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.client import BenchClient
@@ -23,9 +24,13 @@ from swecc_mesocosm.infer import (
     ScoringSource,
     build_domain_payload,
     shape_from_hint,
+)
+from swecc_mesocosm.infer import (
+    suggest_benchmark_shape as infer_suggest_benchmark_shape,
+)
+from swecc_mesocosm.infer import (
     sync_binding_vow_to_domain_id,
 )
-from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
 from swecc_mesocosm.settings import settings
 
 app = typer.Typer(
@@ -70,7 +75,9 @@ def _print_json(obj: Any) -> None:
     """Pretty-print JSON to a TTY, raw to a pipe."""
     text = json.dumps(obj, indent=2, ensure_ascii=False, default=str)
     if sys.stdout.isatty():
-        console.print(Syntax(text, "json", theme="ansi_dark", background_color="default"))
+        console.print(
+            Syntax(text, "json", theme="ansi_dark", background_color="default")
+        )
     else:
         sys.stdout.write(text + "\n")
 
@@ -139,9 +146,10 @@ async def _resolve_vow_version(
     if vow_version:
         return vow_version
     domain = await client.get_domain(domain_id)
-    vow = domain.get("binding_vow")
-    if not isinstance(vow, dict):
+    vow_raw = domain.get("binding_vow")
+    if not isinstance(vow_raw, dict):
         _die(f"domain {domain_id!r} has no binding_vow; pass --vow-version explicitly")
+    vow = cast(dict[str, Any], vow_raw)
     version = vow.get("version")
     if not version:
         _die(f"domain {domain_id!r} binding_vow has no version; pass --vow-version")
@@ -162,7 +170,9 @@ def _exit_if_episode_failed(episode: dict[str, Any]) -> None:
         raise typer.Exit(1)
 
 
-def _exit_if_run_unsuccessful(run: dict[str, Any], episodes: list[dict[str, Any]] | None) -> None:
+def _exit_if_run_unsuccessful(
+    run: dict[str, Any], episodes: list[dict[str, Any]] | None
+) -> None:
     status = run.get("status")
     if status in _RUN_FAILURE_STATUSES:
         err_console.print(f"[red]run {status}[/red]")
@@ -177,7 +187,8 @@ def _print_register_next_steps(domain: dict[str, Any], base_url: str | None) -> 
     if not sys.stdout.isatty():
         return
     domain_id = str(domain.get("id", ""))
-    vow = domain.get("binding_vow") if isinstance(domain.get("binding_vow"), dict) else {}
+    binding_vow = domain.get("binding_vow")
+    vow = cast(dict[str, Any], binding_vow) if isinstance(binding_vow, dict) else {}
     vow_version = str(vow.get("version", "1.0.0"))
     base = _effective_base_url(base_url)
     console.print("\n[bold]Next steps[/bold] (copy/paste):")
@@ -224,7 +235,9 @@ RegisterFromJsonOpt = typer.Option(
 
 @app.command("suggest")
 def cmd_suggest(
-    description: str = typer.Argument(..., help="Short plain-text description of the benchmark."),
+    description: str = typer.Argument(
+        ..., help="Short plain-text description of the benchmark."
+    ),
 ) -> None:
     """Recommend benchmark_kind, scoring_source, and max_steps from a description."""
     s = infer_suggest_benchmark_shape(description)
@@ -297,8 +310,16 @@ def cmd_doctor(
         {
             "ok": ok,
             "base_url": base,
-            "health": {"url": health_url, "status_code": health_code, "error": health_err},
-            "openapi": {"url": openapi_url, "status_code": openapi_code, "error": openapi_err},
+            "health": {
+                "url": health_url,
+                "status_code": health_code,
+                "error": health_err,
+            },
+            "openapi": {
+                "url": openapi_url,
+                "status_code": openapi_code,
+                "error": openapi_err,
+            },
             "issues": issues,
         }
     )
@@ -312,12 +333,18 @@ def cmd_doctor(
 def cmd_register(
     benchmark_id: str | None = typer.Option(None, "--id", help="Domain id (slug)."),
     name: str | None = typer.Option(None, "--name", help="Human-readable name."),
-    owner_id: str | None = typer.Option(None, "--owner-id", help="Owning user/team id."),
-    description: str | None = typer.Option(None, "--description", help="Plain-text description."),
+    owner_id: str | None = typer.Option(
+        None, "--owner-id", help="Owning user/team id."
+    ),
+    description: str | None = typer.Option(
+        None, "--description", help="Plain-text description."
+    ),
     env_url: str | None = typer.Option(
         None, "--env-url", help="Stable HTTP URL of the eval environment."
     ),
-    max_steps: int | None = typer.Option(None, "--max-steps", help="Override inferred max_steps."),
+    max_steps: int | None = typer.Option(
+        None, "--max-steps", help="Override inferred max_steps."
+    ),
     scoring_source: str | None = typer.Option(
         None,
         "--scoring-source",
@@ -435,7 +462,9 @@ def cmd_publish(
     _print_json(
         {
             "domain": domain,
-            "artifact_digests": {name: sha256_digest(content) for name, content in arts.items()},
+            "artifact_digests": {
+                name: sha256_digest(content) for name, content in arts.items()
+            },
         }
     )
 
@@ -475,8 +504,12 @@ def cmd_get(
 
 @app.command("list")
 def cmd_list(
-    status: str = typer.Option("all", "--status", help="One of: all, published, draft."),
-    plain: bool = typer.Option(False, "--json", help="Output raw JSON instead of a table."),
+    status: str = typer.Option(
+        "all", "--status", help="One of: all, published, draft."
+    ),
+    plain: bool = typer.Option(
+        False, "--json", help="Output raw JSON instead of a table."
+    ),
     base_url: str | None = BaseUrlOpt,
 ) -> None:
     """List domains (GET /v1/domains)."""
@@ -526,7 +559,9 @@ def cmd_eval_test(
         "--vow-version",
         help="binding_vow.version (e.g. 1.0.0). Omit to read from the domain record.",
     ),
-    model: str = typer.Option(..., "--model", help="Model identifier (e.g. openai/gpt-4o-mini)."),
+    model: str = typer.Option(
+        ..., "--model", help="Model identifier (e.g. openai/gpt-4o-mini)."
+    ),
     env_url: str | None = typer.Option(None, "--env-url", help="Override env URL."),
     seed: int | None = typer.Option(None, "--seed", help="Episode seed."),
     temperature: float = typer.Option(0.0, "--temperature"),
@@ -662,7 +697,9 @@ def cmd_run_get(
 @run_app.command("episodes")
 def cmd_run_episodes(
     run_id: str = typer.Argument(...),
-    include_traces: bool = typer.Option(False, "--traces", help="Include per-episode traces."),
+    include_traces: bool = typer.Option(
+        False, "--traces", help="Include per-episode traces."
+    ),
     base_url: str | None = BaseUrlOpt,
 ) -> None:
     """List episodes for a run (GET /v1/runs/{id}/episodes)."""
