@@ -29,6 +29,7 @@ from subprocess import run as subprocess_run
 from typing import Any
 
 import requests
+from bench_common.config import settings as bench_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,13 +39,7 @@ log = logging.getLogger("bench_worker")
 
 POLL_INTERVAL = int(os.getenv("WORKER_POLL_INTERVAL", "10"))
 API_URL = os.environ["WORKER_API_URL"].rstrip("/")
-SUPPORTED_MODELS = [
-    "anthropic/claude-sonnet-4-6",
-    "openai/gpt-4o",
-    "gemini/gemini-2.5-flash",
-    "deepseek/deepseek-chat",
-    "xai/grok-2",
-]
+SUPPORTED_MODELS = bench_settings.supported_models
 EPISODES_PER_MODEL = int(os.getenv("WORKER_EPISODES_PER_MODEL", "5"))
 RUN_POLL_TIMEOUT = int(os.getenv("WORKER_RUN_POLL_TIMEOUT", "300"))
 

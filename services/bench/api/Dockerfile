@@ -4,8 +4,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    ROOT_PATH=/bench
+    PYTHONPATH=/app
 
 # Install the shared kernel first so its (heavier) deps cache between rebuilds.
 # Build context for this image is ./services (not ./services/bench) so we can

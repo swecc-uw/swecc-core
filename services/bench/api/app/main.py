@@ -26,7 +26,9 @@ if "bench.apps.BenchConfig" not in django_settings.INSTALLED_APPS:
     )
 
 import structlog  # noqa: E402
-from app.routes import bench, developer, domains, leaderboard, runs, techniques, test  # noqa: E402
+from app.routes import leaderboard  # noqa: E402
+from app.routes import bench, developer, domains, runs, techniques, test
+from bench_common.config import settings as bench_settings  # noqa: E402
 from bench_common.storage.database import init_db  # noqa: E402
 from bench_common.storage.trace_store import trace_store  # noqa: E402
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # noqa: E402
@@ -34,13 +36,13 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 log = structlog.get_logger()
 
-# Public URL prefix when bench-api sits behind api.swecc.org/bench/ (nginx strips
-# /bench before forwarding). Swagger UI must fetch /bench/openapi.json, not /openapi.json.
-ROOT_PATH = os.environ.get("ROOT_PATH", "").rstrip("/")
+# Gateway prefix for public URLs (Swagger/OpenAPI). From ORCH_GATEWAY_PREFIX or
+# ORCH_PUBLIC_BASE_URL — see bench_common.config.Settings.
+GATEWAY_PREFIX = bench_settings.gateway_prefix
 
 
 def _public_path(path: str) -> str:
-    return f"{ROOT_PATH}{path}" if ROOT_PATH else path
+    return f"{GATEWAY_PREFIX}{path}" if GATEWAY_PREFIX else path
 
 
 @asynccontextmanager
@@ -55,7 +57,7 @@ app = FastAPI(
     version="0.1.0",
     description="Distributed evaluation protocol for AI agent benchmarks",
     lifespan=lifespan,
-    root_path=ROOT_PATH,
+    root_path=GATEWAY_PREFIX,
 )
 
 app.add_middleware(
