@@ -58,6 +58,15 @@ The bench schema is a Django app at `services/server/server/bench/` and lives in
 
 To add or change a bench table, edit `services/server/server/bench/models.py` and run `docker compose exec server bash -c "cd server && python manage.py makemigrations bench"` — commit the resulting `0002_*.py` file alongside the model change.
 
+## Auth (branch `auth`)
+
+- **Members:** JWT from swecc-server `GET /auth/jwt/` (validated via shared `packages/swecc-jwt`, same as sockets).
+- **Guests:** `POST /v1/auth/guest` → Bearer guest token or `bench_guest` cookie.
+- **Teams:** create team → 4-char `join_code`; join with `POST /v1/teams/join` (max 4 members). No owner-direct add.
+- **CLI:** `python -m bench_common.cli auth login|guest|whoami` and `team create|join|list`.
+- **Local dev without auth:** `BENCH_AUTH_DISABLED=1`.
+- **Migrate:** `docker compose exec server bash -c "cd server && python manage.py migrate bench"`.
+
 ## Inference CLI
 
 The standalone benchmarking CLI ships inside `bench_common`:

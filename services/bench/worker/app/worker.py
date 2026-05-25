@@ -46,6 +46,13 @@ RUN_POLL_TIMEOUT = int(os.getenv("WORKER_RUN_POLL_TIMEOUT", "300"))
 _django_ready = False
 
 
+def _api_headers() -> dict[str, str]:
+    token = os.environ.get("BENCH_WORKER_TOKEN") or os.environ.get("SWECC_BENCH_TOKEN")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
 def _ensure_django() -> None:
     """Bootstrap Django ORM against shared Postgres (DB_* from server_env)."""
     global _django_ready
@@ -59,7 +66,12 @@ def _ensure_django() -> None:
 
 
 def poll_and_process() -> None:
-    resp = requests.get(f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=10)
+    resp = requests.get(
+        f"{API_URL}/v1/bench/jobs",
+        params={"status": "queued"},
+        headers=_api_headers(),
+        timeout=10,
+    )
     resp.raise_for_status()
     jobs = resp.json()
     if not jobs:
@@ -69,7 +81,11 @@ def poll_and_process() -> None:
     job_id = job["id"]
     log.info(f"claiming job {job_id} (env={job['env_id']})")
 
-    claim_resp = requests.patch(f"{API_URL}/v1/bench/jobs/{job_id}/claim", timeout=10)
+    claim_resp = requests.patch(
+        f"{API_URL}/v1/bench/jobs/{job_id}/claim",
+        headers=_api_headers(),
+        timeout=10,
+    )
     if claim_resp.status_code == 409:
         log.info(f"job {job_id} already claimed — skipping")
         return
@@ -81,6 +97,7 @@ def poll_and_process() -> None:
         requests.patch(
             f"{API_URL}/v1/bench/jobs/{job_id}/complete",
             json={"model_results": model_results, "failed": False},
+            headers=_api_headers(),
             timeout=30,
         )
         log.info(f"job {job_id} completed — scores: {_score_summary(model_results)}")
@@ -89,6 +106,7 @@ def poll_and_process() -> None:
         requests.patch(
             f"{API_URL}/v1/bench/jobs/{job_id}/complete",
             json={"model_results": {}, "failed": True},
+            headers=_api_headers(),
             timeout=30,
         )
 
@@ -309,7 +327,12 @@ def _wait_for_api(max_attempts: int = 60, delay: float = 5.0) -> None:
     """Block until the API responds.  Prevents crashes on cold-start DNS races."""
     for attempt in range(1, max_attempts + 1):
         try:
-            resp = requests.get(f"{API_URL}/v1/bench/jobs", params={"status": "queued"}, timeout=3)
+            resp = requests.get(
+                f"{API_URL}/v1/bench/jobs",
+                params={"status": "queued"},
+                headers=_api_headers(),
+                timeout=3,
+            )
             if resp.status_code < 500:
                 log.info(f"API reachable at {API_URL} after {attempt} attempt(s)")
                 return
