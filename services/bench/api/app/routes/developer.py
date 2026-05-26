@@ -163,6 +163,7 @@ async def _onboard_environment(
     team_id: uuid.UUID | None = None,
 ) -> None:
     """Background task: clone repo via sandbox, create Domain, mark ready."""
+    sandbox_base = settings.sandbox_url.rstrip("/")
 
     async def _update(status: str, **kwargs: Any) -> None:
         env = await db.get_developer_environment(env_id)
@@ -178,7 +179,7 @@ async def _onboard_environment(
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
-                f"{settings.sandbox_url}/clone",
+                f"{sandbox_base}/clone",
                 json={"env_id": env_id, "github_url": github_url},
             )
         if resp.status_code != 200:
@@ -190,7 +191,7 @@ async def _onboard_environment(
         manifest: dict[str, Any] = payload["manifest"]
         # Use the sandbox reverse-proxy path, not payload["url"] (direct subprocess
         # port on localhost inside the sandbox container — unreachable from bench-api).
-        env_url = f"{settings.sandbox_url}/envs/{env_id}"
+        env_url = f"{sandbox_base}/envs/{env_id}"
 
     except httpx.TransportError as exc:
         await _update("failed", error_message=f"Sandbox unreachable: {exc}")
@@ -216,7 +217,7 @@ async def _onboard_environment(
             binding_vow=vow,
             endpoint=EnvironmentEndpoint(
                 mode="sandbox",
-                url=f"{settings.sandbox_url}/envs/{env_id}",
+                url=f"{sandbox_base}/envs/{env_id}",
             ),
             scoring=scoring,
             status="draft",
@@ -284,7 +285,13 @@ async def retry_environment(
     await db.save_developer_environment(env)
     asyncio.create_task(
         _onboard_environment(
-            env_id, env["github_url"], env["owner_id"], env["name"], env["description"]
+            env_id,
+            env["github_url"],
+            env["owner_id"],
+            env["name"],
+            env["description"],
+            env.get("scope", EnvScope.SOLO),
+            uuid.UUID(env["team_id"]) if env.get("team_id") else None,
         )
     )
     return env

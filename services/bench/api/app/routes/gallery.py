@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from bench.models import ActorType
 from bench_common.storage import database as db
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from bench.models import ActorType
 
 router = APIRouter(prefix="/v1/gallery", tags=["gallery"])
 
@@ -51,8 +52,9 @@ async def list_gallery_runs(
         )
 
     if primary_key:
+        missing_sentinel = float("-inf") if higher else float("inf")
         entries.sort(
-            key=lambda e: (e.primary_score if e.primary_score is not None else float("-inf")),
+            key=lambda e: (e.primary_score if e.primary_score is not None else missing_sentinel),
             reverse=higher,
         )
     return entries

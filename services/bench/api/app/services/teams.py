@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import timedelta
+
+from django.db import IntegrityError
 
 from bench.models import (
     MAX_TEAM_MEMBERS,
@@ -11,7 +12,6 @@ from bench.models import (
     TeamRole,
     generate_join_code,
 )
-from django.utils import timezone
 
 
 def _slugify(name: str) -> str:
@@ -46,13 +46,24 @@ async def is_member(team_id: uuid.UUID, user_id: int) -> bool:
 
 
 async def create_team(*, name: str, owner_user_id: int, slug: str | None = None) -> BenchTeam:
-    team = await BenchTeam.objects.acreate(
-        id=uuid.uuid4(),
-        name=name,
-        slug=slug or await _unique_slug(name),
-        join_code=await _unique_join_code(),
-        created_by_user_id=owner_user_id,
-    )
+    resolved_slug = slug or await _unique_slug(name)
+    if slug and await BenchTeam.objects.filter(slug=resolved_slug).aexists():
+        raise ValueError("Team slug already exists")
+
+    for _ in range(8):
+        try:
+            team = await BenchTeam.objects.acreate(
+                id=uuid.uuid4(),
+                name=name,
+                slug=resolved_slug,
+                join_code=await _unique_join_code(),
+                created_by_user_id=owner_user_id,
+            )
+            break
+        except IntegrityError:
+            continue
+    else:
+        raise RuntimeError("Could not create team with unique join code")
     await BenchTeamMembership.objects.acreate(
         team=team,
         user_id=owner_user_id,
