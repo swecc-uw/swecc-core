@@ -29,6 +29,9 @@ bench = "bench_common.cli.main:main"
 [tool.hatch.build.targets.wheel]
 packages = ["bench_common"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"bench_common/cli/templates" = "bench_common/cli/templates"
+
 [tool.ruff]
 target-version = "py311"
 line-length = 120

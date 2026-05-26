@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.auth.deps import get_optional_principal, get_principal, require_member
 from app.auth.principal import Anonymous, Guest, Member
 from app.services import teams as team_svc
-from bench.models import ActorType, EnvScope
+from bench.models import ActorType, EnvScope, Run as RunRow
 from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, Query
@@ -40,17 +40,19 @@ async def me(principal=Depends(get_optional_principal)) -> MeResponse:
 @router.get("/context", response_model=MeContextResponse)
 async def me_context(member: Member = Depends(require_member)) -> MeContextResponse:
     solo_envs = await db.count_dev_envs(actor_id=str(member.user_id), scope=EnvScope.SOLO)
-    solo_runs = await db.list_runs(
+    solo_run_count = await RunRow.objects.filter(
         actor_type=ActorType.MEMBER,
         actor_id=str(member.user_id),
-        limit=1000,
-    )
+        team_id__isnull=True,
+    ).acount()
     enriched = []
     for t in await team_svc.list_teams_for_user(member.user_id):
-        envs = await db.list_developer_environments(scope=EnvScope.TEAM, team_id=t["team_id"])
-        enriched.append({**t, "env_count": len(envs)})
+        team_id = t["team_id"]
+        envs = await db.list_developer_environments(scope=EnvScope.TEAM, team_id=team_id)
+        team_run_count = await RunRow.objects.filter(team_id=team_id).acount()
+        enriched.append({**t, "env_count": len(envs), "run_count": team_run_count})
     return MeContextResponse(
-        solo={"env_count": solo_envs, "run_count": len(solo_runs)},
+        solo={"env_count": solo_envs, "run_count": solo_run_count},
         teams=enriched,
     )
 

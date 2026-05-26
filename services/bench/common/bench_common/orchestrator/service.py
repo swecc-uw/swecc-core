@@ -29,6 +29,8 @@ from bench_common.techniques.base import Technique
 log = structlog.get_logger()
 
 _semaphore: asyncio.Semaphore | None = None
+_active_run_tasks: dict[str, asyncio.Task] = {}
+_TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -140,37 +142,81 @@ async def create_run(config: RunConfig, requester_id: str) -> Run:
         await db.save_episode(ep)
 
     # Schedule episodes as background tasks
-    asyncio.create_task(_run_all_episodes(run, episodes, domain))
+    task = asyncio.create_task(_run_all_episodes(run, episodes, domain))
+    _active_run_tasks[run.id] = task
+    task.add_done_callback(lambda _t, rid=run.id: _active_run_tasks.pop(rid, None))
 
     log.info("run_created", run_id=run.id, num_episodes=len(episodes))
     return run
 
 
-async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> None:
-    sem = _get_semaphore()
-    tasks = [
-        asyncio.create_task(
-            _run_episode(ep, run.config.agent_config, domain, sem, env_id=run.env_id)
-        )
-        for ep in episodes
-    ]
-    completed_episodes = await asyncio.gather(*tasks, return_exceptions=True)
+async def _run_is_cancelled(run_id: str) -> bool:
+    run = await db.get_run(run_id)
+    return run is not None and run.status == "cancelled"
 
-    # Reload run from DB (status may have changed)
-    run = await db.get_run(run.id)
+
+async def cancel_run(run_id: str) -> Run:
+    """Stop a run: cancel background work and mark pending/running episodes cancelled."""
+    run = await db.get_run(run_id)
     if run is None:
+        raise ValueError(f"Run '{run_id}' not found")
+    if run.status in _TERMINAL_RUN_STATUSES:
+        return run
+
+    run.status = "cancelled"
+    run.completed_at = datetime.utcnow()
+    await db.save_run(run)
+
+    bg = _active_run_tasks.pop(run_id, None)
+    if bg is not None and not bg.done():
+        bg.cancel()
+
+    for ep in await db.get_episodes(run_id):
+        if ep.status in ("pending", "running"):
+            ep.status = "cancelled"
+            ep.ended_at = datetime.utcnow()
+            ep.terminal_info = {"cancelled": True, "reason": "run_cancelled"}
+            await db.save_episode(ep)
+
+    log.info("run_cancelled", run_id=run_id)
+    return run
+
+
+async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> None:
+    run_id = run.id
+    try:
+        sem = _get_semaphore()
+        tasks = [
+            asyncio.create_task(
+                _run_episode(ep, run.config.agent_config, domain, sem, env_id=run.env_id)
+            )
+            for ep in episodes
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
+    except asyncio.CancelledError:
+        log.info("run_task_cancelled", run_id=run_id)
+        run = await db.get_run(run_id)
+        if run is not None and run.status == "running":
+            run.status = "cancelled"
+            run.completed_at = datetime.utcnow()
+            await db.save_run(run)
+        raise
+
+    run = await db.get_run(run_id)
+    if run is None or run.status == "cancelled":
         return
 
-    all_eps = await db.get_episodes(run.id)
+    all_eps = await db.get_episodes(run_id)
+    if await _run_is_cancelled(run_id):
+        return
 
-    # Compute scores
     scores = compute_scores(domain.scoring, all_eps)
     run.scores = scores
     run.status = "completed"
     run.completed_at = datetime.utcnow()
     await db.save_run(run, env_id=run.env_id)
 
-    log.info("run_completed", run_id=run.id, scores=scores)
+    log.info("run_completed", run_id=run_id, scores=scores)
 
 
 async def _run_episode(
@@ -218,6 +264,12 @@ async def _run_episode(
             episode.terminal_info = result.terminal_info
             episode.ended_at = result.ended_at
 
+        except asyncio.CancelledError:
+            episode.status = "cancelled"
+            episode.terminal_info = {"cancelled": True, "reason": "run_cancelled"}
+            episode.ended_at = datetime.utcnow()
+            await db.save_episode(episode)
+            raise
         except Exception as exc:
             log.exception("episode_failed", episode_id=episode.id, error=str(exc))
             episode.status = "failed"

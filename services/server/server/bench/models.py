@@ -96,6 +96,7 @@ class RunStatus(models.TextChoices):
     RUNNING = "running", "Running"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
+    CANCELLED = "cancelled", "Cancelled"
 
 
 class Run(models.Model):

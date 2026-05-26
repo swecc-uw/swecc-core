@@ -58,6 +58,14 @@ If you're building your env from scratch, skip `BaseEnv` entirely and just imple
 
 ---
 
+## Showcase in your own repo
+
+Authors build demo UIs in **their** frontends using exported run JSON (`reasoning`, observations, actions). See **[SHOWCASE_DEVELOPER.md](./SHOWCASE_DEVELOPER.md)** for the full workflow, `bench init`, and `bench run export`.
+
+Mesocosm public replay: `GET /v1/runs/{id}/export` (no auth for `gallery_public` completed runs).
+
+---
+
 ## Quick Start (5 minutes)
 
 ### 1. Install
@@ -300,13 +308,17 @@ Or use the `/v1/test/episode` API endpoint (see Quick Start above).
 ### Inspecting traces
 
 ```bash
-# After an episode, traces are in ./data/traces/{episode_id}.jsonl
+# After a platform run (bench-api volume ORCH_TRACE_DIR, default ./data/traces)
 cat data/traces/<episode-id>.jsonl | python -m json.tool | head -60
+
+# Export a full showcase bundle (member auth or public gallery run):
+bench run export <run_id> -o replay.json
 ```
 
-Or via the API:
+API:
 ```
-GET /v1/test/episode/{episode_id}/trace
+GET /v1/runs/{run_id}/export   # run + episodes + traces + replay turns (with reasoning)
+GET /v1/runs/{run_id}/traces   # raw trace map only
 ```
 
 ---

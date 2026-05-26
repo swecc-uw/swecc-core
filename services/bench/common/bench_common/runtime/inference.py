@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 import litellm
 import structlog
@@ -59,6 +59,13 @@ def normalize_model_id(model: str) -> str:
     return model
 
 
+class DecideResult(NamedTuple):
+    """Parsed env action plus raw model text for traces / showcase export."""
+
+    action: Any
+    reasoning_text: str
+
+
 class InferenceRouter:
     """Model-agnostic inference via LiteLLM."""
 
@@ -72,7 +79,7 @@ class InferenceRouter:
         extra_context: dict[str, Any],
         step: int,
         env_system_prompt: str | None = None,
-    ) -> Any:
+    ) -> DecideResult:
         messages = self._build_messages(
             observation, binding_vow, agent_config, extra_context, step, env_system_prompt
         )
@@ -109,9 +116,10 @@ class InferenceRouter:
         response = await litellm.acompletion(**kwargs)
 
         raw = response.choices[0].message.content or ""
-        raw = self._strip_thinking(raw)
-        log.debug("inference_raw", step=step, model=model_name, raw=raw[:200])
-        return self._parse_action(raw, binding_vow)
+        reasoning_text = self._strip_thinking(raw)
+        log.debug("inference_raw", step=step, model=model_name, raw=reasoning_text[:200])
+        action = self._parse_action(reasoning_text, binding_vow)
+        return DecideResult(action=action, reasoning_text=reasoning_text)
 
     def _strip_thinking(self, text: str) -> str:
         """Remove <think>...</think> blocks that some reasoning models emit."""
@@ -157,9 +165,10 @@ class InferenceRouter:
                 parts.append(f"## {key}\n{value}")
 
         parts.append(
-            "Respond with only your action. "
-            "If the action space is discrete, reply with exactly one of the allowed values. "
-            "If the action space is JSON, reply with valid JSON only."
+            "Respond with your action. You may include one or two sentences of reasoning first; "
+            "the platform records your full reply. "
+            "If the action space is discrete, include exactly one allowed value in your response. "
+            "If the action space is JSON, end with valid JSON only."
         )
         return "\n\n".join(parts)
 

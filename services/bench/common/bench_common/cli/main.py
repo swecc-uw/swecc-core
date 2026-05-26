@@ -244,13 +244,67 @@ def _cmd_run_create(args: argparse.Namespace) -> None:
         payload["team_id"] = team_id
     if args.visibility:
         payload["visibility"] = args.visibility
-    if args.env_id:
+    if getattr(args, "env_id", None):
         payload["env_id"] = args.env_id
 
     with get_bench_session(bench_url=_bench_url(args)) as session:
         r = session.client.post("/v1/runs", json=payload)
         r.raise_for_status()
         print(json.dumps(r.json(), indent=2))
+
+
+def _cmd_run_export(args: argparse.Namespace) -> None:
+    out_path = args.output
+    with get_bench_session(bench_url=_bench_url(args)) as session:
+        r = session.client.get(f"/v1/runs/{args.run_id}/export")
+        r.raise_for_status()
+        data = r.json()
+    text = json.dumps(data, indent=2)
+    if out_path:
+        from pathlib import Path
+
+        path = Path(out_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+        print(f"Wrote {path}")
+    else:
+        print(text)
+
+
+def _cmd_init(args: argparse.Namespace) -> None:
+    from importlib import resources
+    from pathlib import Path
+
+    dest = Path(args.dir or ".").resolve()
+    pkg = resources.files("bench_common.cli.templates")
+    files = {
+        "benchanything.json": "benchanything.json",
+        "adapter.py": "adapter.py",
+        "env.py": "env.py",
+        "requirements.txt": "requirements.txt",
+    }
+    for src_name, out_name in files.items():
+        target = dest / out_name
+        if target.exists() and not args.force:
+            print(f"skip (exists): {target}")
+            continue
+        target.write_text(pkg.joinpath(src_name).read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"wrote {target}")
+
+    showcase = dest / "showcase"
+    showcase.mkdir(parents=True, exist_ok=True)
+    for src, out in (
+        ("showcase_README.md", "README.md"),
+        ("replay.example.json", "replay.example.json"),
+    ):
+        target = showcase / out
+        if target.exists() and not args.force:
+            print(f"skip (exists): {target}")
+            continue
+        target.write_text(pkg.joinpath(src).read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"wrote {target}")
+
+    print("\nNext: edit env.py + benchanything.json, then bench env submit --github-url ...")
 
 
 def _cmd_register(args: argparse.Namespace) -> None:
@@ -379,12 +433,21 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--team", default=None)
     p.add_argument("--solo", action="store_true")
     p.add_argument("--visibility", choices=["private", "gallery_public"], default=None)
-    p.add_argument(
-        "--env-id",
-        default=None,
-        help="Developer environment id (must match --domain)",
-    )
+    p.add_argument("--env-id", default=None, dest="env_id", help="Developer environment id")
     p.set_defaults(func=_cmd_run_create)
+    p = run_sub.add_parser("export", help="Download run + traces + replay JSON for a showcase")
+    p.add_argument("run_id")
+    p.add_argument("-o", "--output", default=None, help="Write to file (default: stdout)")
+    p.set_defaults(func=_cmd_run_export)
+
+    init_p = sub.add_parser("init", help="Scaffold benchanything.json, adapter, env, showcase/")
+    init_p.add_argument(
+        "--dir",
+        default=".",
+        help="Target directory (default: current directory)",
+    )
+    init_p.add_argument("--force", action="store_true", help="Overwrite existing files")
+    init_p.set_defaults(func=_cmd_init)
 
     args = parser.parse_args(argv)
     args.func(args)
