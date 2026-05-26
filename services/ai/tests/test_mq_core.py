@@ -800,7 +800,7 @@ class TestRabbitMQManager:
         mock_consumer1 = AsyncMock()
         mock_consumer2 = AsyncMock()
         manager.consumers = {"consumer1": mock_consumer1, "consumer2": mock_consumer2}
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # Act
         await manager.start_consumers(loop)
@@ -871,7 +871,7 @@ class TestRabbitMQManager:
         mock_producer2 = AsyncMock()
         mock_producer2._connected = True
         manager.producers = {"producer1": mock_producer1, "producer2": mock_producer2}
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # Act
         await manager.connect_producers(loop)
@@ -884,16 +884,18 @@ class TestRabbitMQManager:
         """Test getting or creating a producer"""
         # Arrange
         manager = RabbitMQManager()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        try:
+            # Act
+            producer1 = manager.get_or_create_producer(
+                "test-producer", "test-exchange", ExchangeType.topic, "test.key", loop
+            )
+            producer2 = manager.get_or_create_producer(
+                "test-producer", "test-exchange", ExchangeType.topic, "test.key", loop
+            )
 
-        # Act
-        producer1 = manager.get_or_create_producer(
-            "test-producer", "test-exchange", ExchangeType.topic, "test.key", loop
-        )
-        producer2 = manager.get_or_create_producer(
-            "test-producer", "test-exchange", ExchangeType.topic, "test.key", loop
-        )
-
-        # Assert
-        assert producer1 is producer2
-        assert "test-producer" in manager.producers
+            # Assert
+            assert producer1 is producer2
+            assert "test-producer" in manager.producers
+        finally:
+            loop.close()
