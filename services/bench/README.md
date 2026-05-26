@@ -48,7 +48,9 @@ make test-bench-worker
 
 ## Database
 
-The bench schema is a Django app at `services/server/server/bench/` and lives in the shared `swecc` Postgres database. `swecc-server` runs `python manage.py migrate` on startup, so the seven `bench_*` tables (`bench_domain`, `bench_run`, `bench_episode`, `bench_leaderboard`, `bench_developerenvironment`, `bench_benchjob`, `bench_environmentusage`) are provisioned automatically — no manual setup, no separate database, no init script.
+The bench schema is a Django app at `services/server/server/bench/` and lives in the shared `swecc` Postgres database. `swecc-server` runs `python manage.py migrate` on startup (compose and production). Tables are provisioned automatically — no separate database, no init script.
+
+**Do not run `makemigrations` in production.** Committed files under `bench/migrations/` are the source of truth; CI runs `check_bench_migrations.py` and fails PRs when models drift. Deploy workflows for `bench-api` and `bench-worker` always roll out `server` first so migrations apply before bench services start.
 
 `bench-api` is a FastAPI service but it talks to the database through Django's async ORM (`Model.objects.acreate()` / `aget()` / `aupdate_or_create()`, etc.). It bootstraps Django in standalone mode at boot:
 
@@ -56,7 +58,17 @@ The bench schema is a Django app at `services/server/server/bench/` and lives in
 - `app/main.py` calls `django.setup()` before any router import.
 - `app/django_settings.py` is a minimal settings module with just `INSTALLED_APPS = ["bench.apps.BenchConfig"]` and a `DATABASES["default"]` block populated from the shared `DB_HOST` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` env vars.
 
-To add or change a bench table, edit `services/server/server/bench/models.py` and run `docker compose exec server bash -c "cd server && python manage.py makemigrations bench"` — commit the resulting `0002_*.py` file alongside the model change.
+To add or change a bench table:
+
+1. Edit `services/server/server/bench/models.py`.
+2. Run `docker compose exec server bash -c "cd server && python manage.py makemigrations bench"`.
+3. Commit the new `bench/migrations/000N_*.py` in the same PR as the model change.
+
+Verify locally: `cd services/server && python check_bench_migrations.py`.
+
+### Prod migration troubleshooting
+
+If production broke after a deploy that ran `makemigrations` on boot (auto-generated migration files not in git), deploy `server` with committed migrations only, then run `python manage.py migrate bench` after backup/review of any orphan rows in `django_migrations`.
 
 ## Inference CLI
 

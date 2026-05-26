@@ -5,6 +5,8 @@ on:
     branches: [main, master]
     paths:
       - 'services/server/**'
+      # bench_* schema (models + migrations) — must deploy before bench-api/worker
+      - 'services/server/server/bench/**'
       - '!services/server/rabbit_listener.py'
       - 's/ops/**'
       - 's/lib.sh'
