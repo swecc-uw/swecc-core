@@ -19,7 +19,7 @@ Distributable artifacts that live under `packages/` and ship to PyPI independent
 
 | Package | Path | Description |
 |---------|------|-------------|
-| swecc-mesocosm | `packages/swecc-mesocosm/` | CLI (`mesocosm`) + Python client for the BenchAnything platform |
+| swecc-mesocosm | `packages/swecc-mesocosm/` | PyPI CLI: `bench` (env authors) + `mesocosm` (bench-api client); bundles `bench_common` |
 
 ## Local Development
 

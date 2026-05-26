@@ -1,3 +1,6 @@
+# Staged copy for PyPI wheels (see scripts/stage-bench-common.sh)
+bench_common/
+
 dist/
 build/
 *.egg-info/

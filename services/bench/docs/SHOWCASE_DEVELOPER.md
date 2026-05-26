@@ -12,7 +12,7 @@ The platform stores step traces including **`reasoning`** — the model’s text
 ## Quick start
 
 ```bash
-pip install swecc-bench      # provides the `bench` CLI
+pip install swecc-mesocosm   # provides `bench` and `mesocosm` CLIs
 
 mkdir my-bench-env && cd my-bench-env
 bench init

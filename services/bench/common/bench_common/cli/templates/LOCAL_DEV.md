@@ -4,7 +4,7 @@ Iterate on `env.py` and `benchanything.json` on your machine before `bench env s
 
 ## One-time setup
 
-1. Install the `bench` CLI: `pip install swecc-bench`
+1. Install the CLI: `pip install swecc-mesocosm` (provides the `bench` command)
 2. Install Ollama and pull a model:
    ```bash
    ollama pull llama3.2

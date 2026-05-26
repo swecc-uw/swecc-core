@@ -1,8 +1,15 @@
 # swecc-mesocosm
 
-CLI and Python client for SWECC's benchmark and eval platform.
+CLI and Python client for SWECC's BenchAnything / Mesocosm platform.
 
-A *mesocosm* is a small, enclosed environment used for controlled experiments — which is exactly what this tool helps you build, register, and run evals against.
+**One PyPI package, two commands:**
+
+| Command | Use for |
+|---------|---------|
+| **`bench`** | Env authors: `bench init`, local Ollama runs (`bench run local`), auth, `bench env submit` |
+| **`mesocosm`** | Domain JSON helpers, bench-api HTTP (`register`, `eval`, `doctor`, …) |
+
+There is no separate `swecc-bench` package on PyPI.
 
 ## Install
 
@@ -18,7 +25,21 @@ For local development against this monorepo:
 
 ```bash
 pip install -e ./packages/swecc-mesocosm
+pip install -e ./services/bench/common   # optional; PyPI wheel bundles bench_common
 ```
+
+## Env author quick start (`bench`)
+
+```bash
+mkdir my-env && cd my-env
+bench init
+
+ollama pull llama3.2
+python adapter.py          # terminal 1
+bench run local            # terminal 2 — Ollama + benchanything.json, no submit
+```
+
+When ready for the platform: `bench auth login` → `bench env submit` → `bench run create`. See `LOCAL_DEV.md` in your repo after `bench init`.
 
 ## Configure
 

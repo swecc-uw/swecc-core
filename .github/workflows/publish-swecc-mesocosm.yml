@@ -3,13 +3,16 @@ name: Publish swecc-mesocosm to PyPI
 on:
   release:
     types: [created]
+  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     # Only fire when the release tag is prefixed for this package, so other
     # packages in this monorepo can have their own release workflows later.
-    if: startsWith(github.event.release.tag_name, 'swecc-mesocosm-v')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.release.tag_name, 'swecc-mesocosm-v')
     defaults:
       run:
         working-directory: packages/swecc-mesocosm
@@ -37,8 +40,11 @@ jobs:
             exit 1
           fi
 
+      - name: Stage bench_common for wheel
+        run: sh scripts/stage-bench-common.sh
+
       - name: Build package
-        run: python -m build
+        run: python -m build --wheel
 
       - name: Publish to PyPI
         env:
