@@ -13,9 +13,11 @@ Usage: $0 <service|all>
 Services: ${SERVICES[*]}
 
 This script performs a zero-downtime deployment to Docker Swarm:
-1. (Existing service) Validates the new image on a staging task, then rolls
+1. (server only) Runs \`manage.py migrate\` once via \`docker run\` on prod_swecc-network
+   before updating the service (bench-api depends on bench_* schema)
+2. (Existing service) Validates the new image on a staging task, then rolls
    production forward with \`docker service update\` (start-first)
-2. (New service) Creates the production service on prod_swecc-network with
+3. (New service) Creates the production service on prod_swecc-network with
    --network-alias swecc_stack_<service>
 
 Required environment:
@@ -56,6 +58,10 @@ deploy_service() {
 
   log INFO "Preparing environment from Docker config"
   docker config inspect "$config_name" --format pretty | grep '=' > /tmp/${svc}_env.tmp || true
+
+  if [[ "$svc" == "server" ]]; then
+    swarm_run_django_migrate "$image" "/tmp/${svc}_env.tmp"
+  fi
 
   local service_exists=false
   if docker service inspect "$svc" &>/dev/null; then

@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Fail CI when bench models changed without a committed migration."""
+"""
+Fail CI when bench models changed without a committed migration.
+
+Uses SQLite in-memory (same pattern as run_tests.py) — no Postgres required.
+"""
 import os
 import sys
 
