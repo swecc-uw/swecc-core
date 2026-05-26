@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from bench_common.auth.credentials import load_credentials
+from bench_common.cli.urls import default_bench_api_url
 
 
 class BenchSession:
@@ -42,7 +43,7 @@ def get_bench_session(
 ) -> BenchSession:
     if os.environ.get("BENCH_AUTH_DISABLED", "").lower() in ("1", "true", "yes"):
         return BenchSession(
-            bench_url or os.environ.get("BENCH_API_URL", "http://localhost:8010"),
+            bench_url or default_bench_api_url(),
             token="",
             mode="member",
         )
@@ -54,11 +55,7 @@ def get_bench_session(
     if env_token:
         mode = "guest" if os.environ.get("SWECC_BENCH_GUEST_TOKEN") else "member"
         return BenchSession(
-            (
-                bench_url or creds.get("bench_url", "http://localhost:8010")
-                if creds
-                else "http://localhost:8010"
-            ),
+            bench_url or (creds.get("bench_url") if creds else None) or default_bench_api_url(),
             token=env_token,
             mode=mode,
             active_team_id=creds.get("active_team_id") if creds else None,
@@ -66,7 +63,7 @@ def get_bench_session(
 
     if creds and creds.get("token"):
         return BenchSession(
-            bench_url or creds.get("bench_url", "http://localhost:8010"),
+            bench_url or creds.get("bench_url") or default_bench_api_url(),
             token=creds["token"],
             mode=creds.get("mode", "member"),
             active_team_id=creds.get("active_team_id"),

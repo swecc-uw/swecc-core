@@ -44,11 +44,12 @@ pip install -e ./packages/swecc-mesocosm
 ## Configure
 
 ```bash
-export MESOCOSM_BASE_URL=https://api.swecc.org/bench   # production
-mesocosm doctor
+mesocosm doctor                    # checks https://api.swecc.org/bench (default)
+mesocosm doctor --local            # checks adapter :8765 + local bench-api :8010
+export MESOCOSM_LOCAL=1            # same local profile for all commands
 ```
 
-Default: `http://127.0.0.1:8010` (docker compose). See `infra/mesocosm.env.example` in the monorepo.
+Remote defaults: `https://api.swecc.org/bench` and `https://api.swecc.org` for auth. Local: see `infra/mesocosm.env.example`.
 
 ## Python client
 

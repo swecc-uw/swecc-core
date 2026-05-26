@@ -13,6 +13,11 @@ Iterate on `env.py` and `benchanything.json` on your machine before `mesocosm en
 
 ## Dev loop
 
+```bash
+export MESOCOSM_LOCAL=1   # optional: bench-api :8010, adapter :8765 defaults
+mesocosm doctor --local   # verify adapter (8765) before run local
+```
+
 **Terminal 1 — env server**
 
 ```bash

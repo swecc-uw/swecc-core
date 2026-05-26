@@ -121,7 +121,7 @@ def print_root_help(*, console: Console | None = None) -> None:
 
     c.print(
         "[dim]Tip: mesocosm COMMAND --help for subcommand details. "
-        "Set SWECC_SERVER_URL / SWECC_BENCH_URL or MESOCOSM_BASE_URL.[/dim]"
+        "Remote defaults: api.swecc.org (+ /bench). Local: MESOCOSM_LOCAL=1 or doctor --local.[/dim]"
     )
 
 

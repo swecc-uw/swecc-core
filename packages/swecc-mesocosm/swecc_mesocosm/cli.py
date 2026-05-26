@@ -18,6 +18,11 @@ from rich.syntax import Syntax
 from rich.table import Table
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
+from bench_common.cli.urls import (
+    default_bench_api_url,
+    default_env_adapter_url,
+    mesocosm_local_mode,
+)
 from swecc_mesocosm.bench_dispatch import try_dispatch_bench
 from swecc_mesocosm.help_text import print_root_help, print_run_help
 from swecc_mesocosm.client import BenchClient
@@ -266,8 +271,14 @@ def cmd_validate(
 @app.command("doctor")
 def cmd_doctor(
     base_url: str | None = BaseUrlOpt,
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Local dev: check env adapter (:8765) and bench-api (:8010); sets profile like MESOCOSM_LOCAL=1.",
+    ),
 ) -> None:
-    """Check bench-api reachability and whether the base URL includes /bench."""
+    """Check bench-api reachability (and local env adapter when --local / MESOCOSM_LOCAL=1)."""
+    local_profile = local or mesocosm_local_mode()
     base = _effective_base_url(base_url)
     health_url = f"{base}/health"
     openapi_url = f"{base}/openapi.json"
@@ -277,38 +288,80 @@ def cmd_doctor(
 
     issues: list[str] = []
     if health_err:
-        issues.append(f"health unreachable: {health_err}")
+        issues.append(f"bench-api health unreachable: {health_err}")
+        if "Connection refused" in health_err and not local_profile:
+            issues.append(
+                "hint: default is production — https://api.swecc.org/bench "
+                "(use MESOCOSM_LOCAL=1 or mesocosm doctor --local for docker + adapter)"
+            )
     elif health_code != 200:
-        issues.append(f"GET /health returned {health_code}")
+        issues.append(f"bench-api GET /health returned {health_code}")
 
     if openapi_err:
-        issues.append(f"openapi unreachable: {openapi_err}")
+        issues.append(f"bench-api openapi unreachable: {openapi_err}")
     elif openapi_code != 200:
-        issues.append(f"GET /openapi.json returned {openapi_code}")
+        issues.append(f"bench-api GET /openapi.json returned {openapi_code}")
         if not base.rstrip("/").endswith("/bench"):
             issues.append(
                 "hint: production bench-api is at https://api.swecc.org/bench — "
                 "set MESOCOSM_BASE_URL to include the /bench prefix"
             )
 
-    ok = not issues
-    _print_json(
-        {
-            "ok": ok,
-            "base_url": base,
-            "health": {
-                "url": health_url,
-                "status_code": health_code,
-                "error": health_err,
-            },
-            "openapi": {
-                "url": openapi_url,
-                "status_code": openapi_code,
-                "error": openapi_err,
-            },
-            "issues": issues,
-        }
+    bench_ok = (
+        health_err is None
+        and health_code == 200
+        and openapi_err is None
+        and openapi_code == 200
     )
+
+    adapter_block: dict[str, Any] | None = None
+    adapter_ok = False
+    if local_profile:
+        adapter_base = default_env_adapter_url()
+        adapter_health = f"{adapter_base}/health"
+        adapter_code, adapter_err = _probe_url(adapter_health)
+        adapter_block = {
+            "url": adapter_health,
+            "status_code": adapter_code,
+            "error": adapter_err,
+        }
+        adapter_ok = adapter_err is None and adapter_code == 200
+        if adapter_err:
+            issues.append(f"env adapter unreachable: {adapter_err} (run: python adapter.py)")
+        elif adapter_code != 200:
+            issues.append(f"env adapter GET /health returned {adapter_code}")
+        if bench_ok and not adapter_ok:
+            issues.append("bench-api ok; start env adapter for mesocosm run local")
+        if adapter_ok and not bench_ok:
+            issues.append(
+                "env adapter ok; bench-api down — fine for `run local`, "
+                "need docker compose for env submit / run create"
+            )
+
+    if local_profile:
+        ok = adapter_ok
+    else:
+        ok = bench_ok
+
+    payload: dict[str, Any] = {
+        "ok": ok,
+        "profile": "local" if local_profile else "remote",
+        "base_url": base,
+        "health": {
+            "url": health_url,
+            "status_code": health_code,
+            "error": health_err,
+        },
+        "openapi": {
+            "url": openapi_url,
+            "status_code": openapi_code,
+            "error": openapi_err,
+        },
+        "issues": issues,
+    }
+    if adapter_block is not None:
+        payload["env_adapter"] = adapter_block
+    _print_json(payload)
     raise typer.Exit(0 if ok else 1)
 
 

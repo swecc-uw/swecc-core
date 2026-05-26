@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from bench_common.cli.urls import default_bench_api_url
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,8 +19,8 @@ class Settings(BaseSettings):
     )
 
     base_url: str = Field(
-        default="http://127.0.0.1:8010",
-        description="bench API base URL",
+        default_factory=default_bench_api_url,
+        description="bench API base URL (prod: https://api.swecc.org/bench; local: MESOCOSM_LOCAL=1)",
     )
     request_timeout_s: float = 120.0
     policy_dir: Path = Field(default_factory=_default_policy_dir)

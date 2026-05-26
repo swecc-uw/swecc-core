@@ -11,14 +11,15 @@ import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
 from bench_common.auth.session import get_bench_session
 from bench_common.auth.swecc_server import fetch_jwt, login
+from bench_common.cli.urls import default_bench_api_url, default_server_url
 
 
 def _default_bench_url() -> str:
-    return os.environ.get("SWECC_BENCH_URL", "https://api.swecc.org/bench").rstrip("/")
+    return default_bench_api_url()
 
 
 def _default_server_url() -> str:
-    return os.environ.get("SWECC_SERVER_URL", "https://api.swecc.org").rstrip("/")
+    return default_server_url()
 
 
 def _bench_url(args: argparse.Namespace) -> str:
