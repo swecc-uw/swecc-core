@@ -37,6 +37,7 @@ class RunConfig(BaseModel):
     seed_set: list[int] | None = None
     num_episodes: int = 1
     max_parallel: int = 1
+    env_id: str | None = None
 
 
 class Run(BaseModel):
@@ -47,6 +48,7 @@ class Run(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: datetime | None = None
     scores: dict[str, float] = {}
+    env_id: str | None = None
 
 
 class Episode(BaseModel):
