@@ -47,6 +47,20 @@ def _bench_url_for_guest(args: argparse.Namespace) -> str:
     return guest_bench_api_url()
 
 
+def _format_http_error(response: httpx.Response) -> str:
+    """Best-effort message for bench-api HTTP errors (includes JSON detail when present)."""
+    try:
+        body = response.json()
+        detail = body.get("detail")
+        if detail is not None:
+            if not isinstance(detail, str):
+                detail = json.dumps(detail)
+            return f"HTTP {response.status_code} for {response.request.method} {response.url}: {detail}"
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return f"HTTP {response.status_code} for {response.request.method} {response.url}"
+
+
 def _guest_connect_error_message(bench: str, exc: httpx.ConnectError) -> str:
     return (
         f"Could not connect to bench-api at {bench}\n"
@@ -135,9 +149,13 @@ def _resolve_login_password(args: argparse.Namespace) -> str:
 def _cmd_auth_login(args: argparse.Namespace) -> None:
     password = _resolve_login_password(args)
     server = (args.server_url or _default_server_url()).rstrip("/")
-    with httpx.Client(base_url=server, follow_redirects=True) as client:
-        login(client, server, args.username, password)
-        token = fetch_jwt(client, server)
+    try:
+        with httpx.Client(base_url=server, follow_redirects=True) as client:
+            login(client, server, args.username, password)
+            token = fetch_jwt(client, server)
+    except httpx.HTTPStatusError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
     save_credentials(
         {
             "mode": "member",
@@ -218,7 +236,11 @@ def _require_member_session(args: argparse.Namespace):
 def _cmd_team_create(args: argparse.Namespace) -> None:
     with _require_member_session(args) as session:
         r = session.client.post("/v1/teams", json={"name": args.name})
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            print(_format_http_error(exc.response), file=sys.stderr)
+            sys.exit(1)
         data = r.json()
         print(f"team_id={data['team_id']}")
         print(

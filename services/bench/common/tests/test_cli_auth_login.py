@@ -4,9 +4,16 @@ import argparse
 import warnings
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from bench_common.cli import main as cli_main
+
+
+def _login_http_error(status: int, *, detail: str) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://api.swecc.org/auth/login/")
+    response = httpx.Response(status, request=request, json={"detail": detail})
+    return httpx.HTTPStatusError("Invalid username or password", request=request, response=response)
 
 
 def test_resolve_login_password_prompts_when_omitted(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,6 +81,75 @@ def test_cmd_auth_login_never_prints_password(
     out, err = capsys.readouterr()
     assert "cli-secret" not in out
     assert "cli-secret" not in err
+
+
+def test_cmd_auth_login_prints_friendly_message_on_bad_password(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("bench_common.cli.main.getpass.getpass", lambda _prompt: "wrong-pass")
+    monkeypatch.setattr(
+        cli_main,
+        "login",
+        MagicMock(
+            side_effect=_login_http_error(400, detail="Invalid credentials."),
+        ),
+    )
+
+    args = argparse.Namespace(
+        server_url="https://api.swecc.org",
+        username="navneethdg",
+        password=None,
+        bench_url=None,
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main._cmd_auth_login(args)
+    assert exc_info.value.code == 1
+
+    err = capsys.readouterr().err
+    assert err.strip() == "Invalid username or password"
+    assert "wrong-pass" not in err
+    assert "Traceback" not in err
+
+
+def test_cmd_auth_login_prints_jwt_error_without_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("bench_common.cli.main.getpass.getpass", lambda _prompt: "secret")
+    monkeypatch.setattr(cli_main, "login", MagicMock())
+    jwt_request = httpx.Request("GET", "https://api.swecc.org/auth/jwt/")
+    jwt_response = httpx.Response(
+        403,
+        request=jwt_request,
+        json={"detail": "Authentication credentials were not provided."},
+    )
+    monkeypatch.setattr(
+        cli_main,
+        "fetch_jwt",
+        MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "Account access denied: Authentication credentials were not provided.",
+                request=jwt_request,
+                response=jwt_response,
+            )
+        ),
+    )
+
+    args = argparse.Namespace(
+        server_url="https://api.swecc.org",
+        username="alice",
+        password=None,
+        bench_url=None,
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main._cmd_auth_login(args)
+    assert exc_info.value.code == 1
+
+    err = capsys.readouterr().err
+    assert "Account access denied" in err
+    assert "secret" not in err
+    assert "Traceback" not in err
 
 
 def test_auth_login_help_documents_secure_password(capsys: pytest.CaptureFixture[str]) -> None:
