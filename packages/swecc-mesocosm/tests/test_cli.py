@@ -34,7 +34,8 @@ def test_root_help_lists_auth_and_env_commands() -> None:
     assert "suggest" not in out
     assert "publish ID" not in out
     assert "register domain.py" in out
-    assert "register\n" not in out or "register domain.py" in out
+    assert "\nregister\n" not in out
+    assert "register\n       " not in out
 
 
 def test_run_help_lists_platform_and_inspection() -> None:

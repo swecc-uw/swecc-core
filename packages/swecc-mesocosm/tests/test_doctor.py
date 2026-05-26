@@ -65,3 +65,5 @@ def test_doctor_local_ok_when_adapter_healthy(
     assert body["profile"] == "local"
     assert body["ok"] is True
     assert body["env_adapter"]["status_code"] == 200
+    assert "notes" in body
+    assert "address already in use" in body["notes"][0]

@@ -7,9 +7,11 @@ import getpass
 import json
 import os
 import sys
+import warnings
+
 import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
-from bench_common.auth.session import get_bench_session
+from bench_common.auth.session import BenchSession, get_bench_session
 from bench_common.auth.swecc_server import fetch_jwt, login
 from bench_common.cli.urls import (
     default_bench_api_url,
@@ -43,6 +45,24 @@ def _bench_url_for_guest(args: argparse.Namespace) -> str:
     if args.bench_url:
         return args.bench_url.rstrip("/")
     return guest_bench_api_url()
+
+
+def _session_auth_error_message(exc: RuntimeError) -> str | None:
+    msg = str(exc)
+    if msg.startswith("Not authenticated."):
+        return msg
+    return None
+
+
+def _get_bench_session_or_exit(**kwargs: object) -> BenchSession:
+    try:
+        return get_bench_session(**kwargs)  # type: ignore[arg-type]
+    except RuntimeError as exc:
+        hint = _session_auth_error_message(exc)
+        if hint is not None:
+            print(hint, file=sys.stderr)
+            sys.exit(1)
+        raise
 
 
 def _format_http_error(response: httpx.Response) -> str:
@@ -140,7 +160,10 @@ def _prompt_login_credentials() -> tuple[str, str]:
     if not username:
         print("Username cannot be empty.", file=sys.stderr)
         sys.exit(1)
-    password = getpass.getpass("Password: ")
+    with warnings.catch_warnings():
+        if not sys.stdin.isatty():
+            warnings.filterwarnings("ignore", category=getpass.GetPassWarning)
+        password = getpass.getpass("Password: ")
     if not password:
         print("Password cannot be empty.", file=sys.stderr)
         sys.exit(1)
@@ -188,9 +211,13 @@ def _cmd_auth_whoami(args: argparse.Namespace) -> None:
     creds = load_credentials() or {}
     bench = whoami_bench_api_url(cli_bench_url=args.bench_url, creds=creds)
     try:
-        with get_bench_session(bench_url=bench) as session:
+        with _get_bench_session_or_exit(bench_url=bench) as session:
             r = session.client.get("/v1/me")
-            r.raise_for_status()
+            try:
+                r.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                print(_format_http_error(exc.response), file=sys.stderr)
+                sys.exit(1)
             data = r.json()
     except httpx.ConnectError as exc:
         print(_whoami_connect_error_message(bench, exc, creds), file=sys.stderr)
@@ -231,7 +258,7 @@ def _require_member_session(args: argparse.Namespace):
     if creds and creds.get("mode") == "guest":
         print("This command requires a member account. Run: mesocosm auth login", file=sys.stderr)
         sys.exit(1)
-    return get_bench_session(bench_url=_bench_url(args))
+    return _get_bench_session_or_exit(bench_url=_bench_url(args))
 
 
 def _cmd_team_create(args: argparse.Namespace) -> None:
@@ -393,9 +420,13 @@ def _cmd_run_create(args: argparse.Namespace) -> None:
     if getattr(args, "env_id", None):
         payload["env_id"] = args.env_id
 
-    with get_bench_session(bench_url=_bench_url(args)) as session:
+    with _get_bench_session_or_exit(bench_url=_bench_url(args)) as session:
         r = session.client.post("/v1/runs", json=payload)
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            print(_format_http_error(exc.response), file=sys.stderr)
+            sys.exit(1)
         print(json.dumps(r.json(), indent=2))
 
 
@@ -443,9 +474,13 @@ def _cmd_run_local(args: argparse.Namespace) -> None:
 
 def _cmd_run_export(args: argparse.Namespace) -> None:
     out_path = args.output
-    with get_bench_session(bench_url=_bench_url(args)) as session:
+    with _get_bench_session_or_exit(bench_url=_bench_url(args)) as session:
         r = session.client.get(f"/v1/runs/{args.run_id}/export")
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            print(_format_http_error(exc.response), file=sys.stderr)
+            sys.exit(1)
         data = r.json()
     text = json.dumps(data, indent=2)
     if out_path:

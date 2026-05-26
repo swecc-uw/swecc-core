@@ -20,6 +20,7 @@ from asgiref.sync import sync_to_async
 
 # These imports require django.setup() to have been called already.
 from bench.models import ActorType
+from bench.models import BenchTeam as BenchTeamRow
 from bench.models import BenchJob as BenchJobRow
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
 from bench.models import Domain as DomainRow
@@ -50,28 +51,17 @@ def _iso_dt(value: datetime | str | None) -> str | None:
     return value.isoformat()
 
 
+from bench_common.storage.db_hints import init_db_hint
+
+
 async def init_db() -> None:
     """Verify the bench tables exist; they are created by `swecc-server`'s
     `manage.py migrate` step. Fails loudly with an actionable message if not."""
     try:
         await DomainRow.objects.acount()
+        await BenchTeamRow.objects.acount()
     except Exception as exc:  # pragma: no cover - defensive
-        hint = (
-            "bench tables missing — run swecc-server `manage.py migrate` first, "
-            "then restart bench-api."
-        )
-        err = str(exc).lower()
-        if "tenant or user not found" in err or "password authentication failed" in err:
-            hint = (
-                "Postgres auth failed for bench-api. On Swarm, bench-api uses Docker "
-                "config server_env (same as server) — fix DB_* there and redeploy."
-            )
-        elif "connection" in err or "operationalerror" in type(exc).__name__.lower():
-            hint = (
-                "Postgres unreachable from bench-api. Check DB_HOST/DB_PORT/DB_USER "
-                "(Supabase pooler :6543 needs user postgres.<project-ref>)."
-            )
-        raise RuntimeError(f"{hint} Original error: {exc}") from exc
+        raise RuntimeError(f"{init_db_hint(exc)} Original error: {exc}") from exc
 
 
 # ── Domain ────────────────────────────────────────────────────────────────────

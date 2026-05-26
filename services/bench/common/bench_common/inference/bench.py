@@ -40,7 +40,6 @@ from bench_common.eval.metrics import compute_scores
 from bench_common.runtime.agent_loop import AgentLoop
 from bench_common.runtime.env_client import HttpEnvClient
 from bench_common.runtime.inference import InferenceRouter
-from bench_common.storage import database as db
 from bench_common.storage.trace_store import TraceStore
 from bench_common.techniques import TECHNIQUE_REGISTRY
 from bench_common.techniques.base import Technique
@@ -165,6 +164,8 @@ async def bench(
         ConnectionError:  Environment server not reachable at env_url.
     """
     if domain is None:
+        from bench_common.storage import database as db
+
         await db.init_db()
         domain = await db.get_domain(domain_id)
         if domain is None:

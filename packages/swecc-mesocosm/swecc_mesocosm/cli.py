@@ -262,6 +262,7 @@ def cmd_doctor(
 
     adapter_block: dict[str, Any] | None = None
     adapter_ok = False
+    notes: list[str] = []
     if local_profile:
         adapter_base = default_env_adapter_url()
         adapter_health = f"{adapter_base}/health"
@@ -276,6 +277,11 @@ def cmd_doctor(
             issues.append(f"env adapter unreachable: {adapter_err} (run: python adapter.py)")
         elif adapter_code != 200:
             issues.append(f"env adapter GET /health returned {adapter_code}")
+        elif adapter_code == 200:
+            notes.append(
+                "env adapter health returned 200; if `python adapter.py` fails with "
+                "address already in use, another process may be bound to the port"
+            )
         if bench_ok and not adapter_ok:
             issues.append("bench-api ok; start env adapter for mesocosm run local")
         if adapter_ok and not bench_ok:
@@ -307,6 +313,8 @@ def cmd_doctor(
     }
     if adapter_block is not None:
         payload["env_adapter"] = adapter_block
+    if notes:
+        payload["notes"] = notes
     _print_json(payload)
     raise typer.Exit(0 if ok else 1)
 
