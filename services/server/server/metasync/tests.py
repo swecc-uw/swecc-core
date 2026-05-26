@@ -439,6 +439,9 @@ class DiscordChannelsFuzzedTests(APITestCase):
         response = self.client.post(self.url, invalid_channels, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+        # unknown channel types are skipped, not rejected — the rest of the
+        # batch still syncs so a single new Discord channel kind can't stall
+        # anti-entropy.
         invalid_type_channels = self.initial_channels + [
             {
                 "channel_id": "111111111",
@@ -449,9 +452,8 @@ class DiscordChannelsFuzzedTests(APITestCase):
             }
         ]
         response = self.client.post(self.url, invalid_type_channels, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-        # no changes were made during invalid requests
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(DiscordChannel.objects.filter(channel_id=111111111).exists())
         self.assertEqual(DiscordChannel.objects.count(), len(self.initial_channels))
 
     def test_empty_channel_list(self):
