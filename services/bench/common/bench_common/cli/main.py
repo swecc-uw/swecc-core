@@ -76,7 +76,10 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
     """Print member JWT for curl/scripts (run auth login first)."""
     creds = load_credentials()
     if not creds or creds.get("mode") != "member" or not creds.get("token"):
-        print("No member session. Run: bench auth login --username USER --password PASS", file=sys.stderr)
+        print(
+            "No member session. Run: bench auth login --username USER --password PASS",
+            file=sys.stderr,
+        )
         sys.exit(1)
     print(creds["token"])
 

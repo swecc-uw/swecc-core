@@ -10,6 +10,9 @@ import asyncio
 from typing import Any
 
 import structlog
+from app.auth.access import assert_dev_env_access
+from app.auth.deps import require_member
+from app.auth.worker import require_worker
 from bench.models import ActorType, Visibility
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
@@ -17,10 +20,6 @@ from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-
-from app.auth.access import assert_dev_env_access
-from app.auth.deps import require_member
-from app.auth.worker import require_worker
 
 log = structlog.get_logger()
 
@@ -206,9 +205,7 @@ async def _run_full_bench_local(job_id: str) -> None:
             }
             log.info("full_bench_model_done", job_id=job_id, model=model, score=primary_score)
         except Exception as exc:
-            log.exception(
-                "full_bench_model_failed", job_id=job_id, model=model, error=str(exc)
-            )
+            log.exception("full_bench_model_failed", job_id=job_id, model=model, error=str(exc))
             model_results[model] = {
                 "run_id": None,
                 "status": "failed",
