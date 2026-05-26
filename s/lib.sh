@@ -35,6 +35,7 @@ swarm_ensure_gateway_alias() {
 
 # Swarm Docker config for --env-file.
 # bench-api → bench-api_env (server_env copy + ORCH_* from swecc-infra sync-configs).
+# Include BENCH_CORS_ORIGINS with https://mesocosm.swecc.org (and local Vite ports if needed).
 # Collision rules:
 #   - Shared: DB_* only (django_settings.py), plus ORCH_* for bench (config.Settings)
 #   - Shared LLM keys: OPENAI_API_KEY, etc. (both may use LiteLLM)

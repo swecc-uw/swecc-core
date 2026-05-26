@@ -86,6 +86,8 @@ app = FastAPI(
     root_path=GATEWAY_PREFIX,
 )
 
+# Principal inner, CORS outer — Starlette applies CORS to all responses (incl. 401/500).
+app.add_middleware(PrincipalMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -93,7 +95,6 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
-app.add_middleware(PrincipalMiddleware)
 
 
 @app.exception_handler(Exception)
