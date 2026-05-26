@@ -7,8 +7,6 @@ import getpass
 import json
 import os
 import sys
-import warnings
-
 import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
 from bench_common.auth.session import get_bench_session
@@ -103,14 +101,12 @@ def _whoami_connect_error_message(
             lines.append(
                 f"Credentials have stale bench_url ({saved}) for server {server}."
             )
-            lines.append(
-                f"  mesocosm auth login --server-url {server} --username ..."
-            )
+            lines.append(f"  mesocosm auth login --server-url {server}")
         lines.extend(
             [
                 "For production member whoami:",
                 "  unset MESOCOSM_LOCAL",
-                "  mesocosm auth login --server-url https://api.swecc.org ...",
+                "  mesocosm auth login --server-url https://api.swecc.org",
                 "Or fix ~/.config/swecc/bench_credentials.json:",
                 '  "bench_url": "https://api.swecc.org/bench"',
                 "Or: mesocosm auth logout && mesocosm auth login ...",
@@ -135,23 +131,28 @@ def _active_team_id(args: argparse.Namespace) -> str | None:
     return creds.get("active_team_id")
 
 
-def _resolve_login_password(args: argparse.Namespace) -> str:
-    if args.password is not None:
-        warnings.warn(
-            "--password on the command line is deprecated; omit it to be prompted securely.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return args.password
-    return getpass.getpass("Password: ")
+def _prompt_login_credentials() -> tuple[str, str]:
+    default_user = getpass.getuser()
+    if default_user:
+        username = input(f"Username [{default_user}]: ").strip() or default_user
+    else:
+        username = input("Username: ").strip()
+    if not username:
+        print("Username cannot be empty.", file=sys.stderr)
+        sys.exit(1)
+    password = getpass.getpass("Password: ")
+    if not password:
+        print("Password cannot be empty.", file=sys.stderr)
+        sys.exit(1)
+    return username, password
 
 
 def _cmd_auth_login(args: argparse.Namespace) -> None:
-    password = _resolve_login_password(args)
+    username, password = _prompt_login_credentials()
     server = (args.server_url or _default_server_url()).rstrip("/")
     try:
         with httpx.Client(base_url=server, follow_redirects=True) as client:
-            login(client, server, args.username, password)
+            login(client, server, username, password)
             token = fetch_jwt(client, server)
     except httpx.HTTPStatusError as exc:
         print(str(exc), file=sys.stderr)
@@ -218,7 +219,7 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
     creds = load_credentials()
     if not creds or creds.get("mode") != "member" or not creds.get("token"):
         print(
-            "No member session. Run: mesocosm auth login --username USER",
+            "No member session. Run: mesocosm auth login",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -533,21 +534,16 @@ def main(argv: list[str] | None = None) -> None:
     p = auth_sub.add_parser(
         "login",
         description=(
-            "Log in with swecc-server (username + password). Passwords are verified "
-            "server-side over HTTPS; the CLI never hashes them locally. Omit --password "
-            "to be prompted securely (not stored in shell history)."
+            "Log in with swecc-server. Prompts for username and password (not stored in "
+            "shell history). Passwords are verified server-side over HTTPS; the CLI never "
+            "hashes them locally. For non-interactive use, set SWECC_BENCH_TOKEN or run "
+            "mesocosm auth guest."
         ),
     )
     p.add_argument(
         "--server-url",
         default=None,
         help=f"swecc-server base URL (default: {_default_server_url()} or SWECC_SERVER_URL)",
-    )
-    p.add_argument("--username", required=True)
-    p.add_argument(
-        "--password",
-        default=None,
-        help="password (deprecated: visible in shell history; omit to prompt)",
     )
     p.set_defaults(func=_cmd_auth_login)
     p = auth_sub.add_parser("token")

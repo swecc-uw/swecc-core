@@ -57,6 +57,8 @@ export MESOCOSM_LOCAL=1            # same local profile for all commands
 
 Remote defaults: `https://api.swecc.org/bench` and `https://api.swecc.org` for auth. Local: see `infra/mesocosm.env.example`.
 
+**Non-interactive auth:** `mesocosm auth login` always prompts for username and password. In CI or scripts, use `export SWECC_BENCH_TOKEN=…` (member JWT) or `mesocosm auth guest` instead.
+
 ## Python client
 
 ```python

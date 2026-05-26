@@ -41,7 +41,7 @@ def print_root_help(*, console: Console | None = None) -> None:
             [
                 (
                     "auth login",
-                    "Log in (prompts for password; server hashes over HTTPS)",
+                    "Log in (prompts for username and password)",
                 ),
                 ("auth token", "Print saved JWT (for curl/scripts)"),
                 ("auth guest", "Create a guest session (bench-api only)"),
