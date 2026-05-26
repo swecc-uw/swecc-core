@@ -167,7 +167,7 @@ async def team_leaderboard(team_id: str, member=Depends(require_member), limit: 
     safe_limit = max(1, min(limit, 100))
     rows = RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")[:safe_limit]
     entries: list[LeaderboardEntry] = []
-    for row in rows:
+    async for row in rows:
         run = _model_from_row_data(Run, row.data)
         if not run.scores:
             continue

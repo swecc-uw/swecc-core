@@ -6,6 +6,7 @@ import uuid
 
 from app.auth.principal import Guest, Member, Principal
 from app.auth.resolve import auth_disabled
+from app.services import teams as team_svc
 from bench.models import ActorType
 from bench.models import DeveloperEnvironment as DevEnvRow
 from bench.models import EnvScope
@@ -24,7 +25,7 @@ async def can_read_run(row: RunRow, principal: Principal) -> bool:
         if row.actor_type == ActorType.MEMBER and row.actor_id == str(principal.user_id):
             return True
         if row.team_id:
-            return await _is_team_member(row.team_id, principal.user_id)
+            return await team_svc.is_member(row.team_id, principal.user_id)
     return False
 
 
@@ -45,7 +46,7 @@ async def can_access_dev_env(row: DevEnvRow, principal: Principal) -> bool:
         return False
     if row.scope == EnvScope.SOLO or not row.team_id:
         return row.actor_id == str(principal.user_id) or row.owner_id == str(principal.user_id)
-    return await _is_team_member(row.team_id, principal.user_id)
+    return await team_svc.is_member(row.team_id, principal.user_id)
 
 
 async def assert_dev_env_access(env_id: str, principal: Principal) -> DevEnvRow:
@@ -60,15 +61,6 @@ async def assert_dev_env_access(env_id: str, principal: Principal) -> DevEnvRow:
 
 async def domain_owner_member(domain_owner_id: str, member: Member) -> bool:
     return domain_owner_id == str(member.user_id)
-
-
-async def _is_team_member(team_id: uuid.UUID, user_id: int) -> bool:
-    """Allow stacked branches without app.services to import cleanly."""
-    try:
-        from app.services import teams as team_svc
-    except ModuleNotFoundError:
-        return False
-    return await team_svc.is_member(team_id, user_id)
 
 
 def parse_team_id(team_id: str | None) -> uuid.UUID | None:

@@ -207,8 +207,13 @@ services:
     env_file:
       - .env
     environment:
-      # Gateway prefix for Swagger when using nginx /bench/ routes (see .env.example).
-      - ORCH_GATEWAY_PREFIX=${ORCH_GATEWAY_PREFIX:-}
+      # Local dev without member/guest auth (open API). Do not use in production.
+      # - BENCH_AUTH_DISABLED=1
+      # Comma-separated domain IDs guests may run when allowlist is set; empty = all domains.
+      # - ORCH_DEMO_DOMAIN_IDS=wordle,simple-trivia
+      # Swagger/OpenAPI URLs when using nginx `http://localhost/bench/` (mesocosm default).
+      # Set ORCH_GATEWAY_PREFIX= in .env if you only use direct :8010 (no nginx /bench/).
+      - ORCH_GATEWAY_PREFIX=${ORCH_GATEWAY_PREFIX:-/bench}
       - ORCH_PUBLIC_BASE_URL=${ORCH_PUBLIC_BASE_URL:-}
       - ORCH_TRACE_DIR=/data/traces
       - ORCH_SANDBOX_URL=http://swecc-bench-sandbox:8001
