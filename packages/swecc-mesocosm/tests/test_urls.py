@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import pytest
 from swecc_mesocosm.urls import (
+    bench_url_from_server,
     default_bench_api_url,
     default_env_adapter_url,
     default_server_url,
     guest_bench_api_url,
+    member_bench_api_url,
     mesocosm_local_mode,
+    whoami_bench_api_url,
 )
 
 
@@ -60,3 +63,23 @@ def test_mesocosm_local_mode() -> None:
     os.environ["MESOCOSM_LOCAL"] = "true"
     assert mesocosm_local_mode() is True
     del os.environ["MESOCOSM_LOCAL"]
+
+
+def test_bench_url_from_server_prod() -> None:
+    assert bench_url_from_server("https://api.swecc.org") == "https://api.swecc.org/bench"
+
+
+def test_member_bench_api_url_prod_login_ignores_mesocosm_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MESOCOSM_LOCAL", "1")
+    assert (
+        member_bench_api_url(server_url="https://api.swecc.org")
+        == "https://api.swecc.org/bench"
+    )
+
+
+def test_whoami_guest_uses_saved_bench_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MESOCOSM_LOCAL", "1")
+    creds = {"mode": "guest", "bench_url": "https://api.swecc.org/bench"}
+    assert whoami_bench_api_url(creds=creds) == "https://api.swecc.org/bench"

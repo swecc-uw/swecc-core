@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import sys
+import warnings
 
 import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
@@ -15,6 +17,9 @@ from bench_common.cli.urls import (
     default_bench_api_url,
     default_server_url,
     guest_bench_api_url,
+    is_stale_local_bench_url,
+    member_bench_api_url,
+    whoami_bench_api_url,
 )
 
 
@@ -28,7 +33,11 @@ def _default_server_url() -> str:
 
 def _bench_url(args: argparse.Namespace) -> str:
     creds = load_credentials() or {}
-    return (args.bench_url or creds.get("bench_url") or _default_bench_url()).rstrip("/")
+    return member_bench_api_url(
+        server_url=creds.get("server_url"),
+        cli_bench_url=args.bench_url,
+        creds=creds,
+    )
 
 
 def _bench_url_for_guest(args: argparse.Namespace) -> str:
@@ -54,6 +63,55 @@ def _guest_connect_error_message(bench: str, exc: httpx.ConnectError) -> str:
     )
 
 
+def _whoami_connect_error_message(
+    bench: str, exc: httpx.ConnectError, creds: dict | None
+) -> str:
+    creds = creds or {}
+    lines = [
+        f"Could not connect to bench-api at {bench}\n",
+        f"  ({exc})",
+    ]
+    if creds.get("mode") == "guest":
+        lines.extend(
+            [
+                "For production guest whoami:",
+                "  unset MESOCOSM_LOCAL",
+                "  mesocosm auth guest",
+                "Or set the API explicitly:",
+                "  export SWECC_BENCH_URL=https://api.swecc.org/bench",
+                "  mesocosm auth whoami",
+            ]
+        )
+    else:
+        saved = creds.get("bench_url") or ""
+        server = creds.get("server_url") or ""
+        if server and saved and is_stale_local_bench_url(saved, server_url=server):
+            lines.append(
+                f"Credentials have stale bench_url ({saved}) for server {server}."
+            )
+            lines.append(
+                f"  mesocosm auth login --server-url {server} --username ..."
+            )
+        lines.extend(
+            [
+                "For production member whoami:",
+                "  unset MESOCOSM_LOCAL",
+                "  mesocosm auth login --server-url https://api.swecc.org ...",
+                "Or fix ~/.config/swecc/bench_credentials.json:",
+                '  "bench_url": "https://api.swecc.org/bench"',
+                "Or: mesocosm auth logout && mesocosm auth login ...",
+            ]
+        )
+    lines.extend(
+        [
+            "For local docker:",
+            "  docker compose up bench-api",
+            "  mesocosm auth whoami --bench-url http://127.0.0.1:8010",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _active_team_id(args: argparse.Namespace) -> str | None:
     if getattr(args, "solo", False):
         return None
@@ -63,17 +121,32 @@ def _active_team_id(args: argparse.Namespace) -> str | None:
     return creds.get("active_team_id")
 
 
+def _resolve_login_password(args: argparse.Namespace) -> str:
+    if args.password is not None:
+        warnings.warn(
+            "--password on the command line is deprecated; omit it to be prompted securely.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return args.password
+    return getpass.getpass("Password: ")
+
+
 def _cmd_auth_login(args: argparse.Namespace) -> None:
+    password = _resolve_login_password(args)
     server = (args.server_url or _default_server_url()).rstrip("/")
     with httpx.Client(base_url=server, follow_redirects=True) as client:
-        login(client, server, args.username, args.password)
+        login(client, server, args.username, password)
         token = fetch_jwt(client, server)
     save_credentials(
         {
             "mode": "member",
             "token": token,
             "server_url": server,
-            "bench_url": _bench_url(args),
+            "bench_url": member_bench_api_url(
+                server_url=server,
+                cli_bench_url=args.bench_url,
+            ),
         }
     )
     print("Logged in. Member JWT saved.")
@@ -93,10 +166,28 @@ def _cmd_auth_guest(args: argparse.Namespace) -> None:
 
 
 def _cmd_auth_whoami(args: argparse.Namespace) -> None:
-    with get_bench_session(bench_url=_bench_url(args)) as session:
-        r = session.client.get("/v1/me")
-        r.raise_for_status()
-        print(json.dumps(r.json(), indent=2))
+    creds = load_credentials() or {}
+    bench = whoami_bench_api_url(cli_bench_url=args.bench_url, creds=creds)
+    try:
+        with get_bench_session(bench_url=bench) as session:
+            r = session.client.get("/v1/me")
+            r.raise_for_status()
+            data = r.json()
+    except httpx.ConnectError as exc:
+        print(_whoami_connect_error_message(bench, exc, creds), file=sys.stderr)
+        sys.exit(1)
+
+    if data.get("type") == "anonymous" and creds.get("mode") == "guest":
+        print(
+            "Guest token was not recognized at this bench-api URL.\n"
+            f"  Tried: {bench}\n"
+            "  mesocosm auth guest   # refresh credentials\n"
+            "  Or: export SWECC_BENCH_URL=https://api.swecc.org/bench",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(json.dumps(data, indent=2))
 
 
 def _cmd_auth_logout(_args: argparse.Namespace) -> None:
@@ -109,7 +200,7 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
     creds = load_credentials()
     if not creds or creds.get("mode") != "member" or not creds.get("token"):
         print(
-            "No member session. Run: mesocosm auth login --username USER --password PASS",
+            "No member session. Run: mesocosm auth login --username USER",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -415,14 +506,25 @@ def main(argv: list[str] | None = None) -> None:
 
     auth = sub.add_parser("auth")
     auth_sub = auth.add_subparsers(dest="auth_cmd", required=True)
-    p = auth_sub.add_parser("login")
+    p = auth_sub.add_parser(
+        "login",
+        description=(
+            "Log in with swecc-server (username + password). Passwords are verified "
+            "server-side over HTTPS; the CLI never hashes them locally. Omit --password "
+            "to be prompted securely (not stored in shell history)."
+        ),
+    )
     p.add_argument(
         "--server-url",
         default=None,
         help=f"swecc-server base URL (default: {_default_server_url()} or SWECC_SERVER_URL)",
     )
     p.add_argument("--username", required=True)
-    p.add_argument("--password", required=True)
+    p.add_argument(
+        "--password",
+        default=None,
+        help="password (deprecated: visible in shell history; omit to prompt)",
+    )
     p.set_defaults(func=_cmd_auth_login)
     p = auth_sub.add_parser("token")
     p.help = "Print saved member JWT (for curl); login first"
