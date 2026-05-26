@@ -20,4 +20,4 @@ def test_full_bench_gemini_uses_gemini_prefix_not_google() -> None:
     assert len(gemini_models) == 1
     assert gemini_models[0].startswith("gemini/")
     with pytest.raises(BadRequestError):
-        get_llm_provider("google/gemini-2.0-flash")
+        get_llm_provider("google/gemini-3.1-flash-lite")

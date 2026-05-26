@@ -24,7 +24,6 @@ EXTRA_MODEL_ALIASES: tuple[str, ...] = (
     "gemini/gemini-3.5-flash",
     "gemini/gemini-flash-latest",
     "gemini/gemini-flash-lite-latest",
-    "gemini/gemini-2.0-flash",
 )
 
 ALLOWED_MODELS: tuple[str, ...] = FULL_BENCH_MODELS + EXTRA_MODEL_ALIASES
@@ -42,5 +41,4 @@ MODEL_LABELS: dict[str, str] = {
     "gemini/gemini-3.5-flash": "Gemini 3.5 Flash",
     "gemini/gemini-flash-latest": "Gemini Flash (latest)",
     "gemini/gemini-flash-lite-latest": "Gemini Flash Lite (latest)",
-    "gemini/gemini-2.0-flash": "Gemini 2.0 Flash",
 }

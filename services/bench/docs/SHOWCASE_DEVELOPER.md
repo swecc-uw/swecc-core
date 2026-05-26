@@ -29,7 +29,7 @@ mesocosm env submit --name "My env" --github-url https://github.com/you/my-bench
 mesocosm run create \
   --domain DOMAIN_UUID \
   --vow-version 1.0.0 \
-  --model gemini/gemini-2.0-flash \
+  --model gemini/gemini-3.1-flash-lite \
   --episodes 1 \
   --visibility gallery_public
 

@@ -386,7 +386,7 @@ Many platform commands attach `team_id` from credentials `active_team_id`, unles
 | --- | --- | --- |
 | `--domain` | Yes | Target domain id (from `env submit` or legacy register). |
 | `--vow-version` | Yes | Binding vow version string (e.g. `1.0.0`). |
-| `--model` | Yes | Model identifier (e.g. `gemini/gemini-2.0-flash`, `openai/gpt-4o-mini`). |
+| `--model` | Yes | Model identifier (e.g. `gemini/gemini-3.1-flash-lite`, `openai/gpt-4o-mini`). |
 | `--episodes` | No | Number of episodes (default: `1`). |
 | `--parallel` | No | Max parallel episodes (default: `1`). |
 | `--system-prompt` | No | Optional system prompt in `agent_config`. |

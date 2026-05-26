@@ -21,7 +21,7 @@ def test_build_replay_turns_includes_reasoning_and_action():
             event_type="model_call",
             payload={
                 "text": "Two signals. Size a core position before CPI.",
-                "model": "gemini/gemini-2.0-flash",
+                "model": "gemini/gemini-3.1-flash-lite",
             },
         ),
         TraceEvent(

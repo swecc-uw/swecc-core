@@ -7,7 +7,7 @@ Build a marketing or demo UI **in this repository** that replays a real bench ru
 1. Submit this repo: `mesocosm env submit --name "..." --github-url https://github.com/you/your-repo`
 2. Wait for `ready`, then bench a model:
    ```bash
-   mesocosm run create --domain YOUR_DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-2.0-flash --episodes 1 --visibility gallery_public
+   mesocosm run create --domain YOUR_DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-3.1-flash-lite --episodes 1 --visibility gallery_public
    ```
 3. Export the run (after it completes):
    ```bash

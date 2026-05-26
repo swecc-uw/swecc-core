@@ -54,7 +54,7 @@ mesocosm auth login
 mesocosm env submit --name "My env" --github-url https://github.com/you/your-repo
 # submit clones the repo and registers a draft domain from benchanything.json — no separate register step
 mesocosm env list   # note domain_id when status is ready
-mesocosm run create --domain DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-2.0-flash ...
+mesocosm run create --domain DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-3.1-flash-lite ...
 ```
 
 Platform runs use cloud models on SWECC infrastructure; local Ollama is only for your machine.
