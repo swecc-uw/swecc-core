@@ -12,6 +12,7 @@ mesocosm --help
 ## Env author quick start
 
 ```bash
+pip install swecc-mesocosm   # once — covers CLI, bench_common, adapter HTTP stack
 mkdir my-env && cd my-env
 mesocosm init
 
@@ -19,6 +20,8 @@ ollama pull llama3.2
 python adapter.py          # terminal 1
 mesocosm run local         # terminal 2 — Ollama + benchanything.json, no submit
 ```
+
+`requirements.txt` from `mesocosm init` is for **optional env libraries** (e.g. numpy), installed on the platform at submit time — not for installing the CLI.
 
 When ready for the platform: `mesocosm auth login` → `mesocosm env submit` (creates the domain from `benchanything.json` in your repo) → `mesocosm run create` with the returned `domain_id`. See `LOCAL_DEV.md` in your repo after `mesocosm init`.
 

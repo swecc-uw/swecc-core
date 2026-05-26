@@ -494,11 +494,13 @@ def _cmd_init(args: argparse.Namespace) -> None:
 
     print(
         "\nNext:\n"
-        "  1. Edit env.py + benchanything.json\n"
-        "  2. Local Ollama loop (see LOCAL_DEV.md):\n"
+        "  1. pip install swecc-mesocosm  (CLI + adapter deps; not requirements.txt)\n"
+        "  2. Edit env.py + benchanything.json\n"
+        "  3. Local Ollama loop (see LOCAL_DEV.md):\n"
         "       ollama pull llama3.2 && python adapter.py\n"
         "       mesocosm run local\n"
-        "  3. When ready: mesocosm env submit --github-url ..."
+        "  4. When ready: mesocosm env submit --github-url ...\n"
+        "  (requirements.txt: optional extras for your env — see file header)"
     )
 
 
