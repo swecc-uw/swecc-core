@@ -18,7 +18,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
-from bench_common.cli.urls import (
+from swecc_mesocosm.urls import (
     default_bench_api_url,
     default_env_adapter_url,
     mesocosm_local_mode,

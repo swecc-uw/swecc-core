@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from bench_common.cli.urls import (
+from swecc_mesocosm.urls import (
     default_bench_api_url,
     default_env_adapter_url,
     default_server_url,

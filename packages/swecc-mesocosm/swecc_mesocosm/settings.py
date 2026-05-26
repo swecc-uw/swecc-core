@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bench_common.cli.urls import default_bench_api_url
+from swecc_mesocosm.urls import default_bench_api_url
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
