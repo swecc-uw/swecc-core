@@ -30,6 +30,7 @@ from bench.models import Run as RunRow
 from bench.models import Visibility
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
+from bench_common.core.run_env import merge_run_env_id, validate_env_domain_match
 from django.utils import timezone
 from pydantic import BaseModel
 
@@ -105,6 +106,11 @@ async def list_domains(*, published_only: bool = False) -> list[Domain]:
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 
+def _run_from_row(row: RunRow) -> Run:
+    run = _model_from_row_data(Run, row.data)
+    return merge_run_env_id(run, row.environment_id)
+
+
 async def save_run(
     run: Run,
     *,
@@ -113,12 +119,19 @@ async def save_run(
     team_id: str | None = None,
     visibility: str | None = None,
     expires_at: datetime | None = None,
+    env_id: str | None = None,
 ) -> None:
+    effective_env_id = env_id if env_id is not None else run.env_id
+    payload = run.model_dump(mode="json")
+    if effective_env_id:
+        payload["env_id"] = effective_env_id
     defaults: dict[str, Any] = {
-        "data": run.model_dump(mode="json"),
+        "data": payload,
         "domain_id": run.config.domain_id,
         "status": run.status,
     }
+    if effective_env_id is not None:
+        defaults["environment_id"] = effective_env_id
     if actor_type is not None:
         defaults["actor_type"] = actor_type
     if actor_id is not None:
@@ -137,7 +150,7 @@ async def get_run(run_id: str) -> Run | None:
         row = await RunRow.objects.aget(id=run_id)
     except RunRow.DoesNotExist:
         return None
-    return _model_from_row_data(Run, row.data)
+    return _run_from_row(row)
 
 
 async def list_runs(
@@ -147,11 +160,14 @@ async def list_runs(
     actor_id: str | None = None,
     team_id: str | None = None,
     visibility: str | None = None,
+    env_id: str | None = None,
     limit: int = 100,
 ) -> list[Run]:
     qs = RunRow.objects.all()
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
+    if env_id:
+        qs = qs.filter(environment_id=env_id)
     if actor_type:
         qs = qs.filter(actor_type=actor_type)
     if actor_id:
@@ -160,7 +176,7 @@ async def list_runs(
         qs = qs.filter(team_id=team_id)
     if visibility:
         qs = qs.filter(visibility=visibility)
-    return [_model_from_row_data(Run, row.data) async for row in qs.order_by("-id")[:limit]]
+    return [_run_from_row(row) async for row in qs.order_by("-id")[:limit]]
 
 
 async def list_gallery_runs(
@@ -176,7 +192,7 @@ async def list_gallery_runs(
         qs = qs.filter(domain_id=domain_id)
     out: list[tuple[Run, RunRow]] = []
     async for row in qs.order_by("-id")[:limit]:
-        out.append((_model_from_row_data(Run, row.data), row))
+        out.append((_run_from_row(row), row))
     return out
 
 
@@ -304,13 +320,16 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
 # ── Environment Usage ─────────────────────────────────────────────────────────
 
 
-async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
-    run_rows = [row async for row in RunRow.objects.filter(domain_id=domain_id)]
+async def get_domain_usage_stats(domain_id: str, *, env_id: str | None = None) -> dict[str, Any]:
+    qs = RunRow.objects.filter(domain_id=domain_id)
+    if env_id:
+        qs = qs.filter(environment_id=env_id)
+    run_rows = [row async for row in qs]
     total_runs = len(run_rows)
 
     total_episodes = 0
     for r in run_rows:
-        run = _model_from_row_data(Run, r.data)
+        run = _run_from_row(r)
         total_episodes += run.config.num_episodes if run.config else 0
 
     lb_rows = [row async for row in LeaderboardRow.objects.filter(domain_id=domain_id)]

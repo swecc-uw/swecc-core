@@ -11,6 +11,7 @@ from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint
+from bench_common.core.run import Run
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible
@@ -336,8 +337,21 @@ async def get_environment(
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
     usage: dict[str, Any] = {}
     if env.get("domain_id"):
-        usage = await db.get_domain_usage_stats(env["domain_id"])
+        usage = await db.get_domain_usage_stats(env["domain_id"], env_id=env_id)
     return {**env, "usage": usage}
+
+
+@router.get("/environments/{env_id}/runs", response_model=list[Run])
+async def list_environment_runs(
+    env_id: str,
+    limit: int = 50,
+    principal=Depends(get_optional_principal),
+) -> list[Run]:
+    await assert_dev_env_access(env_id, principal)
+    env = await db.get_developer_environment(env_id)
+    if env is None:
+        raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
+    return await db.list_runs(env_id=env_id, domain_id=env.get("domain_id"), limit=limit)
 
 
 @router.get("/environments/{env_id}/usage")
@@ -358,7 +372,7 @@ async def get_environment_usage(
             "best_score": None,
             "leaderboard_entries": 0,
         }
-    return await db.get_domain_usage_stats(env["domain_id"])
+    return await db.get_domain_usage_stats(env["domain_id"], env_id=env_id)
 
 
 @router.get("/domains/{domain_id}/usage")
