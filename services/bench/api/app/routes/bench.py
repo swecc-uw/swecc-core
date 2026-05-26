@@ -100,8 +100,8 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
                 run,
                 actor_type=ActorType.MEMBER,
                 actor_id=str(member.user_id),
-                visibility=Visibility.PRIVATE,
                 env_id=req.env_id,
+                visibility=Visibility.PRIVATE,
             )
 
     return episode
@@ -188,6 +188,9 @@ async def _run_full_bench_local(job_id: str) -> None:
                 num_episodes=episodes_per_model,
             )
             run = await orchestrator.create_run(run_config, requester_id="full_bench")
+            job_env_id = job.get("env_id")
+            if run and job_env_id:
+                await db.save_run(run, env_id=job_env_id)
             # Wait for the run to complete (it runs as background tasks)
             for _ in range(120):
                 await asyncio.sleep(2.0)

@@ -12,7 +12,7 @@ import structlog
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.run import AgentConfig, Episode, TraceEvent
 from bench_common.runtime.env_client import HttpEnvClient, Observation
-from bench_common.runtime.inference import InferenceRouter
+from bench_common.runtime.inference import InferenceRouter, normalize_model_id
 from bench_common.storage.trace_store import TraceStore
 
 log = structlog.get_logger()
@@ -69,6 +69,7 @@ class AgentLoop:
                 step=0,
                 event_type="observation",
                 payload={
+                    "phase": "start",
                     "data": obs.data,
                     "content_type": obs.content_type,
                     "system_prompt": obs.system_prompt,
@@ -91,6 +92,20 @@ class AgentLoop:
                 episode.status = "timeout"
                 break
 
+            await self.trace.append(
+                TraceEvent(
+                    episode_id=episode_id,
+                    step=step,
+                    event_type="observation",
+                    payload={
+                        "phase": "before_agent",
+                        "data": obs.data,
+                        "content_type": obs.content_type,
+                        "system_prompt": obs.system_prompt,
+                    },
+                )
+            )
+
             # ── pre-action technique pass ─────────────────────────────────────
             augmented_context: dict[str, Any] = {}
             for technique in self.techniques:
@@ -98,7 +113,7 @@ class AgentLoop:
                 augmented_context.update(ctx)
 
             # ── model inference ───────────────────────────────────────────────
-            action = await self.inference.decide(
+            decision = await self.inference.decide(
                 observation=obs,
                 binding_vow=self.vow,
                 agent_config=self.config,
@@ -106,17 +121,29 @@ class AgentLoop:
                 step=step,
                 env_system_prompt=env_system_prompt,
             )
+            if decision.reasoning_text:
+                await self.trace.append(
+                    TraceEvent(
+                        episode_id=episode_id,
+                        step=step,
+                        event_type="model_call",
+                        payload={
+                            "text": decision.reasoning_text,
+                            "model": normalize_model_id(self.config.model),
+                        },
+                    )
+                )
             await self.trace.append(
                 TraceEvent(
                     episode_id=episode_id,
                     step=step,
                     event_type="action",
-                    payload={"action": action},
+                    payload={"action": decision.action},
                 )
             )
 
             # ── environment step ──────────────────────────────────────────────
-            result = await env_client.step(episode_id=episode_id, action=action)
+            result = await env_client.step(episode_id=episode_id, action=decision.action)
             total_reward += result.reward
             await self.trace.append(
                 TraceEvent(
@@ -132,6 +159,19 @@ class AgentLoop:
                     },
                 )
             )
+            await self.trace.append(
+                TraceEvent(
+                    episode_id=episode_id,
+                    step=step,
+                    event_type="observation",
+                    payload={
+                        "phase": "after_env",
+                        "data": result.observation.data,
+                        "content_type": result.observation.content_type,
+                        "system_prompt": result.observation.system_prompt,
+                    },
+                )
+            )
 
             # ── carry env system prompt forward ───────────────────────────────
             if result.system_prompt is not None:
@@ -139,7 +179,7 @@ class AgentLoop:
 
             # ── post-action technique pass ────────────────────────────────────
             for technique in self.techniques:
-                await technique.after_action(action, result, self.state)
+                await technique.after_action(decision.action, result, self.state)
 
             if result.terminated or result.truncated:
                 episode.status = "completed"

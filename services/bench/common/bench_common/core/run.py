@@ -37,17 +37,17 @@ class RunConfig(BaseModel):
     seed_set: list[int] | None = None
     num_episodes: int = 1
     max_parallel: int = 1
-    env_id: str | None = None
 
 
 class Run(BaseModel):
     id: str = Field(default_factory=_new_id)
     config: RunConfig
     requester_id: str
-    status: Literal["pending", "running", "completed", "failed"] = "pending"
+    status: Literal["pending", "running", "completed", "failed", "cancelled"] = "pending"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: datetime | None = None
     scores: dict[str, float] = {}
+    team_id: str | None = None
     env_id: str | None = None
 
 
@@ -55,7 +55,7 @@ class Episode(BaseModel):
     id: str = Field(default_factory=_new_id)
     run_id: str
     seed: int | None = None
-    status: Literal["pending", "running", "completed", "failed", "timeout"] = "pending"
+    status: Literal["pending", "running", "completed", "failed", "timeout", "cancelled"] = "pending"
     started_at: datetime | None = None
     ended_at: datetime | None = None
     steps: int = 0

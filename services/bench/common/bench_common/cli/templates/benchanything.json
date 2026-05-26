@@ -25,7 +25,7 @@
     },
 
     "episode": {
-      "max_steps": 1,
+      "max_steps": 10,
       "deterministic_reset": true,
       "supports_seed": true,
       "parallel_episodes": 1,

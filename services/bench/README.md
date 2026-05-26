@@ -84,7 +84,7 @@ If production broke after a deploy that ran `makemigrations` on boot (auto-gener
 - **Members:** JWT from swecc-server `GET /auth/jwt/` (validated via shared `packages/swecc-jwt`, same as sockets).
 - **Guests:** `POST /v1/auth/guest` → Bearer guest token or `bench_guest` cookie.
 - **Teams:** create team → 4-char `join_code`; join with `POST /v1/teams/join` (max 4 members). No owner-direct add.
-- **CLI:** `python -m bench_common.cli auth login|guest|whoami` and `team create|join|list`.
+- **CLI:** `bench auth login|guest|whoami`, `team create|join|list`, `env submit|list`, `run create|export`, `init` (scaffold a repo). See `docs/SHOWCASE_DEVELOPER.md`.
 - **Local dev without auth:** `BENCH_AUTH_DISABLED=1`.
 - **Migrate:** `docker compose exec server bash -c "cd server && python manage.py migrate bench"`.
 

@@ -16,7 +16,6 @@ from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint
-from bench_common.core.run import Run
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible
@@ -47,6 +46,8 @@ class DeveloperEnvironment(BaseModel):
     env_url: str | None
     error_message: str | None
     created_at: str
+    scope: str = EnvScope.SOLO
+    team_id: str | None = None
 
 
 class EnvironmentWithUsage(DeveloperEnvironment):
@@ -247,19 +248,61 @@ async def _onboard_environment(
 async def list_environments(
     scope: str | None = Query(None),
     team_id: str | None = Query(None),
+    domain_id: str | None = Query(None),
     member: Member = Depends(require_member),
 ) -> list[dict[str, Any]]:
+    if domain_id and not scope and not team_id:
+        solo = await db.list_developer_environments(
+            scope=EnvScope.SOLO,
+            actor_id=str(member.user_id),
+            domain_id=domain_id,
+        )
+        teams = await team_svc.list_teams_for_user(member.user_id)
+        team_envs: list[dict[str, Any]] = []
+        for t in teams:
+            tid = parse_team_id(t["team_id"])
+            if tid:
+                team_envs.extend(
+                    await db.list_developer_environments(
+                        scope=EnvScope.TEAM,
+                        team_id=str(tid),
+                        domain_id=domain_id,
+                    )
+                )
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for env in solo + team_envs:
+            eid = env.get("id")
+            if eid and eid not in seen:
+                seen.add(eid)
+                out.append(env)
+        return out
+
     if team_id:
         tid = parse_team_id(team_id)
         if not await team_svc.is_member(tid, member.user_id):
             raise HTTPException(status_code=403, detail="Not a member of this team")
-        return await db.list_developer_environments(scope=EnvScope.TEAM, team_id=str(tid))
+        return await db.list_developer_environments(
+            scope=EnvScope.TEAM,
+            team_id=str(tid),
+            domain_id=domain_id,
+        )
     if scope == EnvScope.TEAM:
         raise HTTPException(status_code=422, detail="team_id required for team scope")
     return await db.list_developer_environments(
         scope=EnvScope.SOLO,
         actor_id=str(member.user_id),
+        domain_id=domain_id,
     )
+
+
+@router.get("/environments/{env_id}/runs")
+async def list_environment_runs(
+    env_id: str,
+    member: Member = Depends(require_member),
+) -> list:
+    await assert_dev_env_access(env_id, member)
+    return await db.list_runs(env_id=env_id, limit=50)
 
 
 @router.post("/environments/{env_id}/retry", response_model=DeveloperEnvironment)
@@ -335,23 +378,8 @@ async def get_environment(
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
-    usage: dict[str, Any] = {}
-    if env.get("domain_id"):
-        usage = await db.get_domain_usage_stats(env["domain_id"], env_id=env_id)
+    usage = await db.get_environment_usage_stats(env_id)
     return {**env, "usage": usage}
-
-
-@router.get("/environments/{env_id}/runs", response_model=list[Run])
-async def list_environment_runs(
-    env_id: str,
-    limit: int = 50,
-    principal=Depends(get_optional_principal),
-) -> list[Run]:
-    await assert_dev_env_access(env_id, principal)
-    env = await db.get_developer_environment(env_id)
-    if env is None:
-        raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
-    return await db.list_runs(env_id=env_id, domain_id=env.get("domain_id"), limit=limit)
 
 
 @router.get("/environments/{env_id}/usage")
@@ -363,16 +391,7 @@ async def get_environment_usage(
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
-    if not env.get("domain_id"):
-        return {
-            "domain_id": None,
-            "total_runs": 0,
-            "total_episodes": 0,
-            "avg_score": None,
-            "best_score": None,
-            "leaderboard_entries": 0,
-        }
-    return await db.get_domain_usage_stats(env["domain_id"], env_id=env_id)
+    return await db.get_environment_usage_stats(env_id)
 
 
 @router.get("/domains/{domain_id}/usage")

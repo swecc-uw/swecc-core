@@ -6,11 +6,14 @@ from app.auth.policy import assert_guest_can_create_run, assert_guest_rate_limit
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
 from app.services import teams as team_svc
+from app.services.run_env import resolve_run_environment_id
 from bench.models import ActorType
 from bench.models import DeveloperEnvironment as DevEnvRow
-from bench.models import EnvScope, Visibility
+from bench.models import EnvScope
+from bench.models import Run as RunRow
+from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
-from bench_common.core.run_env import validate_env_domain_match
+from bench_common.export.replay import build_run_export_dict
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import trace_store
@@ -24,6 +27,7 @@ router = APIRouter(prefix="/v1/runs", tags=["runs"])
 class CreateRunBody(RunConfig):
     team_id: str | None = None
     visibility: str | None = None
+    env_id: str | None = None
 
 
 def _requester_id(principal: Guest | Member) -> str:
@@ -35,22 +39,23 @@ def _requester_id(principal: Guest | Member) -> str:
 @router.get("", response_model=list[Run])
 async def list_runs(
     domain_id: str | None = None,
+    env_id: str | None = None,
     principal=Depends(get_optional_principal),
 ) -> list[Run]:
-    from bench.models import Run as RunRow
-
     if auth_disabled():
-        return await db.list_runs(domain_id=domain_id)
+        return await db.list_runs(domain_id=domain_id, env_id=env_id)
 
     if isinstance(principal, Guest):
         return await db.list_runs(
             domain_id=domain_id,
+            env_id=env_id,
             actor_type=ActorType.GUEST,
             actor_id=principal.session_id,
         )
     if isinstance(principal, Member):
         return await db.list_runs(
             domain_id=domain_id,
+            env_id=env_id,
             actor_type=ActorType.MEMBER,
             actor_id=str(principal.user_id),
         )
@@ -76,14 +81,17 @@ async def create_run(
         if not await team_svc.is_member(team_uuid, principal.user_id):
             raise HTTPException(status_code=403, detail="Not a member of this team")
 
-    run_config = RunConfig(**config.model_dump(exclude={"team_id", "visibility"}))
-    if run_config.env_id:
-        env = await db.get_developer_environment(run_config.env_id)
-        try:
-            validate_env_domain_match(env, run_config.env_id, run_config.domain_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    resolved_env_id = await resolve_run_environment_id(
+        env_id=config.env_id,
+        domain_id=config.domain_id,
+        principal=principal,
+        team_id=team_uuid,
+    )
 
+    run_config = RunConfig(
+        **config.model_dump(exclude={"team_id", "visibility", "env_id"}),
+        env_id=resolved_env_id,
+    )
     req_id = "local" if auth_disabled() else _requester_id(principal)
     try:
         run = await orchestrator.create_run(run_config, requester_id=req_id)
@@ -101,16 +109,36 @@ async def create_run(
             visibility = Visibility.PRIVATE
         expires = None
 
+    if resolved_env_id:
+        run = run.model_copy(update={"env_id": resolved_env_id})
+
     await db.save_run(
         run,
         actor_type=actor_type,
         actor_id=actor_id,
         team_id=str(team_uuid) if team_uuid else None,
+        env_id=resolved_env_id,
         visibility=visibility,
         expires_at=expires,
-        env_id=run_config.env_id,
     )
-    return run
+    return await db.get_run(run.id) or run
+
+
+@router.post("/{run_id}/cancel", response_model=Run)
+async def cancel_run(
+    run_id: str,
+    principal=Depends(get_principal),
+) -> Run:
+    await assert_run_read(run_id, principal)
+    run = await db.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    if run.status in ("completed", "failed", "cancelled"):
+        return run
+    try:
+        return await orchestrator.cancel_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/{run_id}", response_model=Run)
@@ -144,5 +172,46 @@ async def get_traces(
     result = {}
     for ep in episodes:
         events = await trace_store.read(ep.id)
-        result[ep.id] = [e.model_dump() for e in events]
+        result[ep.id] = [e.model_dump(mode="json") for e in events]
     return result
+
+
+@router.get("/{run_id}/export")
+async def export_run(
+    run_id: str,
+    principal=Depends(get_optional_principal),
+) -> dict:
+    """
+    Full run bundle for repo-local showcase frontends.
+
+    Includes run metadata, episodes, raw traces, and a ``replay`` map with
+    per-step ``reasoning`` (model text), observations, and actions.
+    Readable without auth when the run is gallery_public and completed.
+    """
+    row = await assert_run_read(run_id, principal)
+    run = await db.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    tid = str(row.team_id) if row.team_id else None
+    eid = str(row.environment_id) if row.environment_id else None
+    updates: dict[str, str | None] = {}
+    if run.team_id != tid:
+        updates["team_id"] = tid
+    if run.env_id != eid:
+        updates["env_id"] = eid
+    if updates:
+        run = run.model_copy(update=updates)
+
+    domain = await db.get_domain(run.config.domain_id)
+    episodes = await db.get_episodes(run_id)
+    traces_by_episode: dict[str, list] = {}
+    for ep in episodes:
+        traces_by_episode[ep.id] = await trace_store.read(ep.id)
+
+    return build_run_export_dict(
+        run=run,
+        episodes=episodes,
+        traces_by_episode=traces_by_episode,
+        visibility=row.visibility,
+        domain_name=domain.name if domain else None,
+    )
