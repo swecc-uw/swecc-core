@@ -131,3 +131,21 @@ async def test_archive_domain_gallery_demotes_public_runs(django_db):
     assert await store.list_gallery_runs() == []
     row = await RunRow.objects.aget(id=run.id)
     assert row.visibility == Visibility.PRIVATE
+
+
+@pytest.mark.asyncio
+async def test_list_domains_excludes_archived_by_default(django_db):
+    from bench_common.storage import django_store as store
+
+    active = _sample_domain("active-domain")
+    archived = _sample_domain("archived-domain")
+    await store.save_domain(active)
+    await store.save_domain(archived.model_copy(update={"status": "archived"}))
+
+    listed = await store.list_domains()
+    listed_ids = {d.id for d in listed}
+    assert active.id in listed_ids
+    assert archived.id not in listed_ids
+
+    with_archived = await store.list_domains(include_archived=True)
+    assert archived.id in {d.id for d in with_archived}

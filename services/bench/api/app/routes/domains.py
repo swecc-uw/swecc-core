@@ -76,8 +76,14 @@ async def create_domain(
 
 
 @router.get("", response_model=list[Domain])
-async def list_domains(published: bool | None = None) -> list[Domain]:
-    return await db.list_domains(published_only=published is True)
+async def list_domains(
+    published: bool | None = None,
+    include_archived: bool = False,
+) -> list[Domain]:
+    return await db.list_domains(
+        published_only=published is True,
+        include_archived=include_archived,
+    )
 
 
 @router.get("/{domain_id}", response_model=Domain)
@@ -150,3 +156,22 @@ async def unpublish_domain(
     updated = domain.model_copy(update={"status": "draft"})
     await db.save_domain(updated)
     return updated
+
+
+@router.post("/{domain_id}/archive", response_model=Domain)
+async def archive_domain(
+    domain_id: str,
+    member: Member = Depends(require_member),
+) -> Domain:
+    """Archive a domain and remove it from gallery surfaces (owner-only)."""
+    domain = await db.get_domain(domain_id)
+    if domain is None:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    await _assert_domain_owner(domain, member)
+    if domain.status == "archived":
+        return domain
+    await db.archive_domain_gallery(domain_id)
+    archived = await db.get_domain(domain_id)
+    if archived is None:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    return archived

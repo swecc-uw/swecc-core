@@ -85,11 +85,21 @@ async def get_domain(domain_id: str) -> Domain | None:
     return _model_from_row_data(Domain, row.data)
 
 
-async def list_domains(*, published_only: bool = False) -> list[Domain]:
+async def list_domains(
+    *,
+    published_only: bool = False,
+    include_archived: bool = False,
+) -> list[Domain]:
     qs = DomainRow.objects.all()
     if published_only:
         qs = qs.filter(published=True)
-    return [_model_from_row_data(Domain, row.data) async for row in qs]
+    out: list[Domain] = []
+    async for row in qs:
+        domain = _model_from_row_data(Domain, row.data)
+        if not include_archived and domain.status == "archived":
+            continue
+        out.append(domain)
+    return out
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────

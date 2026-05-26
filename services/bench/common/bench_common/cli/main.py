@@ -399,6 +399,13 @@ def _cmd_env_list(args: argparse.Namespace) -> None:
             print(f"{env['id']}  {env['status']}  {env.get('scope', 'solo')}  {env['name']}")
 
 
+def _cmd_env_delete(args: argparse.Namespace) -> None:
+    with _require_member_session(args) as session:
+        r = session.client.delete(f"/v1/developer/environments/{args.env_id}")
+        r.raise_for_status()
+        print("Environment deleted.")
+
+
 def _cmd_run_create(args: argparse.Namespace) -> None:
     team_id = _active_team_id(args)
     payload: dict = {
@@ -664,6 +671,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--team", default=None)
     p.add_argument("--solo", action="store_true")
     p.set_defaults(func=_cmd_env_list)
+    p = env_sub.add_parser("delete")
+    p.add_argument("env_id")
+    p.set_defaults(func=_cmd_env_delete)
 
     reg = sub.add_parser("register")
     reg.add_argument("domain_file")
