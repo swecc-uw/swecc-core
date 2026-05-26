@@ -1,7 +1,7 @@
 import os
 
-import jwt
 import pytest
+from jose import jwt
 from swecc_jwt import validate_member_token
 
 
