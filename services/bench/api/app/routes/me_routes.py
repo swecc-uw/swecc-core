@@ -3,7 +3,8 @@ from __future__ import annotations
 from app.auth.deps import get_optional_principal, get_principal, require_member
 from app.auth.principal import Anonymous, Guest, Member
 from app.services import teams as team_svc
-from bench.models import ActorType, EnvScope, Run as RunRow
+from bench.models import ActorType, EnvScope
+from bench.models import Run as RunRow
 from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, Query

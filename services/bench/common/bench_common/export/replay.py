@@ -9,6 +9,7 @@ from bench_common.core.run import Episode, Run, TraceEvent
 
 EXPORT_SCHEMA_VERSION = "1"
 
+
 def _observation_suborder(payload: dict[str, Any]) -> int:
     phase = payload.get("phase") or ""
     if phase == "start":

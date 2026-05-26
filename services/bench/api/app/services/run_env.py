@@ -76,8 +76,7 @@ async def resolve_run_environment_id(
         raise HTTPException(
             status_code=422,
             detail=(
-                "Multiple developer environments match this domain; "
-                "pass env_id on POST /v1/runs"
+                "Multiple developer environments match this domain; " "pass env_id on POST /v1/runs"
             ),
         )
     return None

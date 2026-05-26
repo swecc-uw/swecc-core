@@ -102,7 +102,6 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
                 actor_id=str(member.user_id),
                 env_id=req.env_id,
                 visibility=Visibility.PRIVATE,
-                env_id=req.env_id,
             )
 
     return episode

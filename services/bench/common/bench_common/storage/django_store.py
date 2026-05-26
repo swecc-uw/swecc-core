@@ -346,9 +346,7 @@ async def get_environment_usage_stats(env_id: str) -> dict[str, Any]:
 
     lb_rows = []
     if domain_id:
-        lb_rows = [
-            row async for row in LeaderboardRow.objects.filter(domain_id=domain_id)
-        ]
+        lb_rows = [row async for row in LeaderboardRow.objects.filter(domain_id=domain_id)]
     scores = [row.primary_score for row in lb_rows]
     avg_score = sum(scores) / len(scores) if scores else None
     best_score = max(scores) if scores else None
