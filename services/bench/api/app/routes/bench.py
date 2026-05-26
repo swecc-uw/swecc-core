@@ -191,9 +191,7 @@ async def _run_full_bench_local(job_id: str) -> None:
                 "full_bench_model_done", job_id=job_id, model=model, score=primary_score
             )
         except Exception as exc:
-            log.exception(
-                "full_bench_model_failed", job_id=job_id, model=model, error=str(exc)
-            )
+            log.exception("full_bench_model_failed", job_id=job_id, model=model, error=str(exc))
             model_results[model] = {
                 "run_id": None,
                 "status": "failed",

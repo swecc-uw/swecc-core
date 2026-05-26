@@ -13,6 +13,14 @@ Monorepo for SWECC's backend services.
 | chronos | 8002 | Metrics collection |
 | scheduler | - | Cron job runner |
 
+## Packages
+
+Distributable artifacts that live under `packages/` and ship to PyPI independently of the services.
+
+| Package | Path | Description |
+|---------|------|-------------|
+| swecc-mesocosm | `packages/swecc-mesocosm/` | CLI (`mesocosm`) + Python client for the BenchAnything platform |
+
 ## Local Development
 
 ```bash

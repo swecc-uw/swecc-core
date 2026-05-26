@@ -1,0 +1,108 @@
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "swecc-mesocosm"
+version = "0.1.0"
+description = "CLI and Python client for SWECC's benchmark and eval platform."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+keywords = ["benchmark", "evaluation", "llm", "swecc"]
+authors = [
+    { name = "SWECC Labs", email = "swecc@uw.edu" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "typer>=0.12",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "mypy",
+    "ruff",
+    "black",
+    "pre-commit",
+    "build",
+    "twine",
+]
+lint = [
+    "ruff",
+    "black",
+    "mypy",
+]
+test = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.urls]
+Homepage = "https://github.com/swecc-uw/swecc-core"
+Repository = "https://github.com/swecc-uw/swecc-core"
+Issues = "https://github.com/swecc-uw/swecc-core/issues"
+
+[project.scripts]
+mesocosm = "swecc_mesocosm.cli:main"
+
+[tool.hatch.build]
+exclude = [
+    "tests/*",
+    "venv/*",
+    ".git/*",
+    "*.pyc",
+    "__pycache__/*",
+    ".pytest_cache/*",
+    ".mypy_cache/*",
+    ".ruff_cache/*",
+    "dist/*",
+    "build/*",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["swecc_mesocosm"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+fix = true
+unsafe-fixes = false
+lint.select = ["E", "F", "I", "N", "W", "B", "UP", "RUF"]
+lint.ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["swecc_mesocosm"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]

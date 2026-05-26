@@ -53,9 +53,12 @@ lint_python_service() {
   if command -v isort &>/dev/null; then
     log INFO "Running isort"
     if [[ "$FIX" == "true" ]]; then
-      isort . || exit_code=$?
+      isort --profile=black --line-length=100 . || exit_code=$?
+      if command -v black &>/dev/null; then
+        black . || exit_code=$?
+      fi
     else
-      isort --check-only . || exit_code=$?
+      isort --check-only --profile=black --line-length=100 . || exit_code=$?
     fi
   fi
 
