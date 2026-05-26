@@ -1,8 +1,7 @@
 import pytest
+from app.auth.policy import assert_guest_can_create_run
 from bench_common.config import settings
 from fastapi import HTTPException
-
-from app.auth.policy import assert_guest_can_create_run
 
 
 def test_guest_allowlist_empty_allows_any_domain(monkeypatch):

@@ -1,9 +1,8 @@
 """Delete expired guest sessions and guest runs past expires_at."""
 
+from bench.models import ActorType, BenchGuestSession, Run
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-
-from bench.models import ActorType, BenchGuestSession, Run
 
 
 class Command(BaseCommand):

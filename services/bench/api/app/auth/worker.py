@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import os
 
-from fastapi import HTTPException, Request
-
 from app.auth.resolve import auth_disabled
+from fastapi import HTTPException, Request
 
 
 def _expected_worker_token() -> str | None:
-    return os.environ.get("BENCH_WORKER_TOKEN") or os.environ.get(
-        "SWECC_BENCH_WORKER_TOKEN"
-    )
+    return os.environ.get("BENCH_WORKER_TOKEN") or os.environ.get("SWECC_BENCH_WORKER_TOKEN")
 
 
 async def require_worker(request: Request) -> None:

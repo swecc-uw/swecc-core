@@ -1,5 +1,11 @@
 from datetime import timedelta
 
+from app.auth.access import assert_run_read, parse_team_id
+from app.auth.deps import get_optional_principal, get_principal
+from app.auth.policy import assert_guest_can_create_run, assert_guest_rate_limit
+from app.auth.principal import Guest, Member
+from app.auth.resolve import auth_disabled
+from app.services import teams as team_svc
 from bench.models import ActorType
 from bench.models import DeveloperEnvironment as DevEnvRow
 from bench.models import EnvScope, Visibility
@@ -11,14 +17,6 @@ from bench_common.storage.trace_store import trace_store
 from django.utils import timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-
-from app.auth.access import assert_run_read, parse_team_id
-from app.auth.deps import get_optional_principal, get_principal
-from app.auth.policy import (assert_guest_can_create_run,
-                             assert_guest_rate_limit)
-from app.auth.principal import Guest, Member
-from app.auth.resolve import auth_disabled
-from app.services import teams as team_svc
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 
@@ -93,11 +91,7 @@ async def create_run(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     actor_type = ActorType.MEMBER if isinstance(principal, Member) else ActorType.GUEST
-    actor_id = (
-        str(principal.user_id)
-        if isinstance(principal, Member)
-        else principal.session_id
-    )
+    actor_id = str(principal.user_id) if isinstance(principal, Member) else principal.session_id
     if isinstance(principal, Guest):
         visibility = Visibility.GALLERY_PUBLIC
         expires = timezone.now() + timedelta(days=7)
