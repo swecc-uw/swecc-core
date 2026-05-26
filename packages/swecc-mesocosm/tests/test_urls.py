@@ -5,6 +5,7 @@ from swecc_mesocosm.urls import (
     default_bench_api_url,
     default_env_adapter_url,
     default_server_url,
+    guest_bench_api_url,
     mesocosm_local_mode,
 )
 
@@ -32,6 +33,17 @@ def test_default_bench_api_url_local_profile() -> None:
     os.environ["MESOCOSM_LOCAL"] = "1"
     assert default_bench_api_url() == "http://127.0.0.1:8010"
     del os.environ["MESOCOSM_LOCAL"]
+
+
+def test_guest_bench_api_url_ignores_local_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MESOCOSM_LOCAL", "1")
+    assert guest_bench_api_url() == "https://api.swecc.org/bench"
+
+
+def test_guest_bench_api_url_respects_swecc_bench_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MESOCOSM_LOCAL", "1")
+    monkeypatch.setenv("SWECC_BENCH_URL", "http://127.0.0.1:8010")
+    assert guest_bench_api_url() == "http://127.0.0.1:8010"
 
 
 def test_default_server_url_remote() -> None:

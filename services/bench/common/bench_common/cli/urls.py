@@ -16,14 +16,29 @@ def mesocosm_local_mode() -> bool:
     return os.environ.get("MESOCOSM_LOCAL", "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def default_bench_api_url() -> str:
-    """bench-api base URL (includes ``/bench`` in production behind SWAG)."""
+def _bench_url_from_env() -> str | None:
     for key in ("MESOCOSM_BASE_URL", "SWECC_BENCH_URL", "BENCH_API_URL"):
         val = os.environ.get(key, "").strip()
         if val:
             return val.rstrip("/")
+    return None
+
+
+def default_bench_api_url() -> str:
+    """bench-api base URL (includes ``/bench`` in production behind SWAG)."""
+    from_env = _bench_url_from_env()
+    if from_env:
+        return from_env
     if mesocosm_local_mode():
         return LOCAL_BENCH_API_URL
+    return PROD_BENCH_API_URL
+
+
+def guest_bench_api_url() -> str:
+    """bench-api URL for ``auth guest`` (production default; ignores creds and ``MESOCOSM_LOCAL``)."""
+    from_env = _bench_url_from_env()
+    if from_env:
+        return from_env
     return PROD_BENCH_API_URL
 
 

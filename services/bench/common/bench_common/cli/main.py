@@ -11,7 +11,11 @@ import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
 from bench_common.auth.session import get_bench_session
 from bench_common.auth.swecc_server import fetch_jwt, login
-from bench_common.cli.urls import default_bench_api_url, default_server_url
+from bench_common.cli.urls import (
+    default_bench_api_url,
+    default_server_url,
+    guest_bench_api_url,
+)
 
 
 def _default_bench_url() -> str:
@@ -25,6 +29,29 @@ def _default_server_url() -> str:
 def _bench_url(args: argparse.Namespace) -> str:
     creds = load_credentials() or {}
     return (args.bench_url or creds.get("bench_url") or _default_bench_url()).rstrip("/")
+
+
+def _bench_url_for_guest(args: argparse.Namespace) -> str:
+    """Guest creation URL: CLI flag or explicit env only (never saved creds or MESOCOSM_LOCAL)."""
+    if args.bench_url:
+        return args.bench_url.rstrip("/")
+    return guest_bench_api_url()
+
+
+def _guest_connect_error_message(bench: str, exc: httpx.ConnectError) -> str:
+    return (
+        f"Could not connect to bench-api at {bench}\n"
+        f"  ({exc})\n"
+        "For production guest auth:\n"
+        "  unset MESOCOSM_LOCAL\n"
+        "  mesocosm auth guest\n"
+        "Or set the API explicitly:\n"
+        "  export SWECC_BENCH_URL=https://api.swecc.org/bench\n"
+        "  mesocosm auth guest\n"
+        "For local docker:\n"
+        "  docker compose up bench-api\n"
+        "  mesocosm auth guest --bench-url http://127.0.0.1:8010"
+    )
 
 
 def _active_team_id(args: argparse.Namespace) -> str | None:
@@ -53,9 +80,13 @@ def _cmd_auth_login(args: argparse.Namespace) -> None:
 
 
 def _cmd_auth_guest(args: argparse.Namespace) -> None:
-    bench = _bench_url(args)
-    r = httpx.post(f"{bench}/v1/auth/guest", timeout=30.0)
-    r.raise_for_status()
+    bench = _bench_url_for_guest(args)
+    try:
+        r = httpx.post(f"{bench}/v1/auth/guest", timeout=30.0)
+        r.raise_for_status()
+    except httpx.ConnectError as exc:
+        print(_guest_connect_error_message(bench, exc), file=sys.stderr)
+        sys.exit(1)
     data = r.json()
     save_credentials({"mode": "guest", "token": data["guest_token"], "bench_url": bench})
     print(f"Guest session created (expires {data['expires_at']}).")
@@ -396,7 +427,20 @@ def main(argv: list[str] | None = None) -> None:
     p = auth_sub.add_parser("token")
     p.help = "Print saved member JWT (for curl); login first"
     p.set_defaults(func=_cmd_auth_token)
-    p = auth_sub.add_parser("guest")
+    p = auth_sub.add_parser(
+        "guest",
+        help="Create a guest session (defaults to production bench-api)",
+    )
+    p.add_argument(
+        "--bench-url",
+        default=None,
+        dest="bench_url",
+        metavar="URL",
+        help=(
+            "bench-api base URL (default: https://api.swecc.org/bench; "
+            "ignores saved credentials and MESOCOSM_LOCAL)"
+        ),
+    )
     p.set_defaults(func=_cmd_auth_guest)
     p = auth_sub.add_parser("whoami")
     p.set_defaults(func=_cmd_auth_whoami)
