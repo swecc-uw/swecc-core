@@ -82,23 +82,16 @@ def print_root_help(*, console: Console | None = None) -> None:
             ],
         ),
         (
-            "Domain helpers (bench-api)",
+            "Connectivity & validation",
             [
-                ("suggest TEXT", "Heuristic benchmark_kind / scoring hints"),
-                ("validate FILE", "Validate domain JSON against policy"),
                 ("doctor", "Check bench-api URL and /bench prefix"),
-                (
-                    "register",
-                    "Register/upsert domain via API (--from-json or flags)",
-                ),
+                ("doctor --local", "Check env adapter (:8765) for run local"),
+                ("validate FILE", "Validate domain JSON against policy (pre-submit check)"),
                 (
                     "register domain.py",
-                    "(advanced) Legacy repos: load DOMAIN_CONFIG from domain.py "
-                    "(--auto-id, --publish); not used by mesocosm init",
+                    "(legacy) Repos with DOMAIN_CONFIG in domain.py "
+                    "(--auto-id, --publish); use env submit for new repos",
                 ),
-                ("publish ID", "Publish a draft domain"),
-                ("get ID", "Fetch a domain"),
-                ("list", "List domains"),
             ],
         ),
         (

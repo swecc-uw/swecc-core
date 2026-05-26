@@ -29,10 +29,12 @@ def test_root_help_lists_auth_and_env_commands() -> None:
     assert "env submit" in out
     assert "run local" in out
     assert "run get" in out
-    # init scaffold uses benchanything.json + env submit; not register DOMAIN.py in local section
-    assert "register DOMAIN.py" not in out
-    assert "(advanced)" in out
+    assert "doctor" in out
+    assert "validate FILE" in out
+    assert "suggest" not in out
+    assert "publish ID" not in out
     assert "register domain.py" in out
+    assert "register\n" not in out or "register domain.py" in out
 
 
 def test_run_help_lists_platform_and_inspection() -> None:
@@ -48,18 +50,6 @@ def test_main_help_entrypoint(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
     monkeypatch.setattr(sys, "argv", ["mesocosm", "--help"])
     main()
     assert "auth login" in capsys.readouterr().out
-
-
-def test_suggest_command(cli_runner: CliRunner) -> None:
-    result = cli_runner.invoke(
-        app,
-        ["suggest", "A trivia quiz with multiple choice questions."],
-    )
-    assert result.exit_code == 0
-    body = json.loads(result.stdout)
-    assert body["benchmark_kind"] == "qa_mcq"
-    assert body["scoring_source"] == "terminal"
-    assert body["max_steps"] == 1
 
 
 def test_validate_ok_from_file(cli_runner: CliRunner, domain_json_file: Path) -> None:
@@ -108,61 +98,6 @@ def test_validate_fails_on_policy_violation(
     result = cli_runner.invoke(app, ["validate", str(path)])
     assert result.exit_code == 1
     assert json.loads(result.stdout)["ok"] is False
-
-
-def test_register_missing_required_flags(cli_runner: CliRunner) -> None:
-    result = cli_runner.invoke(
-        app,
-        ["register", "--id", "only-id"],
-    )
-    assert result.exit_code == 1
-    assert "missing required flag" in result.stderr
-
-
-def test_register_invalid_scoring_source(cli_runner: CliRunner) -> None:
-    result = cli_runner.invoke(
-        app,
-        [
-            "register",
-            "--id",
-            "x",
-            "--name",
-            "X",
-            "--owner-id",
-            "o",
-            "--description",
-            "trivia",
-            "--env-url",
-            "https://example.com/env",
-            "--scoring-source",
-            "bogus",
-        ],
-    )
-    assert result.exit_code == 1
-    assert "terminal" in result.stderr or "episode_reward" in result.stderr
-
-
-def test_register_validation_failure_without_skip(cli_runner: CliRunner, tmp_path: Path) -> None:
-    path = tmp_path / "domain.json"
-    path.write_text(json.dumps({"id": "x"}), encoding="utf-8")
-    result = cli_runner.invoke(app, ["register", "--from-json", str(path)])
-    assert result.exit_code == 1
-    assert "validation failed" in result.stderr
-    assert json.loads(result.stdout)["ok"] is False
-
-
-def test_register_invalid_from_json(cli_runner: CliRunner, tmp_path: Path) -> None:
-    path = tmp_path / "domain.json"
-    path.write_text("[1, 2, 3]", encoding="utf-8")
-    result = cli_runner.invoke(app, ["register", "--from-json", str(path)])
-    assert result.exit_code == 1
-    assert "JSON object" in result.stderr
-
-
-def test_list_invalid_status(cli_runner: CliRunner) -> None:
-    result = cli_runner.invoke(app, ["list", "--status", "archived"])
-    assert result.exit_code == 1
-    assert "--status must be" in result.stderr
 
 
 def test_eval_run_invalid_seed_set(cli_runner: CliRunner) -> None:

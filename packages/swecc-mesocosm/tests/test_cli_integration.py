@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -24,181 +23,6 @@ def patch_bench_client(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr("swecc_mesocosm.cli._client", factory)
 
     return _patch
-
-
-def test_register_success(
-    cli_runner: CliRunner,
-    patch_bench_client: Any,
-    minimal_domain_payload: dict[str, Any],
-) -> None:
-    created = {**minimal_domain_payload, "status": "draft"}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "POST"
-        assert request.url.path.endswith("/v1/domains")
-        return httpx.Response(201, json=created)
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        [
-            "register",
-            "--id",
-            "demo",
-            "--name",
-            "Demo",
-            "--owner-id",
-            "owner",
-            "--description",
-            "trivia quiz",
-            "--env-url",
-            "https://example.com/env",
-            "--base-url",
-            "http://bench.test",
-        ],
-    )
-    assert result.exit_code == 0, result.stderr
-    assert json.loads(result.stdout)["id"] == "demo"
-
-
-def test_register_from_json_with_overrides(
-    cli_runner: CliRunner,
-    patch_bench_client: Any,
-    domain_json_file: Path,
-) -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content.decode())
-        assert body["id"] == "override-id"
-        assert body["binding_vow"]["domain_id"] == "override-id"
-        return httpx.Response(201, json={**body, "status": "draft"})
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        [
-            "register",
-            "--from-json",
-            str(domain_json_file),
-            "--id",
-            "override-id",
-            "--base-url",
-            "http://bench.test",
-        ],
-    )
-    assert result.exit_code == 0, result.stderr
-
-
-def test_register_upsert_on_conflict(
-    cli_runner: CliRunner,
-    patch_bench_client: Any,
-    domain_json_file: Path,
-    minimal_domain_payload: dict[str, Any],
-) -> None:
-    patched = {**minimal_domain_payload, "name": "Updated"}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.method == "POST":
-            return httpx.Response(409, json={"detail": "exists"})
-        if request.method == "PATCH":
-            return httpx.Response(200, json={**patched, "status": "draft"})
-        return httpx.Response(405)
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        [
-            "register",
-            "--from-json",
-            str(domain_json_file),
-            "--base-url",
-            "http://bench.test",
-        ],
-    )
-    assert result.exit_code == 0, result.stderr
-    assert json.loads(result.stdout)["name"] == "Updated"
-
-
-def test_list_domains_json(
-    cli_runner: CliRunner,
-    patch_bench_client: Any,
-) -> None:
-    items = [
-        {"id": "a", "name": "A", "status": "published", "owner_id": "o1"},
-        {"id": "b", "name": "B", "status": "draft", "owner_id": "o2"},
-    ]
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params.get("published") == "true"
-        return httpx.Response(200, json=items)
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        ["list", "--status", "published", "--json", "--base-url", "http://bench.test"],
-    )
-    assert result.exit_code == 0, result.stderr
-    assert json.loads(result.stdout) == items
-
-
-def test_list_draft_filter(
-    cli_runner: CliRunner,
-    patch_bench_client: Any,
-) -> None:
-    items = [
-        {"id": "a", "name": "A", "status": "published", "owner_id": "o1"},
-        {"id": "b", "name": "B", "status": "draft", "owner_id": "o2"},
-    ]
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=items)
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        ["list", "--status", "draft", "--json", "--base-url", "http://bench.test"],
-    )
-    assert result.exit_code == 0, result.stderr
-    assert len(json.loads(result.stdout)) == 1
-    assert json.loads(result.stdout)[0]["id"] == "b"
-
-
-def test_get_domain(cli_runner: CliRunner, patch_bench_client: Any) -> None:
-    domain = {"id": "demo", "status": "draft"}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/v1/domains/demo")
-        return httpx.Response(200, json=domain)
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        ["get", "demo", "--base-url", "http://bench.test"],
-    )
-    assert result.exit_code == 0, result.stderr
-    assert json.loads(result.stdout) == domain
-
-
-def test_publish_domain(
-    cli_runner: CliRunner,
-    patch_bench_client: Any,
-    minimal_domain_payload: dict[str, Any],
-) -> None:
-    published = {**minimal_domain_payload, "status": "published"}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "POST"
-        assert request.url.path.endswith("/publish")
-        return httpx.Response(200, json=published)
-
-    patch_bench_client(handler)
-    result = cli_runner.invoke(
-        app,
-        ["publish", "demo", "--base-url", "http://bench.test"],
-    )
-    assert result.exit_code == 0, result.stderr
-    body = json.loads(result.stdout)
-    assert body["domain"]["status"] == "published"
-    assert "artifact_digests" in body
 
 
 def test_eval_test_episode(cli_runner: CliRunner, patch_bench_client: Any) -> None:
@@ -408,7 +232,7 @@ def test_cli_http_error_json(
     patch_bench_client(handler)
     result = cli_runner.invoke(
         app,
-        ["get", "missing", "--base-url", "http://bench.test"],
+        ["run", "get", "missing", "--base-url", "http://bench.test"],
     )
     assert result.exit_code == 1
     body = json.loads(result.stdout)

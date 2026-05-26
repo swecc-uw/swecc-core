@@ -43,5 +43,5 @@ def test_dispatch_register_domain_py(monkeypatch, tmp_path) -> None:
 
 
 def test_register_flags_not_dispatched_to_bench() -> None:
-    """Typer handles API register (no .py path)."""
+    """API register removed; only domain.py paths dispatch to bench_common."""
     assert try_dispatch_bench(["register", "--id", "my-bench"]) is False

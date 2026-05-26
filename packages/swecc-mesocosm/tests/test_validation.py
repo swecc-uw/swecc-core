@@ -5,27 +5,17 @@ from pathlib import Path
 
 import pytest
 from swecc_mesocosm import validation
-from swecc_mesocosm.infer import build_domain_payload
-
-
-def _minimal_payload() -> dict:
-    return build_domain_payload(
-        benchmark_id="demo",
-        name="Demo",
-        owner_id="owner",
-        description="trivia quiz",
-        env_url="https://example.com/env",
-    )
+from tests.conftest import _minimal_domain_payload_dict
 
 
 def test_validate_benchmark_config_ok() -> None:
-    result = validation.validate_benchmark_config(_minimal_payload())
+    result = validation.validate_benchmark_config(_minimal_domain_payload_dict())
     assert result["ok"] is True
     assert result["issues"] == []
 
 
 def test_validate_benchmark_config_missing_field() -> None:
-    payload = _minimal_payload()
+    payload = _minimal_domain_payload_dict()
     del payload["name"]
     result = validation.validate_benchmark_config(payload)
     assert result["ok"] is False
@@ -33,7 +23,7 @@ def test_validate_benchmark_config_missing_field() -> None:
 
 
 def test_validate_benchmark_config_bad_primary_metric() -> None:
-    payload = _minimal_payload()
+    payload = _minimal_domain_payload_dict()
     payload["scoring"]["primary_metric"] = "nonexistent_metric"
     result = validation.validate_benchmark_config(payload)
     assert result["ok"] is False

@@ -20,7 +20,7 @@ python adapter.py          # terminal 1
 mesocosm run local         # terminal 2 — Ollama + benchanything.json, no submit
 ```
 
-When ready for the platform: `mesocosm auth login` → `mesocosm env submit` (creates the domain from `benchanything.json` in your repo) → `mesocosm run create` with the returned `domain_id`. See `LOCAL_DEV.md` in your repo after `mesocosm init`. You do **not** need `mesocosm register domain.py` for this flow.
+When ready for the platform: `mesocosm auth login` → `mesocosm env submit` (creates the domain from `benchanything.json` in your repo) → `mesocosm run create` with the returned `domain_id`. See `LOCAL_DEV.md` in your repo after `mesocosm init`.
 
 ## Command overview
 
@@ -30,8 +30,11 @@ When ready for the platform: `mesocosm auth login` → `mesocosm env submit` (cr
 | **Auth & teams** | `mesocosm auth login`, `mesocosm team create` |
 | **Submit repo** | `mesocosm env submit --github-url …` |
 | **Platform runs** | `mesocosm run create`, `mesocosm run export RUN_ID` |
-| **Domain helpers** | `mesocosm suggest`, `mesocosm validate`, `mesocosm register` (API JSON/flags; legacy `register domain.py` only if your repo has `DOMAIN_CONFIG`) |
-| **Bench-api eval** | `mesocosm doctor`, `mesocosm eval test`, `mesocosm run get` |
+| **Connectivity** | `mesocosm doctor`, `mesocosm doctor --local` |
+| **Pre-submit check** | `mesocosm validate domain.json` |
+| **Bench-api eval** | `mesocosm eval test`, `mesocosm run get` |
+
+Legacy repos with `domain.py` + `DOMAIN_CONFIG` (not created by `mesocosm init`) can still use `mesocosm register path/to/domain.py`.
 
 See `PACKAGING.md` in this directory for how `bench_common` is bundled and how `mesocosm run` routes local vs platform subcommands.
 
@@ -60,8 +63,8 @@ from swecc_mesocosm import BenchClient
 async def main():
     c = BenchClient(base_url="http://127.0.0.1:8010")
     try:
-        domains = await c.list_domains(published_only=True)
-        print(len(domains), "published")
+        domain = await c.get_domain("my-bench-id")
+        print(domain["status"])
     finally:
         await c.aclose()
 
