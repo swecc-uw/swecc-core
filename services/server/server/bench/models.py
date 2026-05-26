@@ -147,6 +147,7 @@ class EpisodeStatus(models.TextChoices):
     RUNNING = "running", "Running"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
+    CANCELLED = "cancelled", "Cancelled"
     TIMEOUT = "timeout", "Timeout"
 
 
@@ -200,6 +201,7 @@ class DeveloperEnvironmentStatus(models.TextChoices):
     CLONING = "cloning", "Cloning"
     READY = "ready", "Ready"
     FAILED = "failed", "Failed"
+    CANCELLED = "cancelled", "Cancelled"
 
 
 class DeveloperEnvironment(models.Model):
@@ -258,6 +260,7 @@ class BenchJobStatus(models.TextChoices):
     RUNNING = "running", "Running"
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
+    CANCELLED = "cancelled", "Cancelled"
 
 
 class BenchJob(models.Model):
