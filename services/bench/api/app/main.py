@@ -36,6 +36,7 @@ from app.routes import (
     leaderboard,
     me_routes,
     runs,
+    teams,
     techniques,
     test,
 )
@@ -104,6 +105,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 app.include_router(auth_routes.router)
 app.include_router(gallery.router)
 app.include_router(me_routes.router)
+app.include_router(teams.router)
 app.include_router(domains.router)
 app.include_router(runs.router)
 app.include_router(test.router)

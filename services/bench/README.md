@@ -70,6 +70,15 @@ Verify locally: `cd services/server && python check_bench_migrations.py`.
 
 If production broke after a deploy that ran `makemigrations` on boot (auto-generated migration files not in git), deploy `server` with committed migrations only, then run `python manage.py migrate bench` after backup/review of any orphan rows in `django_migrations`.
 
+## Auth (branch `auth`)
+
+- **Members:** JWT from swecc-server `GET /auth/jwt/` (validated via shared `packages/swecc-jwt`, same as sockets).
+- **Guests:** `POST /v1/auth/guest` → Bearer guest token or `bench_guest` cookie.
+- **Teams:** create team → 4-char `join_code`; join with `POST /v1/teams/join` (max 4 members). No owner-direct add.
+- **CLI:** `python -m bench_common.cli auth login|guest|whoami` and `team create|join|list`.
+- **Local dev without auth:** `BENCH_AUTH_DISABLED=1`.
+- **Migrate:** `docker compose exec server bash -c "cd server && python manage.py migrate bench"`.
+
 ## Inference CLI
 
 The standalone benchmarking CLI ships inside `bench_common`:
