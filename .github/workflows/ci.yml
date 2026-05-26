@@ -241,6 +241,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      - name: Install local swecc-jwt for bench auth imports
+        if: steps.present.outputs.exists == 'true'
+        run: pip install -e ./packages/swecc-jwt
+
       - name: Install service test deps
         if: steps.present.outputs.exists == 'true'
         working-directory: ./services/bench/${{ steps.svc.outputs.sub }}
