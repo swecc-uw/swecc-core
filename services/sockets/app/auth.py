@@ -1,9 +1,18 @@
+from datetime import datetime
 from typing import List, Optional, Union
 
 from fastapi import WebSocket, status
+from pydantic import BaseModel, Field
 from swecc_jwt import validate_member_token
 
 from .config import settings
+
+
+class TokenPayload(BaseModel):
+    user_id: int
+    username: str
+    groups: List[str] = Field(default_factory=list)
+    exp: datetime
 
 
 class Auth:
