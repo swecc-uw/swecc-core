@@ -33,6 +33,5 @@ def test_merge_run_env_id_from_row():
         num_episodes=1,
     )
     run = Run(config=config, requester_id="u1")
-    row = SimpleNamespace(environment_id="env-abc")
-    merged = merge_run_env_id(run, row.environment_id)
+    merged = merge_run_env_id(run, "env-abc")
     assert merged.env_id == "env-abc"

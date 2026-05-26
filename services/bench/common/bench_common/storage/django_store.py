@@ -119,8 +119,6 @@ async def save_run(
         defaults["actor_id"] = actor_id
     if team_id is not None:
         defaults["team_id"] = team_id
-    if effective_env_id is not None:
-        defaults["environment_id"] = effective_env_id
     if visibility is not None:
         defaults["visibility"] = visibility
     if expires_at is not None:
@@ -131,14 +129,8 @@ async def save_run(
 def _run_from_row(row: RunRow) -> Run:
     run = _model_from_row_data(Run, row.data)
     tid = str(row.team_id) if row.team_id else None
-    eid = str(row.environment_id) if row.environment_id else None
-    updates: dict[str, Any] = {}
     if run.team_id != tid:
-        updates["team_id"] = tid
-    if run.env_id != eid:
-        updates["env_id"] = eid
-    if updates:
-        return run.model_copy(update=updates)
+        return run.model_copy(update={"team_id": tid})
     return run
 
 
@@ -170,7 +162,7 @@ async def list_runs(
     if team_id:
         qs = qs.filter(team_id=team_id)
     if env_id:
-        qs = qs.filter(environment_id=env_id)
+        qs = qs.filter(data__env_id=env_id)
     if visibility:
         qs = qs.filter(visibility=visibility)
     return [_run_from_row(row) async for row in qs.order_by("-id")[:limit]]
@@ -322,7 +314,7 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
 
 async def get_environment_usage_stats(env_id: str) -> dict[str, Any]:
     """Usage for runs attributed to one developer environment."""
-    run_rows = [row async for row in RunRow.objects.filter(environment_id=env_id)]
+    run_rows = [row async for row in RunRow.objects.filter(data__env_id=env_id)]
     total_runs = len(run_rows)
     domain_id = run_rows[0].domain_id if run_rows else None
     if domain_id is None:
