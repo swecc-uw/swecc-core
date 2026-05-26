@@ -65,9 +65,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
     await assert_dev_env_access(req.env_id, member)
     env = await db.get_developer_environment(req.env_id)
     if env is None:
-        raise HTTPException(
-            status_code=404, detail=f"Environment '{req.env_id}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Environment '{req.env_id}' not found")
     if env["status"] != "ready":
         raise HTTPException(
             status_code=400,
@@ -75,9 +73,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
             "Wait for onboarding to complete before benching.",
         )
     if not env.get("domain_id"):
-        raise HTTPException(
-            status_code=400, detail="Environment has no associated domain"
-        )
+        raise HTTPException(status_code=400, detail="Environment has no associated domain")
 
     domain = await db.get_domain(env["domain_id"])
     if domain is None:
@@ -201,18 +197,14 @@ async def _run_full_bench_local(job_id: str) -> None:
                     break
 
             primary_score = (
-                run.scores.get(domain.scoring.primary_metric)
-                if run and run.scores
-                else None
+                run.scores.get(domain.scoring.primary_metric) if run and run.scores else None
             )
             model_results[model] = {
                 "run_id": run.id if run else None,
                 "status": run.status if run else "failed",
                 "primary_score": primary_score,
             }
-            log.info(
-                "full_bench_model_done", job_id=job_id, model=model, score=primary_score
-            )
+            log.info("full_bench_model_done", job_id=job_id, model=model, score=primary_score)
         except Exception as exc:
             log.exception(
                 "full_bench_model_failed", job_id=job_id, model=model, error=str(exc)
