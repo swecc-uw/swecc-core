@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Full bench — episodes per model when running a full 5-model bench
     full_bench_episodes_per_model: int = 5
 
-    # Auth — guest demo runs (comma-separated domain IDs; empty = no guest runs)
+    # Auth — guest demo runs (comma-separated domain IDs; empty = all domains allowed)
     guest_runs_per_day: int = 5
     demo_domain_ids: list[str] = []
 

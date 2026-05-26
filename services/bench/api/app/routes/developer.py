@@ -7,14 +7,21 @@ from typing import Any
 
 import httpx
 import structlog
+from app.auth.access import assert_dev_env_access, parse_team_id
+from app.auth.deps import get_optional_principal, require_member
+from app.auth.principal import Member
+from app.auth.resolve import auth_disabled
+from app.services import teams as team_svc
+from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint
+from bench_common.core.run import Run
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible
 from bench_common.utils.github import normalize_github_url
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 
 log = structlog.get_logger()
@@ -22,10 +29,11 @@ router = APIRouter(prefix="/v1/developer", tags=["developer"])
 
 
 class SubmitEnvironmentRequest(BaseModel):
-    owner_id: str
     name: str
     description: str = ""
     github_url: str
+    team_id: str | None = None
+    owner_id: str | None = None  # ignored when auth enabled
 
 
 class DeveloperEnvironment(BaseModel):
@@ -57,16 +65,23 @@ class EnvPollResponse(BaseModel):
 async def submit_environment(
     req: SubmitEnvironmentRequest,
     response: Response,
+    member: Member = Depends(require_member),
 ) -> dict[str, Any]:
     github_url = normalize_github_url(req.github_url)
-    existing = await db.get_developer_environment_by_github_repo(req.owner_id, github_url)
+    owner_key = str(member.user_id) if not auth_disabled() else (req.owner_id or "local")
+    team_uuid = parse_team_id(req.team_id) if req.team_id else None
+    if team_uuid and not await team_svc.is_member(team_uuid, member.user_id):
+        raise HTTPException(status_code=403, detail="Not a member of this team")
+
+    scope = EnvScope.TEAM if team_uuid else EnvScope.SOLO
+    existing = await db.get_developer_environment_by_github_repo(owner_key, github_url)
     if existing is not None:
-        return await _handle_duplicate_submission(existing, req, github_url, response)
+        return await _handle_duplicate_submission(existing, req, github_url, response, owner_key)
 
     env_id = str(uuid.uuid4())
     env: dict[str, Any] = {
         "id": env_id,
-        "owner_id": req.owner_id,
+        "owner_id": owner_key,
         "name": req.name,
         "description": req.description,
         "github_url": github_url,
@@ -75,11 +90,18 @@ async def submit_environment(
         "env_url": None,
         "error_message": None,
         "created_at": datetime.utcnow().isoformat(),
+        "scope": scope,
+        "actor_type": ActorType.MEMBER,
+        "actor_id": owner_key,
+        "created_by_user_id": member.user_id,
+        "team_id": str(team_uuid) if team_uuid else None,
     }
     await db.save_developer_environment(env)
     response.status_code = 201
     asyncio.create_task(
-        _onboard_environment(env_id, github_url, req.owner_id, req.name, req.description)
+        _onboard_environment(
+            env_id, github_url, owner_key, req.name, req.description, scope, team_uuid
+        )
     )
     return env
 
@@ -89,6 +111,7 @@ async def _handle_duplicate_submission(
     req: SubmitEnvironmentRequest,
     github_url: str,
     response: Response,
+    owner_key: str,
 ) -> dict[str, Any]:
     """Re-submitting the same repo for the same owner updates one row instead of creating another."""
     if env["status"] == "cloning":
@@ -120,9 +143,11 @@ async def _handle_duplicate_submission(
         _onboard_environment(
             env["id"],
             github_url,
-            env["owner_id"],
+            owner_key,
             env["name"],
             env["description"],
+            env.get("scope", EnvScope.SOLO),
+            uuid.UUID(env["team_id"]) if env.get("team_id") else None,
         )
     )
     return env
@@ -134,6 +159,8 @@ async def _onboard_environment(
     owner_id: str,
     name: str,
     description: str,
+    scope: str = EnvScope.SOLO,
+    team_id: uuid.UUID | None = None,
 ) -> None:
     """Background task: clone repo via sandbox, create Domain, mark ready."""
     sandbox_base = settings.sandbox_url.rstrip("/")
@@ -217,13 +244,31 @@ async def _onboard_environment(
 
 
 @router.get("/environments", response_model=list[DeveloperEnvironment])
-async def list_environments(owner_id: str | None = None) -> list[dict[str, Any]]:
-    return await db.list_developer_environments(owner_id=owner_id)
+async def list_environments(
+    scope: str | None = Query(None),
+    team_id: str | None = Query(None),
+    member: Member = Depends(require_member),
+) -> list[dict[str, Any]]:
+    if team_id:
+        tid = parse_team_id(team_id)
+        if not await team_svc.is_member(tid, member.user_id):
+            raise HTTPException(status_code=403, detail="Not a member of this team")
+        return await db.list_developer_environments(scope=EnvScope.TEAM, team_id=str(tid))
+    if scope == EnvScope.TEAM:
+        raise HTTPException(status_code=422, detail="team_id required for team scope")
+    return await db.list_developer_environments(
+        scope=EnvScope.SOLO,
+        actor_id=str(member.user_id),
+    )
 
 
 @router.post("/environments/{env_id}/retry", response_model=DeveloperEnvironment)
-async def retry_environment(env_id: str) -> dict[str, Any]:
+async def retry_environment(
+    env_id: str,
+    principal=Depends(get_optional_principal),
+) -> dict[str, Any]:
     """Re-trigger cloning for a failed or pending environment after the repo has been fixed."""
+    await assert_dev_env_access(env_id, principal)
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
@@ -253,14 +298,22 @@ async def retry_environment(env_id: str) -> dict[str, Any]:
 
 
 @router.delete("/environments/{env_id}", status_code=204)
-async def delete_environment(env_id: str) -> None:
+async def delete_environment(
+    env_id: str,
+    principal=Depends(get_optional_principal),
+) -> None:
+    await assert_dev_env_access(env_id, principal)
     deleted = await db.delete_developer_environment(env_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
 
 
 @router.get("/environments/{env_id}/poll", response_model=EnvPollResponse)
-async def poll_environment(env_id: str) -> dict[str, Any]:
+async def poll_environment(
+    env_id: str,
+    principal=Depends(get_optional_principal),
+) -> dict[str, Any]:
+    await assert_dev_env_access(env_id, principal)
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
@@ -274,18 +327,39 @@ async def poll_environment(env_id: str) -> dict[str, Any]:
 
 
 @router.get("/environments/{env_id}", response_model=EnvironmentWithUsage)
-async def get_environment(env_id: str) -> dict[str, Any]:
+async def get_environment(
+    env_id: str,
+    principal=Depends(get_optional_principal),
+) -> dict[str, Any]:
+    await assert_dev_env_access(env_id, principal)
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
     usage: dict[str, Any] = {}
     if env.get("domain_id"):
-        usage = await db.get_domain_usage_stats(env["domain_id"])
+        usage = await db.get_domain_usage_stats(env["domain_id"], env_id=env_id)
     return {**env, "usage": usage}
 
 
+@router.get("/environments/{env_id}/runs", response_model=list[Run])
+async def list_environment_runs(
+    env_id: str,
+    limit: int = 50,
+    principal=Depends(get_optional_principal),
+) -> list[Run]:
+    await assert_dev_env_access(env_id, principal)
+    env = await db.get_developer_environment(env_id)
+    if env is None:
+        raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
+    return await db.list_runs(env_id=env_id, domain_id=env.get("domain_id"), limit=limit)
+
+
 @router.get("/environments/{env_id}/usage")
-async def get_environment_usage(env_id: str) -> dict[str, Any]:
+async def get_environment_usage(
+    env_id: str,
+    principal=Depends(get_optional_principal),
+) -> dict[str, Any]:
+    await assert_dev_env_access(env_id, principal)
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
@@ -298,7 +372,7 @@ async def get_environment_usage(env_id: str) -> dict[str, Any]:
             "best_score": None,
             "leaderboard_entries": 0,
         }
-    return await db.get_domain_usage_stats(env["domain_id"])
+    return await db.get_domain_usage_stats(env["domain_id"], env_id=env_id)
 
 
 @router.get("/domains/{domain_id}/usage")

@@ -1,11 +1,14 @@
 from typing import Any
 
+from app.auth.deps import require_member
+from app.auth.principal import Member
+from app.auth.resolve import auth_disabled
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/domains", tags=["domains"])
@@ -14,7 +17,7 @@ router = APIRouter(prefix="/v1/domains", tags=["domains"])
 class CreateDomainRequest(BaseModel):
     id: str
     name: str
-    owner_id: str
+    owner_id: str | None = None  # ignored when auth enabled; derived from member
     binding_vow: BindingVow
     endpoint: EnvironmentEndpoint
     scoring: ScoringConfig
@@ -53,12 +56,20 @@ class UpdateDomainRequest(BaseModel):
 
 
 @router.post("", response_model=Domain, status_code=201)
-async def create_domain(req: CreateDomainRequest) -> Domain:
+async def create_domain(
+    req: CreateDomainRequest,
+    member: Member = Depends(require_member),
+) -> Domain:
     existing = await db.get_domain(req.id)
     if existing is not None:
         raise HTTPException(status_code=409, detail=f"Domain '{req.id}' already exists")
     _ensure_binding_vow_matches_domain(req.id, req.binding_vow)
-    domain = Domain(**req.model_dump())
+    payload = req.model_dump()
+    if auth_disabled():
+        payload.setdefault("owner_id", req.owner_id or "local")
+    else:
+        payload["owner_id"] = str(member.user_id)
+    domain = Domain(**payload)
     await db.save_domain(domain)
     domain = await ensure_gallery_visible(domain, github_url="")
     return domain
@@ -77,11 +88,23 @@ async def get_domain(domain_id: str) -> Domain:
     return domain
 
 
+async def _assert_domain_owner(domain: Domain, member: Member) -> None:
+    if auth_disabled():
+        return
+    if domain.owner_id != str(member.user_id):
+        raise HTTPException(status_code=403, detail="Not allowed to modify this domain")
+
+
 @router.patch("/{domain_id}", response_model=Domain)
-async def update_domain(domain_id: str, req: UpdateDomainRequest) -> Domain:
+async def update_domain(
+    domain_id: str,
+    req: UpdateDomainRequest,
+    member: Member = Depends(require_member),
+) -> Domain:
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    await _assert_domain_owner(domain, member)
     if domain.status != "draft":
         raise HTTPException(
             status_code=409,
@@ -96,11 +119,34 @@ async def update_domain(domain_id: str, req: UpdateDomainRequest) -> Domain:
 
 
 @router.post("/{domain_id}/publish", response_model=Domain)
-async def publish_domain(domain_id: str) -> Domain:
+async def publish_domain(
+    domain_id: str,
+    member: Member = Depends(require_member),
+) -> Domain:
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    await _assert_domain_owner(domain, member)
     updated = domain.model_copy(update={"status": "published"})
     await db.save_domain(updated)
     await mirror_developer_env_from_domain(updated)
+    return updated
+
+
+@router.post("/{domain_id}/unpublish", response_model=Domain)
+async def unpublish_domain(
+    domain_id: str,
+    member: Member = Depends(require_member),
+) -> Domain:
+    domain = await db.get_domain(domain_id)
+    if domain is None:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    await _assert_domain_owner(domain, member)
+    if domain.status != "published":
+        raise HTTPException(
+            status_code=409,
+            detail="Only published domains can be unpublished",
+        )
+    updated = domain.model_copy(update={"status": "draft"})
+    await db.save_domain(updated)
     return updated

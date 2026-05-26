@@ -10,11 +10,15 @@ import asyncio
 from typing import Any
 
 import structlog
+from app.auth.access import assert_dev_env_access
+from app.auth.deps import require_member
+from app.auth.worker import require_worker
+from bench.models import ActorType, Visibility
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 log = structlog.get_logger()
@@ -42,7 +46,7 @@ async def dev_bench_status() -> dict[str, bool]:
 
 
 @router.post("/test", response_model=Episode)
-async def test_bench(req: TestBenchRequest) -> Episode:
+async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> Episode:
     """Run a single dev test bench: one model, one episode at a time."""
     allowed_models = settings.supported_models + settings.accepted_model_aliases
     if req.model not in allowed_models:
@@ -57,6 +61,7 @@ async def test_bench(req: TestBenchRequest) -> Episode:
             detail="A dev test bench is already running. Only one at a time is supported.",
         )
 
+    await assert_dev_env_access(req.env_id, member)
     env = await db.get_developer_environment(req.env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{req.env_id}' not found")
@@ -82,9 +87,22 @@ async def test_bench(req: TestBenchRequest) -> Episode:
                 env_url=env.get("env_url"),
                 seed=req.seed,
                 github_url=env.get("github_url"),
+                env_id=req.env_id,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
+
+        # run_test_episode saves the Run without actor metadata; attach member so
+        # GET /v1/runs?domain_id=… returns dev test bench runs in Recent activity.
+        run = await db.get_run(episode.run_id)
+        if run is not None:
+            await db.save_run(
+                run,
+                actor_type=ActorType.MEMBER,
+                actor_id=str(member.user_id),
+                visibility=Visibility.PRIVATE,
+                env_id=req.env_id,
+            )
 
     return episode
 
@@ -101,8 +119,12 @@ class FullBenchResponse(BaseModel):
 
 
 @router.post("/full/{env_id}", response_model=FullBenchResponse, status_code=202)
-async def full_bench(env_id: str) -> dict[str, Any]:
+async def full_bench(
+    env_id: str,
+    member=Depends(require_member),
+) -> dict[str, Any]:
     """Initiate a full bench: all 5 supported models against the env."""
+    await assert_dev_env_access(env_id, member)
     env = await db.get_developer_environment(env_id)
     if env is None:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
@@ -202,7 +224,7 @@ class CompleteJobRequest(BaseModel):
     failed: bool = False
 
 
-@router.get("/jobs")
+@router.get("/jobs", dependencies=[Depends(require_worker)])
 async def list_bench_jobs(
     env_id: str | None = None,
     status: str | None = None,
@@ -210,7 +232,7 @@ async def list_bench_jobs(
     return await db.list_bench_jobs(env_id=env_id, status=status)
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", dependencies=[Depends(require_worker)])
 async def get_bench_job(job_id: str) -> dict[str, Any]:
     job = await db.get_bench_job(job_id)
     if job is None:
@@ -229,7 +251,7 @@ async def claim_bench_job(job_id: str) -> dict[str, Any]:
     return job
 
 
-@router.patch("/jobs/{job_id}/complete")
+@router.patch("/jobs/{job_id}/complete", dependencies=[Depends(require_worker)])
 async def complete_bench_job(job_id: str, req: CompleteJobRequest) -> dict[str, Any]:
     job = await db.complete_bench_job(job_id, req.model_results, failed=req.failed)
     if job is None:
