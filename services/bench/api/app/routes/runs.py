@@ -4,6 +4,7 @@ from bench.models import ActorType
 from bench.models import DeveloperEnvironment as DevEnvRow
 from bench.models import EnvScope, Visibility
 from bench_common.core.run import Episode, Run, RunConfig
+from bench_common.core.run_env import validate_env_domain_match
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import trace_store
@@ -78,6 +79,13 @@ async def create_run(
             raise HTTPException(status_code=403, detail="Not a member of this team")
 
     run_config = RunConfig(**config.model_dump(exclude={"team_id", "visibility"}))
+    if run_config.env_id:
+        env = await db.get_developer_environment(run_config.env_id)
+        try:
+            validate_env_domain_match(env, run_config.env_id, run_config.domain_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     req_id = "local" if auth_disabled() else _requester_id(principal)
     try:
         run = await orchestrator.create_run(run_config, requester_id=req_id)
@@ -106,6 +114,7 @@ async def create_run(
         team_id=str(team_uuid) if team_uuid else None,
         visibility=visibility,
         expires_at=expires,
+        env_id=run_config.env_id,
     )
     return run
 
