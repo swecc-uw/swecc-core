@@ -29,6 +29,7 @@ Server images still `pip install` `services/bench/common` as a library (no CLI s
 ## Release
 
 1. Bump `version` in `packages/swecc-mesocosm/pyproject.toml`.
-2. Tag `swecc-mesocosm-vX.Y.Z` or run **Publish swecc-mesocosm to PyPI** (`workflow_dispatch`).
+2. Merge to `main`. CI publishes when `packages/swecc-mesocosm/**` or `services/bench/common/**` change **and** the version string changed (no release tag needed).
+3. Optional: **Actions → Publish swecc-mesocosm to PyPI → Run workflow** to force-upload the current version.
 
 CI runs `scripts/stage-bench-common.sh` then `python -m build --wheel`.
