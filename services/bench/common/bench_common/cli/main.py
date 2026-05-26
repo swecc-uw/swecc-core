@@ -77,7 +77,7 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
     creds = load_credentials()
     if not creds or creds.get("mode") != "member" or not creds.get("token"):
         print(
-            "No member session. Run: bench auth login --username USER --password PASS",
+            "No member session. Run: mesocosm auth login --username USER --password PASS",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -87,7 +87,7 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
 def _require_member_session(args: argparse.Namespace):
     creds = load_credentials()
     if creds and creds.get("mode") == "guest":
-        print("This command requires a member account. Run: bench auth login", file=sys.stderr)
+        print("This command requires a member account. Run: mesocosm auth login", file=sys.stderr)
         sys.exit(1)
     return get_bench_session(bench_url=_bench_url(args))
 
@@ -264,7 +264,7 @@ def _cmd_run_local(args: argparse.Namespace) -> None:
     model = args.model or "ollama/llama3.2"
     if not model.startswith("ollama/"):
         print(
-            "bench run local only supports Ollama models (e.g. ollama/llama3.2).\n"
+            "mesocosm run local only supports Ollama models (e.g. ollama/llama3.2).\n"
             "Install Ollama, run `ollama pull llama3.2`, then retry.",
             file=sys.stderr,
         )
@@ -352,8 +352,8 @@ def _cmd_init(args: argparse.Namespace) -> None:
         "  1. Edit env.py + benchanything.json\n"
         "  2. Local Ollama loop (see LOCAL_DEV.md):\n"
         "       ollama pull llama3.2 && python adapter.py\n"
-        "       bench run local\n"
-        "  3. When ready: bench env submit --github-url ..."
+        "       mesocosm run local\n"
+        "  3. When ready: mesocosm env submit --github-url ..."
     )
 
 
@@ -373,7 +373,7 @@ def _cmd_register(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="bench", description="SWECC Bench CLI")
+    parser = argparse.ArgumentParser(prog="mesocosm", description="SWECC Bench / Mesocosm CLI")
     parser.add_argument(
         "--bench-url",
         default=None,

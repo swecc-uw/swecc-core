@@ -72,4 +72,6 @@ def get_bench_session(
             active_team_id=creds.get("active_team_id"),
         )
 
-    raise RuntimeError("Not authenticated. Run: bench auth login  (member)  or  bench auth guest")
+    raise RuntimeError(
+        "Not authenticated. Run: mesocosm auth login  (member)  or  mesocosm auth guest"
+    )

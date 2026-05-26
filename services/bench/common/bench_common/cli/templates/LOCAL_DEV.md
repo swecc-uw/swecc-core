@@ -1,10 +1,10 @@
 # Local development (Ollama)
 
-Iterate on `env.py` and `benchanything.json` on your machine before `bench env submit`. No API keys, no cloud setup — only [Ollama](https://ollama.com).
+Iterate on `env.py` and `benchanything.json` on your machine before `mesocosm env submit`. No API keys — only [Ollama](https://ollama.com).
 
 ## One-time setup
 
-1. Install the CLI: `pip install swecc-mesocosm` (provides the `bench` command)
+1. Install the CLI: `pip install swecc-mesocosm`
 2. Install Ollama and pull a model:
    ```bash
    ollama pull llama3.2
@@ -23,8 +23,8 @@ python adapter.py
 **Terminal 2 — bench episodes**
 
 ```bash
-bench run local
-# same as: bench run local --model ollama/llama3.2
+mesocosm run local
+# same as: mesocosm run local --model ollama/llama3.2
 ```
 
 Uses `benchanything.json` for the binding vow and scoring. Does **not** register the domain or create platform runs.
@@ -39,20 +39,14 @@ Uses `benchanything.json` for the binding vow and scoring. Does **not** register
 | `--manifest` | `benchanything.json` | Alternate manifest path |
 | `--system-prompt` | — | Extra instruction for the agent |
 
-## Troubleshooting
-
-- **`Connection refused` to Ollama** — start Ollama / run `ollama serve`.
-- **Model not found** — `ollama list` and use `ollama/<exact-name>` (e.g. `ollama/llama3.2`).
-- **Adapter not reachable** — start `python adapter.py` first; check `--env-url`.
-
 ## Ship to Mesocosm
 
 When local runs look good:
 
 ```bash
-bench auth login --username YOU --password PASS
-bench env submit --name "My env" --github-url https://github.com/you/your-repo
-bench run create --domain DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-2.0-flash ...
+mesocosm auth login --username YOU --password PASS
+mesocosm env submit --name "My env" --github-url https://github.com/you/your-repo
+mesocosm run create --domain DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-2.0-flash ...
 ```
 
 Platform runs use cloud models on SWECC infrastructure; local Ollama is only for your machine.

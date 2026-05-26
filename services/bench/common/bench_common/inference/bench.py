@@ -154,7 +154,7 @@ async def bench(
         max_parallel:  Episode concurrency (default 1 — sequential).
         quiet:         Suppress per-episode progress output.
         domain:        When set, use this config instead of loading from the platform DB
-                       (for local ``bench run local`` / benchanything.json workflows).
+                       (for local ``mesocosm run local`` / benchanything.json workflows).
         allow_any_model: Skip the platform model allowlist (local dev with Ollama, etc.).
 
     Returns:
@@ -170,8 +170,8 @@ async def bench(
         if domain is None:
             raise ValueError(
                 f"Domain '{domain_id}' not found.\n"
-                f"Register it first with POST /v1/domains, submit via bench env submit, "
-                f"or run locally with bench run local (reads benchanything.json)."
+                f"Register it first with POST /v1/domains, submit via mesocosm env submit, "
+                f"or run locally with mesocosm run local (reads benchanything.json)."
             )
     elif domain_id != domain.id:
         domain_id = domain.id
