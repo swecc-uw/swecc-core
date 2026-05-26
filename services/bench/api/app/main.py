@@ -39,6 +39,10 @@ from app.routes import (auth_routes, bench, developer, domains,  # noqa: E402
                         gallery, leaderboard, me_routes, runs, techniques,
                         test)
 
+from app.middleware.auth import PrincipalMiddleware  # noqa: E402
+from app.routes import (auth_routes, bench, developer, domains,  # noqa: E402
+                        leaderboard, runs, techniques, test)
+
 log = structlog.get_logger()
 
 # Gateway prefix for public URLs (Swagger/OpenAPI). From ORCH_GATEWAY_PREFIX or

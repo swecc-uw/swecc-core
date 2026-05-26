@@ -23,6 +23,10 @@ class DiscordChannelsAntiEntropy(APIView):
 
     permission_classes = [IsAdmin | IsApiKey]
 
+    def _has_known_channel_type(self, channel_data: dict) -> bool:
+        channel_type = channel_data.get("channel_type")
+        return any(v == channel_type for v, _ in DiscordChannel.CHANNEL_TYPES)
+
     def _validate_channel_data(self, channel_data: dict) -> bool:
         required_fields = {
             "channel_id",
@@ -34,14 +38,6 @@ class DiscordChannelsAntiEntropy(APIView):
 
         if not all(field in channel_data for field in required_fields):
             logger.error("Missing required fields in channel data")
-            return False
-
-        if not any(v == channel_data["channel_type"] for v, _ in DiscordChannel.CHANNEL_TYPES):
-            logger.error(
-                "Invalid channel type %s, must be one of %s",
-                channel_data["channel_type"],
-                [v for v, _ in DiscordChannel.CHANNEL_TYPES],
-            )
             return False
 
         for field in ["channel_id", "guild_id"]:
@@ -93,6 +89,18 @@ class DiscordChannelsAntiEntropy(APIView):
                     {"error": "Invalid data format. Expected a list of channels."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            known_channels = []
+            for channel in channels_updated:
+                if not self._has_known_channel_type(channel):
+                    logger.warning(
+                        "Skipping channel %s with unsupported type %s",
+                        channel.get("channel_id"),
+                        channel.get("channel_type"),
+                    )
+                    continue
+                known_channels.append(channel)
+            channels_updated = known_channels
 
             for channel in channels_updated:
                 if not self._validate_channel_data(channel):
