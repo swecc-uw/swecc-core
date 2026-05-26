@@ -113,6 +113,10 @@ jobs:
           if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^services/bench/worker/"; then
             CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"bench-worker\"]")
           fi
+          # sockets + bench-api images COPY packages/swecc-jwt from repo root.
+          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -q "^packages/swecc-jwt/"; then
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"sockets\", \"bench-api\"]")
+          fi
 
           echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
           echo "Changed services: $CHANGED_SERVICES"
@@ -312,14 +316,8 @@ jobs:
       - name: Resolve build context
         id: ctx
         run: |
-          case "${{ matrix.service }}" in
-            # bench-api and sockets need repo-root context to COPY packages/swecc-jwt.
-            bench-api)     echo "context=." >> "$GITHUB_OUTPUT"; echo "file=./services/bench/api/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-            bench-sandbox) echo "context=./services/bench" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/sandbox/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-            bench-worker)  echo "context=./services" >> "$GITHUB_OUTPUT"; echo "file=./services/bench/worker/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-            sockets)       echo "context=." >> "$GITHUB_OUTPUT"; echo "file=./services/sockets/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-            *)             echo "context=./services/${{ matrix.service }}" >> "$GITHUB_OUTPUT"; echo "file=./services/${{ matrix.service }}/Dockerfile" >> "$GITHUB_OUTPUT" ;;
-          esac
+          chmod +x ./s/ci/resolve-docker-build.sh
+          ./s/ci/resolve-docker-build.sh "${{ matrix.service }}"
 
       - name: Build Docker image (no push)
         uses: docker/build-push-action@v5

@@ -5,8 +5,10 @@ on:
     branches: [main, master]
     paths:
       - 'services/sockets/**'
+      - 'packages/swecc-jwt/**'
       - 's/ops/**'
       - 's/lib.sh'
+      - 's/ci/resolve-docker-build.sh'
       - '.github/workflows/deploy-sockets.yml'
       - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:

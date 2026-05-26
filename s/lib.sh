@@ -33,6 +33,21 @@ swarm_ensure_gateway_alias() {
     "$svc" >/dev/null 2>&1 || true
 }
 
+# Extra mounts for Swarm create/staging (sockets needs docker.sock for log streaming).
+swarm_task_mount_args() {
+  local svc="$1"
+  case "$svc" in
+    chronos|sockets)
+      echo --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
+      ;;
+  esac
+  case "$svc" in
+    chronos)
+      echo --mount "type=volume,source=chronos_data,target=/app"
+      ;;
+  esac
+}
+
 # Swarm Docker config for --env-file.
 # bench-api → bench-api_env (server_env copy + ORCH_* from swecc-infra sync-configs).
 # Include BENCH_CORS_ORIGINS with https://mesocosm.swecc.org (and local Vite ports if needed).
