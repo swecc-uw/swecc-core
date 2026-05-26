@@ -6,12 +6,11 @@ import uuid
 
 from app.auth.principal import Guest, Member, Principal
 from app.auth.resolve import auth_disabled
-from fastapi import HTTPException
-
 from bench.models import ActorType
 from bench.models import DeveloperEnvironment as DevEnvRow
 from bench.models import EnvScope
 from bench.models import Run as RunRow
+from fastapi import HTTPException
 
 
 async def can_read_run(row: RunRow, principal: Principal) -> bool:
