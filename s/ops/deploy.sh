@@ -72,6 +72,16 @@ deploy_service() {
   if [[ "$service_exists" == "true" ]]; then
     log INFO "Creating staging service: $staging_name"
 
+    if docker service inspect "$staging_name" &>/dev/null; then
+      log WARN "Removing leftover staging service: $staging_name"
+      docker service rm "$staging_name" || die "Failed to remove existing staging service"
+      local rm_wait=0
+      while docker service inspect "$staging_name" &>/dev/null && [[ $rm_wait -lt 30 ]]; do
+        sleep 1
+        rm_wait=$((rm_wait + 1))
+      done
+    fi
+
     docker service create \
       --name "$staging_name" \
       --network "$SWARM_NETWORK" \

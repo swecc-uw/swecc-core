@@ -46,17 +46,40 @@ jobs:
       - name: Resolve build context
         id: ctx
         run: |
-          if [ -n "${{ inputs.context }}" ]; then
-            echo "context=${{ inputs.context }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "context=./services/${{ inputs.service }}" >> "$GITHUB_OUTPUT"
-          fi
+          case "${{ inputs.service }}" in
+            # Images COPY packages/swecc-jwt and paths under services/ — context must be repo root.
+            bench-api)
+              echo "context=." >> "$GITHUB_OUTPUT"
+              echo "file=./services/bench/api/Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            sockets)
+              echo "context=." >> "$GITHUB_OUTPUT"
+              echo "file=./services/sockets/Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            bench-sandbox)
+              echo "context=./services/bench" >> "$GITHUB_OUTPUT"
+              echo "file=./services/bench/sandbox/Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            bench-worker)
+              echo "context=./services" >> "$GITHUB_OUTPUT"
+              echo "file=./services/bench/worker/Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              if [ -n "${{ inputs.context }}" ]; then
+                echo "context=${{ inputs.context }}" >> "$GITHUB_OUTPUT"
+                echo "file=${{ inputs.context }}/${{ inputs.dockerfile }}" >> "$GITHUB_OUTPUT"
+              else
+                echo "context=./services/${{ inputs.service }}" >> "$GITHUB_OUTPUT"
+                echo "file=./services/${{ inputs.service }}/Dockerfile" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+          esac
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ${{ steps.ctx.outputs.context }}
-          file: ${{ steps.ctx.outputs.context }}/${{ inputs.dockerfile }}
+          file: ${{ steps.ctx.outputs.file }}
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE }}:latest

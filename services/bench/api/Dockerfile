@@ -7,8 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
 # Install the shared kernel first so its (heavier) deps cache between rebuilds.
-# Build context for this image is ./services (not ./services/bench) so we can
-# also COPY in the Django bench app from services/server/server/bench/ below.
+# Build context is the repository root (.) so COPY can reach packages/swecc-jwt
+# and paths under services/, including services/server/server/bench/ below.
 COPY packages/swecc-jwt /tmp/swecc-jwt/
 RUN pip install --no-cache-dir /tmp/swecc-jwt && rm -rf /tmp/swecc-jwt
 
