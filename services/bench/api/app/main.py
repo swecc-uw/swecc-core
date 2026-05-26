@@ -46,6 +46,7 @@ from bench_common.storage.trace_store import trace_store  # noqa: E402
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # noqa: E402
 
 log = structlog.get_logger()
 
@@ -84,9 +85,13 @@ app = FastAPI(
     description="Distributed evaluation protocol for AI agent benchmarks",
     lifespan=lifespan,
     root_path=GATEWAY_PREFIX,
+    # SWAG strips /bench/ before proxying; trailing-slash redirects would send
+    # Location: http://api.swecc.org/v1/... (drops /bench, wrong scheme) and break
+    # Mesocosm CORS even when the canonical path is correct.
+    redirect_slashes=False,
 )
 
-# Principal inner, CORS outer — Starlette applies CORS to all responses (incl. 401/500).
+# ProxyHeaders outermost, then CORS, then Principal — CORS must wrap error responses.
 app.add_middleware(PrincipalMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -95,6 +100,7 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
 @app.exception_handler(Exception)
