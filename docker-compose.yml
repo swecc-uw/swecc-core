@@ -85,7 +85,9 @@ services:
       bash -c "cd server && python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
 
   sockets:
-    build: ./services/sockets
+    build:
+      context: .
+      dockerfile: services/sockets/Dockerfile
     container_name: swecc-sockets
     networks:
       - swecc-network
@@ -239,6 +241,8 @@ services:
     environment:
       - WORKER_API_URL=http://swecc-bench-api:8000
       - WORKER_POLL_INTERVAL=${WORKER_POLL_INTERVAL:-10}
+      # Must match BENCH_WORKER_TOKEN on bench-api when auth is enabled.
+      - SWECC_BENCH_TOKEN=${BENCH_WORKER_TOKEN:-}
       # Same GEMINI_API_KEY → GOOGLE_API_KEY fallback as bench-api, so the
       # worker can call gemini/* models when its run_full_bench loop
       # eventually invokes litellm directly.

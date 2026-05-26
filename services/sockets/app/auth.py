@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional, Union
 
 from fastapi import WebSocket, status
-from jose import JWTError, jwt
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field
+from swecc_jwt import validate_member_token
 
 from .config import settings
 
@@ -11,30 +11,18 @@ from .config import settings
 class TokenPayload(BaseModel):
     user_id: int
     username: str
-    groups: List[str] = []
+    groups: List[str] = Field(default_factory=list)
     exp: datetime
 
 
 class Auth:
     @staticmethod
     async def validate_token(token: str) -> Optional[dict]:
-        try:
-            payload = jwt.decode(
-                token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-            )
-            token_data = TokenPayload(**payload)
-
-            if token_data.exp < datetime.now(timezone.utc):
-                return None
-
-            return {
-                "user_id": token_data.user_id,
-                "username": token_data.username,
-                "groups": token_data.groups,
-            }
-        except (JWTError, ValidationError) as e:
-            print("Token validation failed", e)
-            return None
+        return validate_member_token(
+            token,
+            secret=settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        )
 
     @staticmethod
     async def authenticate_ws(
@@ -47,7 +35,6 @@ class Auth:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return None
 
-        # Check for required groups if specified
         if required_groups:
             has_permission = any(group in user.get("groups", []) for group in required_groups)
             if not has_permission:
