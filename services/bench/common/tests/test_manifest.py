@@ -6,7 +6,13 @@ import pytest
 from bench_common.core.errors import ManifestError
 from bench_common.env_sdk.manifest import domain_config_from_manifest, load_manifest
 
-_TEMPLATE = Path(__file__).resolve().parents[1] / "bench_common" / "cli" / "templates" / "benchanything.json"
+_TEMPLATE = (
+    Path(__file__).resolve().parents[1]
+    / "bench_common"
+    / "cli"
+    / "templates"
+    / "benchanything.json"
+)
 
 
 def test_load_manifest_template() -> None:

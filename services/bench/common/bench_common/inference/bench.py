@@ -35,6 +35,7 @@ from typing import Any
 
 import structlog
 from bench_common.core.run import AgentConfig, Episode, TechniqueConfig
+from bench_common.env_sdk.registration import DomainConfig
 from bench_common.eval.metrics import compute_scores
 from bench_common.runtime.agent_loop import AgentLoop
 from bench_common.runtime.env_client import HttpEnvClient
@@ -42,7 +43,6 @@ from bench_common.runtime.inference import InferenceRouter
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import TraceStore
 from bench_common.techniques import TECHNIQUE_REGISTRY
-from bench_common.env_sdk.registration import DomainConfig
 from bench_common.techniques.base import Technique
 
 log = structlog.get_logger()

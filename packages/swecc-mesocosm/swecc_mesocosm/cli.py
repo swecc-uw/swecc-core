@@ -18,11 +18,11 @@ from rich.syntax import Syntax
 from rich.table import Table
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
+from swecc_mesocosm.bench_dispatch import try_dispatch_bench
 from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
 from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
 from swecc_mesocosm.infer import sync_binding_vow_to_domain_id
-from swecc_mesocosm.bench_dispatch import try_dispatch_bench
 from swecc_mesocosm.settings import settings
 
 app = typer.Typer(
