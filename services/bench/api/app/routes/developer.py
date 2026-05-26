@@ -78,7 +78,9 @@ async def submit_environment(
     }
     await db.save_developer_environment(env)
     response.status_code = 201
-    asyncio.create_task(_onboard_environment(env_id, github_url, req.owner_id, req.name, req.description))
+    asyncio.create_task(
+        _onboard_environment(env_id, github_url, req.owner_id, req.name, req.description)
+    )
     return env
 
 

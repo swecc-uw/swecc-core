@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
-
 from app.auth.principal import Anonymous, Guest, Member, Principal
 from app.auth.resolve import resolve_principal
+from fastapi import HTTPException, Request
 
 
 async def get_optional_principal(request: Request) -> Principal:
