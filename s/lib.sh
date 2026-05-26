@@ -74,6 +74,23 @@ swarm_service_update_with_env() {
   docker service update "${update_args[@]}" "${env_add[@]}" "$svc"
 }
 
+# Apply Django migrations before rolling the server service. Uses the same
+# image and env as production; does not depend on the swarm service CMD (older
+# services may still override the image entrypoint with gunicorn-only).
+swarm_run_django_migrate() {
+  local image="$1"
+  local env_file="$2"
+
+  [[ -f "$env_file" ]] || die "env file not found: $env_file"
+
+  log INFO "Running Django migrate (one-shot) on ${SWARM_NETWORK}"
+  docker run --rm \
+    --network "$SWARM_NETWORK" \
+    --env-file "$env_file" \
+    "$image" \
+    python manage.py migrate --noinput
+}
+
 if [[ -t 1 ]]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'
@@ -132,7 +149,10 @@ service_dir() {
 build_context() {
   local svc="$1"
   case "$svc" in
-    bench-api|bench-worker)
+    bench-api|sockets)
+      echo "${REPO_ROOT}"
+      ;;
+    bench-worker)
       echo "${REPO_ROOT}/services"
       ;;
     bench-*)
@@ -149,7 +169,10 @@ build_dockerfile() {
   local svc="$1"
   case "$svc" in
     bench-api)
-      echo "bench/api/Dockerfile"
+      echo "services/bench/api/Dockerfile"
+      ;;
+    sockets)
+      echo "services/sockets/Dockerfile"
       ;;
     bench-worker)
       echo "bench/worker/Dockerfile"
