@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import os
 
-from app.auth.principal import Anonymous, Guest, Member, Principal
-from app.auth.resolve import auth_disabled
 from bench_common.config import settings
 from fastapi import HTTPException
+
+from app.auth.principal import Anonymous, Guest, Member, Principal
+from app.auth.resolve import auth_disabled
 
 
 def assert_can_manage_teams(principal: Principal) -> Member:
     if auth_disabled():
         return Member(user_id=0, username="local", groups=("is_authenticated",))
     if not isinstance(principal, Member):
-        raise HTTPException(status_code=403, detail="SWECC member account required for teams")
+        raise HTTPException(
+            status_code=403, detail="SWECC member account required for teams"
+        )
     return principal
 
 

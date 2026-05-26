@@ -1,8 +1,9 @@
-from app.auth.resolve import resolve_principal
 from django.db import close_old_connections
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+from app.auth.resolve import resolve_principal
 
 
 class PrincipalMiddleware(BaseHTTPMiddleware):

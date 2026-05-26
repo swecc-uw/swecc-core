@@ -7,11 +7,6 @@ from typing import Any
 
 import httpx
 import structlog
-from app.auth.access import assert_dev_env_access, parse_team_id
-from app.auth.deps import get_optional_principal, require_member
-from app.auth.principal import Member
-from app.auth.resolve import auth_disabled
-from app.services import teams as team_svc
 from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
@@ -22,6 +17,12 @@ from bench_common.storage.dev_sync import ensure_gallery_visible
 from bench_common.utils.github import normalize_github_url
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
+
+from app.auth.access import assert_dev_env_access, parse_team_id
+from app.auth.deps import get_optional_principal, require_member
+from app.auth.principal import Member
+from app.auth.resolve import auth_disabled
+from app.services import teams as team_svc
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/v1/developer", tags=["developer"])
@@ -67,7 +68,9 @@ async def submit_environment(
     member: Member = Depends(require_member),
 ) -> dict[str, Any]:
     github_url = normalize_github_url(req.github_url)
-    owner_key = str(member.user_id) if not auth_disabled() else (req.owner_id or "local")
+    owner_key = (
+        str(member.user_id) if not auth_disabled() else (req.owner_id or "local")
+    )
     team_uuid = parse_team_id(req.team_id) if req.team_id else None
     if team_uuid and not await team_svc.is_member(team_uuid, member.user_id):
         raise HTTPException(status_code=403, detail="Not a member of this team")
@@ -75,7 +78,9 @@ async def submit_environment(
     scope = EnvScope.TEAM if team_uuid else EnvScope.SOLO
     existing = await db.get_developer_environment_by_github_repo(owner_key, github_url)
     if existing is not None:
-        return await _handle_duplicate_submission(existing, req, github_url, response, owner_key)
+        return await _handle_duplicate_submission(
+            existing, req, github_url, response, owner_key
+        )
 
     env_id = str(uuid.uuid4())
     env: dict[str, Any] = {
@@ -251,7 +256,9 @@ async def list_environments(
         tid = parse_team_id(team_id)
         if not await team_svc.is_member(tid, member.user_id):
             raise HTTPException(status_code=403, detail="Not a member of this team")
-        return await db.list_developer_environments(scope=EnvScope.TEAM, team_id=str(tid))
+        return await db.list_developer_environments(
+            scope=EnvScope.TEAM, team_id=str(tid)
+        )
     if scope == EnvScope.TEAM:
         raise HTTPException(status_code=422, detail="team_id required for team scope")
     return await db.list_developer_environments(

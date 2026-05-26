@@ -26,25 +26,18 @@ if "bench.apps.BenchConfig" not in django_settings.INSTALLED_APPS:
     )
 
 import structlog  # noqa: E402
-from app.middleware.auth import PrincipalMiddleware  # noqa: E402
-from app.routes import (  # noqa: E402
-    auth_routes,
-    bench,
-    developer,
-    domains,
-    gallery,
-    leaderboard,
-    me_routes,
-    runs,
-    techniques,
-    test,
-)
 from bench_common.config import settings as bench_settings  # noqa: E402
 from bench_common.storage.database import init_db  # noqa: E402
 from bench_common.storage.trace_store import trace_store  # noqa: E402
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi import (FastAPI, Request, WebSocket,  # noqa: E402
+                     WebSocketDisconnect)
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
+
+from app.middleware.auth import PrincipalMiddleware  # noqa: E402
+from app.routes import (auth_routes, bench, developer, domains,  # noqa: E402
+                        gallery, leaderboard, me_routes, runs, techniques,
+                        test)
 
 log = structlog.get_logger()
 
@@ -99,6 +92,7 @@ app.add_middleware(PrincipalMiddleware)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log.exception("unhandled_request_error", path=request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 app.include_router(auth_routes.router)
 app.include_router(gallery.router)
