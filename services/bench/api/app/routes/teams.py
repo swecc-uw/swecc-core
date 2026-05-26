@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-import uuid
-
 from app.auth.access import parse_team_id
-from app.auth.deps import get_optional_principal, require_member
-from app.auth.policy import assert_can_manage_teams
+from app.auth.deps import require_member
 from app.services import teams as team_svc
-from bench.models import MAX_TEAM_MEMBERS, ActorType
-from bench.models import DeveloperEnvironment as DevEnvRow
-from bench.models import EnvScope
+from bench.models import MAX_TEAM_MEMBERS, EnvScope
 from bench.models import Run as RunRow
-from bench.models import Visibility
-from bench_common.core.domain import Domain
 from bench_common.core.run import Run
 from bench_common.storage.django_store import _model_from_row_data
 from fastapi import APIRouter, Depends, HTTPException
@@ -99,13 +92,13 @@ async def join_team(req: JoinTeamRequest, member=Depends(require_member)) -> dic
         msg = str(exc)
         status = 409 if "full" in msg.lower() else 404 if "Invalid" in msg else 422
         raise HTTPException(status_code=status, detail=msg) from exc
-    count = await team_svc.member_count(team.id)
+    detail = await team_svc.get_team_detail(team.id, viewer_user_id=member.user_id)
     return {
         "team_id": str(team.id),
         "name": team.name,
-        "member_count": count,
+        "member_count": detail["member_count"],
         "max_members": MAX_TEAM_MEMBERS,
-        "role": "member",
+        "role": detail.get("role", "member"),
     }
 
 
@@ -171,11 +164,10 @@ async def team_leaderboard(team_id: str, member=Depends(require_member), limit: 
     tid = parse_team_id(team_id)
     if not await team_svc.is_member(tid, member.user_id):
         raise HTTPException(status_code=403, detail="Not a member of this team")
-    rows = [
-        row async for row in RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")
-    ]
+    safe_limit = max(1, min(limit, 100))
+    rows = RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")[:safe_limit]
     entries: list[LeaderboardEntry] = []
-    for row in rows[:limit]:
+    async for row in rows:
         run = _model_from_row_data(Run, row.data)
         if not run.scores:
             continue

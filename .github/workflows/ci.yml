@@ -180,6 +180,12 @@ jobs:
         run: |
           pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
 
+      - name: Check bench migrations are committed
+        if: matrix.service == 'server'
+        working-directory: ./services/server
+        run: |
+          python check_bench_migrations.py
+
       - name: Run tests - Server
         if: matrix.service == 'server'
         working-directory: ./services/server
