@@ -168,6 +168,17 @@ async def list_runs(
     return [_run_from_row(row) async for row in qs.order_by("-id")[:limit]]
 
 
+async def archive_domain_gallery(domain_id: str) -> None:
+    """Remove a domain and its runs from public gallery surfaces."""
+    domain = await get_domain(domain_id)
+    if domain is not None and domain.status != "archived":
+        await save_domain(domain.model_copy(update={"status": "archived"}))
+    await RunRow.objects.filter(
+        domain_id=domain_id,
+        visibility=Visibility.GALLERY_PUBLIC,
+    ).aupdate(visibility=Visibility.PRIVATE)
+
+
 async def list_gallery_runs(
     *,
     domain_id: str | None = None,
@@ -176,6 +187,7 @@ async def list_gallery_runs(
     qs = RunRow.objects.filter(
         visibility=Visibility.GALLERY_PUBLIC,
         status="completed",
+        domain__published=True,
     )
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
