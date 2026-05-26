@@ -12,13 +12,15 @@ The platform stores step traces including **`reasoning`** — the model’s text
 ## Quick start
 
 ```bash
-pip install swecc-mesocosm   # provides the `bench` CLI
+pip install swecc-bench      # provides the `bench` CLI
 
 mkdir my-bench-env && cd my-bench-env
 bench init
 
-# edit env.py, benchanything.json, test locally if needed:
-# python adapter.py
+# edit env.py, benchanything.json, then iterate locally with Ollama (no submit):
+#   ollama pull llama3.2 && python adapter.py
+#   bench run local
+# See LOCAL_DEV.md in your repo after `bench init`.
 
 bench auth login --username YOU --password PASS
 bench env submit --name "My env" --github-url https://github.com/you/my-bench-env

@@ -1,4 +1,5 @@
 {
+  "id": "my-env",
   "adapter": "adapter.py",
   "name": "My Environment",
   "description": "One-sentence description of what this benchmark evaluates.",

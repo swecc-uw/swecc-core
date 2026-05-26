@@ -253,6 +253,48 @@ def _cmd_run_create(args: argparse.Namespace) -> None:
         print(json.dumps(r.json(), indent=2))
 
 
+def _cmd_run_local(args: argparse.Namespace) -> None:
+    """Run episodes locally via Ollama + benchanything.json (no platform submit)."""
+    import asyncio
+    from pathlib import Path
+
+    from bench_common.env_sdk.manifest import domain_config_from_manifest
+    from bench_common.inference.bench import bench
+
+    model = args.model or "ollama/llama3.2"
+    if not model.startswith("ollama/"):
+        print(
+            "bench run local only supports Ollama models (e.g. ollama/llama3.2).\n"
+            "Install Ollama, run `ollama pull llama3.2`, then retry.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    manifest_path = Path(args.manifest).resolve()
+    domain = domain_config_from_manifest(
+        manifest_path,
+        domain_id=args.domain_id,
+        env_url=args.env_url,
+    )
+    result = asyncio.run(
+        bench(
+            model=model,
+            domain_id=domain.id,
+            env_url=args.env_url,
+            num_episodes=args.episodes,
+            seed_set=args.seeds,
+            system_prompt=args.system_prompt,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            max_parallel=args.parallel,
+            quiet=args.quiet,
+            domain=domain,
+            allow_any_model=True,
+        )
+    )
+    print(result)
+
+
 def _cmd_run_export(args: argparse.Namespace) -> None:
     out_path = args.output
     with get_bench_session(bench_url=_bench_url(args)) as session:
@@ -282,6 +324,7 @@ def _cmd_init(args: argparse.Namespace) -> None:
         "adapter.py": "adapter.py",
         "env.py": "env.py",
         "requirements.txt": "requirements.txt",
+        "LOCAL_DEV.md": "LOCAL_DEV.md",
     }
     for src_name, out_name in files.items():
         target = dest / out_name
@@ -304,7 +347,14 @@ def _cmd_init(args: argparse.Namespace) -> None:
         target.write_text(pkg.joinpath(src).read_text(encoding="utf-8"), encoding="utf-8")
         print(f"wrote {target}")
 
-    print("\nNext: edit env.py + benchanything.json, then bench env submit --github-url ...")
+    print(
+        "\nNext:\n"
+        "  1. Edit env.py + benchanything.json\n"
+        "  2. Local Ollama loop (see LOCAL_DEV.md):\n"
+        "       ollama pull llama3.2 && python adapter.py\n"
+        "       bench run local\n"
+        "  3. When ready: bench env submit --github-url ..."
+    )
 
 
 def _cmd_register(args: argparse.Namespace) -> None:
@@ -435,6 +485,38 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--visibility", choices=["private", "gallery_public"], default=None)
     p.add_argument("--env-id", default=None, dest="env_id", help="Developer environment id")
     p.set_defaults(func=_cmd_run_create)
+    p = run_sub.add_parser(
+        "local",
+        help="Bench via Ollama + benchanything.json (no API submit; see LOCAL_DEV.md)",
+    )
+    p.add_argument(
+        "--manifest",
+        default="benchanything.json",
+        help="Path to benchanything.json (default: ./benchanything.json)",
+    )
+    p.add_argument(
+        "--domain-id",
+        default=None,
+        help="Override domain id (default: manifest id or parent folder name)",
+    )
+    p.add_argument(
+        "--model",
+        default="ollama/llama3.2",
+        help="Ollama model via LiteLLM (default: ollama/llama3.2)",
+    )
+    p.add_argument(
+        "--env-url",
+        default="http://localhost:8765",
+        help="Adapter base URL (default: http://localhost:8765)",
+    )
+    p.add_argument("--episodes", type=int, default=5)
+    p.add_argument("--seeds", type=int, nargs="+", default=None)
+    p.add_argument("--system-prompt", default=None)
+    p.add_argument("--temperature", type=float, default=0.0)
+    p.add_argument("--max-tokens", type=int, default=512)
+    p.add_argument("--parallel", type=int, default=1)
+    p.add_argument("--quiet", action="store_true")
+    p.set_defaults(func=_cmd_run_local)
     p = run_sub.add_parser("export", help="Download run + traces + replay JSON for a showcase")
     p.add_argument("run_id")
     p.add_argument("-o", "--output", default=None, help="Write to file (default: stdout)")
