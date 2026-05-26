@@ -92,6 +92,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
                 env_url=env.get("env_url"),
                 seed=req.seed,
                 github_url=env.get("github_url"),
+                env_id=req.env_id,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
@@ -105,6 +106,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
                 actor_type=ActorType.MEMBER,
                 actor_id=str(member.user_id),
                 visibility=Visibility.PRIVATE,
+                env_id=req.env_id,
             )
 
     return episode

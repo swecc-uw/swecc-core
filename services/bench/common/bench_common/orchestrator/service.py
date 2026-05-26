@@ -87,6 +87,25 @@ async def _github_url_for_domain(domain_id: str) -> str | None:
     return None
 
 
+async def _resolve_episode_env_url(
+    domain: Any,
+    env_id: str | None,
+) -> tuple[str | None, str | None]:
+    github_url = await _github_url_for_domain(domain.id)
+    env_url = domain.endpoint.url
+    if not env_id:
+        return env_url, github_url
+
+    env = await db.get_developer_environment(env_id)
+    if env:
+        github_url = env.get("github_url") or github_url
+        if domain.endpoint.mode == "sandbox" and domain.endpoint.url:
+            env_url = domain.endpoint.url
+        else:
+            env_url = env.get("env_url") or domain.endpoint.url
+    return env_url, github_url
+
+
 async def create_run(config: RunConfig, requester_id: str) -> Run:
     # Validate domain + binding vow
     domain = await db.get_domain(config.domain_id)
@@ -106,8 +125,13 @@ async def create_run(config: RunConfig, requester_id: str) -> Run:
         if tc.technique_id not in declared_ids:
             raise ValueError(f"Technique '{tc.technique_id}' not declared in binding vow")
 
-    run = Run(config=config, requester_id=requester_id, status="running")
-    await db.save_run(run)
+    run = Run(
+        config=config,
+        requester_id=requester_id,
+        status="running",
+        env_id=config.env_id,
+    )
+    await db.save_run(run, env_id=config.env_id)
 
     # Create episode records
     seeds = config.seed_set or list(range(config.num_episodes))
@@ -125,7 +149,9 @@ async def create_run(config: RunConfig, requester_id: str) -> Run:
 async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> None:
     sem = _get_semaphore()
     tasks = [
-        asyncio.create_task(_run_episode(ep, run.config.agent_config, domain, sem))
+        asyncio.create_task(
+            _run_episode(ep, run.config.agent_config, domain, sem, env_id=run.env_id)
+        )
         for ep in episodes
     ]
     completed_episodes = await asyncio.gather(*tasks, return_exceptions=True)
@@ -142,7 +168,7 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
     run.scores = scores
     run.status = "completed"
     run.completed_at = datetime.utcnow()
-    await db.save_run(run)
+    await db.save_run(run, env_id=run.env_id)
 
     log.info("run_completed", run_id=run.id, scores=scores)
 
@@ -152,13 +178,15 @@ async def _run_episode(
     agent_config: AgentConfig,
     domain: Any,
     sem: asyncio.Semaphore,
+    *,
+    env_id: str | None = None,
 ) -> Episode:
     async with sem:
         episode.status = "running"
         episode.started_at = datetime.utcnow()
         await db.save_episode(episode)
 
-        env_url = domain.endpoint.url
+        env_url, github_url = await _resolve_episode_env_url(domain, env_id)
         if not env_url:
             episode.status = "failed"
             episode.terminal_info = {"error": "No environment URL configured"}
@@ -166,10 +194,7 @@ async def _run_episode(
             return episode
 
         try:
-            await _ensure_sandbox_env_running(
-                env_url,
-                await _github_url_for_domain(domain.id),
-            )
+            await _ensure_sandbox_env_running(env_url, github_url)
             techniques = _build_techniques(agent_config)
             inference = InferenceRouter()
             loop = AgentLoop(
@@ -210,6 +235,7 @@ async def run_test_episode(
     env_url: str | None = None,
     seed: int | None = None,
     github_url: str | None = None,
+    env_id: str | None = None,
 ) -> Episode:
     """Run a single ephemeral episode (Development Mode)."""
     domain = await db.get_domain(domain_id)
@@ -233,11 +259,13 @@ async def run_test_episode(
             binding_vow_version=binding_vow_version,
             agent_config=agent_config,
             num_episodes=1,
+            env_id=env_id,
         ),
         requester_id="test",
         status="running",
+        env_id=env_id,
     )
-    await db.save_run(run)
+    await db.save_run(run, env_id=env_id)
 
     episode = Episode(
         run_id=run.id,
@@ -282,6 +310,6 @@ async def run_test_episode(
     run.status = "completed" if episode.status == "completed" else "failed"
     run.completed_at = datetime.utcnow()
     run.scores = compute_scores(domain.scoring, [episode])
-    await db.save_run(run)
+    await db.save_run(run, env_id=env_id)
 
     return episode
