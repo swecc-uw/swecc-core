@@ -1,8 +1,8 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-import jwt
 import pytest
+from jose import jwt
 from swecc_jwt import MemberTokenPayload, validate_member_token
 
 
