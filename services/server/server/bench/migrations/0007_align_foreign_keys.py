@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("bench", "0001_initial"),
+        ("bench", "0006_remove_run_environment"),
     ]
 
     operations = [
