@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # bench schema lives in server; run makemigrations + migrate there before bench-api.
+  # bench schema lives in server; deploy server first so migrate runs before bench-api.
   deploy-server:
     uses: ./.github/workflows/reusable-deploy.yml
     with:
