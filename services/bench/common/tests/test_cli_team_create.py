@@ -43,3 +43,17 @@ def test_cmd_team_create_prints_api_detail_on_500(capsys: pytest.CaptureFixture[
     assert exc.value.code == 1
     err = capsys.readouterr().err
     assert "Internal server error" in err
+
+
+def test_cmd_team_delete_calls_delete_endpoint() -> None:
+    request = httpx.Request("DELETE", "https://api.swecc.org/bench/v1/teams/t1")
+    response = httpx.Response(204, request=request)
+    session = MagicMock()
+    session.client.delete.return_value = response
+    session.__enter__ = MagicMock(return_value=session)
+    session.__exit__ = MagicMock(return_value=False)
+
+    with patch.object(cli_main, "_require_member_session", return_value=session):
+        cli_main._cmd_team_delete(argparse.Namespace(team_id="t1"))
+
+    session.client.delete.assert_called_once_with("/v1/teams/t1")
