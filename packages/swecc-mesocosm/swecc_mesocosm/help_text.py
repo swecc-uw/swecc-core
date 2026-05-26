@@ -66,10 +66,6 @@ def print_root_help(*, console: Console | None = None) -> None:
             "Local env authoring",
             [
                 ("init", "Scaffold benchanything.json, adapter, env.py, showcase/"),
-                (
-                    "register DOMAIN.py",
-                    "Register domain from env repo (--auto-id, --publish)",
-                ),
                 ("run local", "Bench with Ollama + benchanything.json (no API)"),
             ],
         ),
@@ -90,8 +86,12 @@ def print_root_help(*, console: Console | None = None) -> None:
                 ("doctor", "Check bench-api URL and /bench prefix"),
                 (
                     "register",
-                    "Register domain via API (flags or --from-json); "
-                    "or register DOMAIN.py for local repos",
+                    "Register/upsert domain via API (--from-json or flags)",
+                ),
+                (
+                    "register domain.py",
+                    "(advanced) Legacy repos: load DOMAIN_CONFIG from domain.py "
+                    "(--auto-id, --publish); not used by mesocosm init",
                 ),
                 ("publish ID", "Publish a draft domain"),
                 ("get ID", "Fetch a domain"),

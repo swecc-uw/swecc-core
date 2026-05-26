@@ -29,6 +29,10 @@ def test_root_help_lists_auth_and_env_commands() -> None:
     assert "env submit" in out
     assert "run local" in out
     assert "run get" in out
+    # init scaffold uses benchanything.json + env submit; not register DOMAIN.py in local section
+    assert "register DOMAIN.py" not in out
+    assert "(advanced)" in out
+    assert "register domain.py" in out
 
 
 def test_run_help_lists_platform_and_inspection() -> None:

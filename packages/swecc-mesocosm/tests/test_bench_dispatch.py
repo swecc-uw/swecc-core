@@ -27,3 +27,21 @@ def test_dispatch_run_local(monkeypatch) -> None:
 
 def test_run_get_not_dispatched() -> None:
     assert try_dispatch_bench(["run", "get", "run-1"]) is False
+
+
+def test_dispatch_register_domain_py(monkeypatch, tmp_path) -> None:
+    domain_file = tmp_path / "domain.py"
+    domain_file.write_text("DOMAIN_CONFIG = None\n", encoding="utf-8")
+    called: list[list[str] | None] = []
+
+    def fake_main(argv: list[str] | None) -> None:
+        called.append(argv)
+
+    monkeypatch.setattr("bench_common.cli.main.main", fake_main)
+    assert try_dispatch_bench(["register", str(domain_file), "--publish"]) is True
+    assert called == [["register", str(domain_file), "--publish"]]
+
+
+def test_register_flags_not_dispatched_to_bench() -> None:
+    """Typer handles API register (no .py path)."""
+    assert try_dispatch_bench(["register", "--id", "my-bench"]) is False

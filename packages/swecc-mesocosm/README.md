@@ -20,7 +20,7 @@ python adapter.py          # terminal 1
 mesocosm run local         # terminal 2 — Ollama + benchanything.json, no submit
 ```
 
-When ready for the platform: `mesocosm auth login` → `mesocosm env submit` → `mesocosm run create`. See `LOCAL_DEV.md` in your repo after `mesocosm init`.
+When ready for the platform: `mesocosm auth login` → `mesocosm env submit` (creates the domain from `benchanything.json` in your repo) → `mesocosm run create` with the returned `domain_id`. See `LOCAL_DEV.md` in your repo after `mesocosm init`. You do **not** need `mesocosm register domain.py` for this flow.
 
 ## Command overview
 
@@ -30,7 +30,7 @@ When ready for the platform: `mesocosm auth login` → `mesocosm env submit` →
 | **Auth & teams** | `mesocosm auth login`, `mesocosm team create` |
 | **Submit repo** | `mesocosm env submit --github-url …` |
 | **Platform runs** | `mesocosm run create`, `mesocosm run export RUN_ID` |
-| **Domain helpers** | `mesocosm suggest`, `mesocosm validate`, `mesocosm register` |
+| **Domain helpers** | `mesocosm suggest`, `mesocosm validate`, `mesocosm register` (API JSON/flags; legacy `register domain.py` only if your repo has `DOMAIN_CONFIG`) |
 | **Bench-api eval** | `mesocosm doctor`, `mesocosm eval test`, `mesocosm run get` |
 
 See `PACKAGING.md` in this directory for how `bench_common` is bundled and how `mesocosm run` routes local vs platform subcommands.
