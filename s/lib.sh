@@ -34,16 +34,17 @@ swarm_ensure_gateway_alias() {
 }
 
 # Extra mounts for Swarm create/staging (sockets needs docker.sock for log streaming).
+# Prints one argv per line: --mount then type=... (docker requires two separate args).
 swarm_task_mount_args() {
   local svc="$1"
   case "$svc" in
     chronos|sockets)
-      echo --mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
+      printf '%s\n' --mount 'type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock'
       ;;
   esac
   case "$svc" in
     chronos)
-      echo --mount "type=volume,source=chronos_data,target=/app"
+      printf '%s\n' --mount 'type=volume,source=chronos_data,target=/app'
       ;;
   esac
 }
