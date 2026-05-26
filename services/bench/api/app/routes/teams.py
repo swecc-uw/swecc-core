@@ -3,13 +3,12 @@ from __future__ import annotations
 from app.auth.access import parse_team_id
 from app.auth.deps import require_member
 from app.services import teams as team_svc
+from bench.models import MAX_TEAM_MEMBERS, EnvScope
+from bench.models import Run as RunRow
 from bench_common.core.run import Run
 from bench_common.storage.django_store import _model_from_row_data
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-
-from bench.models import MAX_TEAM_MEMBERS, EnvScope
-from bench.models import Run as RunRow
 
 router = APIRouter(prefix="/v1/teams", tags=["teams"])
 

@@ -3,8 +3,6 @@ from __future__ import annotations
 import re
 import uuid
 
-from django.db import IntegrityError
-
 from bench.models import (
     MAX_TEAM_MEMBERS,
     BenchTeam,
@@ -12,6 +10,7 @@ from bench.models import (
     TeamRole,
     generate_join_code,
 )
+from django.db import IntegrityError
 
 
 def _slugify(name: str) -> str:

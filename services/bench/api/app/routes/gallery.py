@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from bench.models import ActorType
 from bench_common.storage import database as db
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-from bench.models import ActorType
 
 router = APIRouter(prefix="/v1/gallery", tags=["gallery"])
 
