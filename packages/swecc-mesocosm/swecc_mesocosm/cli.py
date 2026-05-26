@@ -19,6 +19,7 @@ from rich.table import Table
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
 from swecc_mesocosm.bench_dispatch import try_dispatch_bench
+from swecc_mesocosm.help_text import print_root_help, print_run_help
 from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
 from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
@@ -28,10 +29,13 @@ from swecc_mesocosm.settings import settings
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="CLI for SWECC's benchmark and eval platform.",
+    help="CLI for SWECC BenchAnything / Mesocosm (see mesocosm --help for all commands).",
 )
 eval_app = typer.Typer(no_args_is_help=True, help="Run dev or private evaluations.")
-run_app = typer.Typer(no_args_is_help=True, help="Inspect existing runs.")
+run_app = typer.Typer(
+    no_args_is_help=True,
+    help="Platform runs, local Ollama, or inspect runs (mesocosm run --help).",
+)
 app.add_typer(eval_app, name="eval")
 app.add_typer(run_app, name="run")
 
@@ -685,7 +689,14 @@ def cmd_run_episodes(
 
 
 def main() -> None:
-    if try_dispatch_bench(sys.argv[1:]):
+    argv = sys.argv[1:]
+    if not argv or argv in (["--help"], ["-h"]):
+        print_root_help()
+        return
+    if argv[:1] == ["run"] and (len(argv) == 1 or argv[1:] in (["--help"], ["-h"])):
+        print_run_help()
+        return
+    if try_dispatch_bench(argv):
         return
     app()
 

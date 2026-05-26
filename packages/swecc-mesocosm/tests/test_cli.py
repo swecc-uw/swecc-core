@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import sys
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+from rich.console import Console
 from swecc_mesocosm import __version__
-from swecc_mesocosm.cli import _connection_error_payload, _http_error_payload, app
+from swecc_mesocosm.cli import _connection_error_payload, _http_error_payload, app, main
+from swecc_mesocosm.help_text import print_root_help, print_run_help
 from typer.testing import CliRunner
 
 
@@ -15,6 +19,31 @@ def test_version_flag(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert result.stdout.strip() == f"mesocosm {__version__}"
+
+
+def test_root_help_lists_auth_and_env_commands() -> None:
+    buf = StringIO()
+    print_root_help(console=Console(file=buf, width=120, force_terminal=False))
+    out = buf.getvalue()
+    assert "auth login" in out
+    assert "env submit" in out
+    assert "run local" in out
+    assert "run get" in out
+
+
+def test_run_help_lists_platform_and_inspection() -> None:
+    buf = StringIO()
+    print_run_help(console=Console(file=buf, width=120, force_terminal=False))
+    out = buf.getvalue()
+    assert "run create" in out or "create" in out
+    assert "local" in out
+    assert "get RUN_ID" in out or "get" in out
+
+
+def test_main_help_entrypoint(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(sys, "argv", ["mesocosm", "--help"])
+    main()
+    assert "auth login" in capsys.readouterr().out
 
 
 def test_suggest_command(cli_runner: CliRunner) -> None:
