@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.auth.deps import require_member
+from app.auth.policy import is_bench_admin, is_legacy_string_owner_id
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
 from bench_common.core.binding_vow import BindingVow
@@ -101,6 +102,16 @@ async def _assert_domain_owner(domain: Domain, member: Member) -> None:
         raise HTTPException(status_code=403, detail="Not allowed to modify this domain")
 
 
+async def _assert_can_archive_domain(domain: Domain, member: Member) -> None:
+    if auth_disabled():
+        return
+    if domain.owner_id == str(member.user_id) or is_bench_admin(member):
+        return
+    if is_legacy_string_owner_id(domain.owner_id):
+        return
+    raise HTTPException(status_code=403, detail="Not allowed to modify this domain")
+
+
 @router.patch("/{domain_id}", response_model=Domain)
 async def update_domain(
     domain_id: str,
@@ -167,7 +178,7 @@ async def archive_domain(
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
-    await _assert_domain_owner(domain, member)
+    await _assert_can_archive_domain(domain, member)
     if domain.status == "archived":
         return domain
     await db.archive_domain_gallery(domain_id)

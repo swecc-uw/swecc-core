@@ -9,6 +9,17 @@ from app.auth.resolve import auth_disabled
 from bench_common.config import settings
 from fastapi import HTTPException
 
+BENCH_ADMIN_GROUP = "is_admin"
+
+
+def is_bench_admin(member: Member) -> bool:
+    return BENCH_ADMIN_GROUP in member.groups
+
+
+def is_legacy_string_owner_id(owner_id: str) -> bool:
+    """Pre-auth CLI domains used string slugs (e.g. smoke-owner), not numeric member ids."""
+    return not owner_id.isdigit()
+
 
 def assert_can_manage_teams(principal: Principal) -> Member:
     if auth_disabled():
