@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("bench", "0004_run_environment"),
+        ("bench", "0005_align_foreign_keys"),
     ]
 
     operations = [
