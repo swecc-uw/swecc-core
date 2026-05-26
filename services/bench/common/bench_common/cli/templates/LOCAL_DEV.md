@@ -49,7 +49,7 @@ Uses `benchanything.json` for the binding vow and scoring. Does **not** register
 When local runs look good:
 
 ```bash
-mesocosm auth login --username YOU --password PASS
+mesocosm auth login --username YOU
 mesocosm env submit --name "My env" --github-url https://github.com/you/your-repo
 # submit clones the repo and registers a draft domain from benchanything.json — no separate register step
 mesocosm env list   # note domain_id when status is ready

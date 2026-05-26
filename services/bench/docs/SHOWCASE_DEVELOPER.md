@@ -22,7 +22,7 @@ mesocosm init
 #   mesocosm run local
 # See LOCAL_DEV.md in your repo after `mesocosm init`.
 
-mesocosm auth login --username YOU --password PASS
+mesocosm auth login --username YOU
 mesocosm env submit --name "My env" --github-url https://github.com/you/my-bench-env
 
 # After onboarding is ready, note domain_id from Mesocosm developer page or env list

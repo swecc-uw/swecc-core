@@ -39,7 +39,10 @@ def print_root_help(*, console: Console | None = None) -> None:
         (
             "Auth & session (swecc-server + bench-api)",
             [
-                ("auth login", "Log in; save member JWT for bench-api"),
+                (
+                    "auth login",
+                    "Log in (prompts for password; server hashes over HTTPS)",
+                ),
                 ("auth token", "Print saved JWT (for curl/scripts)"),
                 ("auth guest", "Create a guest session (bench-api only)"),
                 ("auth whoami", "Show current principal (GET /v1/me)"),
