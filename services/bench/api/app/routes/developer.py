@@ -59,7 +59,9 @@ async def submit_environment(
     response: Response,
 ) -> dict[str, Any]:
     github_url = normalize_github_url(req.github_url)
-    existing = await db.get_developer_environment_by_github_repo(req.owner_id, github_url)
+    existing = await db.get_developer_environment_by_github_repo(
+        req.owner_id, github_url
+    )
     if existing is not None:
         return await _handle_duplicate_submission(existing, req, github_url, response)
 
@@ -79,7 +81,9 @@ async def submit_environment(
     await db.save_developer_environment(env)
     response.status_code = 201
     asyncio.create_task(
-        _onboard_environment(env_id, github_url, req.owner_id, req.name, req.description)
+        _onboard_environment(
+            env_id, github_url, req.owner_id, req.name, req.description
+        )
     )
     return env
 
