@@ -241,6 +241,8 @@ def _cmd_run_create(args: argparse.Namespace) -> None:
         payload["team_id"] = team_id
     if args.visibility:
         payload["visibility"] = args.visibility
+    if args.env_id:
+        payload["env_id"] = args.env_id
 
     with get_bench_session(bench_url=_bench_url(args)) as session:
         r = session.client.post("/v1/runs", json=payload)
@@ -374,6 +376,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--team", default=None)
     p.add_argument("--solo", action="store_true")
     p.add_argument("--visibility", choices=["private", "gallery_public"], default=None)
+    p.add_argument(
+        "--env-id",
+        default=None,
+        help="Developer environment id (must match --domain)",
+    )
     p.set_defaults(func=_cmd_run_create)
 
     args = parser.parse_args(argv)
