@@ -82,11 +82,6 @@ deploy_service() {
       done
     fi
 
-    local -a staging_mount_args=()
-    while IFS= read -r mount_arg; do
-      [[ -n "$mount_arg" ]] && staging_mount_args+=("$mount_arg")
-    done < <(swarm_task_mount_args "$svc")
-
     docker service create \
       --name "$staging_name" \
       --network "$SWARM_NETWORK" \
@@ -97,7 +92,6 @@ deploy_service() {
       --reserve-memory "$MEMORY_RESERVE" \
       --restart-condition any \
       --with-registry-auth \
-      "${staging_mount_args[@]}" \
       "$image" || die "Failed to create staging service"
 
     wait_for_service "$staging_name"
@@ -126,9 +120,17 @@ deploy_service() {
     log INFO "Creating production service: $svc"
 
     local -a extra_args=()
-    while IFS= read -r mount_arg; do
-      [[ -n "$mount_arg" ]] && extra_args+=("$mount_arg")
-    done < <(swarm_task_mount_args "$svc")
+
+    case "$svc" in
+      chronos|sockets)
+        extra_args+=(--mount "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
+        ;;
+    esac
+    case "$svc" in
+      chronos)
+        extra_args+=(--mount "type=volume,source=chronos_data,target=/app")
+        ;;
+    esac
 
     docker service create \
       --name "$svc" \
