@@ -9,6 +9,7 @@ from app.auth.resolve import auth_disabled
 from bench_common.config import settings
 from fastapi import HTTPException
 
+
 def assert_can_manage_teams(principal: Principal) -> Member:
     if auth_disabled():
         return Member(user_id=0, username="local", groups=("is_authenticated",))

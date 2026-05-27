@@ -4,7 +4,7 @@ Iterate on `env.py` and `benchanything.json` on your machine before `mesocosm en
 
 ## One-time setup
 
-1. Install the CLI: `pip install swecc-mesocosm`  
+1. Install the CLI: `pip install swecc-mesocosm`
    This covers `mesocosm run local`, `bench_common` for `adapter.py`, and the HTTP stack (`fastapi`, `uvicorn`). You do **not** need `pip install -r requirements.txt` for the default scaffold — that file is only for extra packages your env imports (see comments in `requirements.txt`). The platform installs it when you `env submit`.
 2. Install Ollama and pull a model:
    ```bash

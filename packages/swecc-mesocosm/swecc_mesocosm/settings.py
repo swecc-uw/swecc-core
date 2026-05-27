@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from swecc_mesocosm.urls import default_bench_api_url
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from swecc_mesocosm.urls import default_bench_api_url
 
 
 def _default_policy_dir() -> Path:

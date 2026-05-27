@@ -47,7 +47,9 @@ def test_run_help_lists_platform_and_inspection() -> None:
     assert "get RUN_ID" in out or "get" in out
 
 
-def test_main_help_entrypoint(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_help_entrypoint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(sys, "argv", ["mesocosm", "--help"])
     main()
     assert "auth login" in capsys.readouterr().out

@@ -95,9 +95,7 @@ def _guest_connect_error_message(bench: str, exc: httpx.ConnectError) -> str:
     )
 
 
-def _whoami_connect_error_message(
-    bench: str, exc: httpx.ConnectError, creds: dict | None
-) -> str:
+def _whoami_connect_error_message(bench: str, exc: httpx.ConnectError, creds: dict | None) -> str:
     creds = creds or {}
     lines = [
         f"Could not connect to bench-api at {bench}\n",
@@ -118,9 +116,7 @@ def _whoami_connect_error_message(
         saved = creds.get("bench_url") or ""
         server = creds.get("server_url") or ""
         if server and saved and is_stale_local_bench_url(saved, server_url=server):
-            lines.append(
-                f"Credentials have stale bench_url ({saved}) for server {server}."
-            )
+            lines.append(f"Credentials have stale bench_url ({saved}) for server {server}.")
             lines.append(f"  mesocosm auth login --server-url {server}")
         lines.extend(
             [

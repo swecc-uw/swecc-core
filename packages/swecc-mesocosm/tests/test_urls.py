@@ -73,10 +73,7 @@ def test_member_bench_api_url_prod_login_ignores_mesocosm_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("MESOCOSM_LOCAL", "1")
-    assert (
-        member_bench_api_url(server_url="https://api.swecc.org")
-        == "https://api.swecc.org/bench"
-    )
+    assert member_bench_api_url(server_url="https://api.swecc.org") == "https://api.swecc.org/bench"
 
 
 def test_whoami_guest_uses_saved_bench_url(monkeypatch: pytest.MonkeyPatch) -> None:

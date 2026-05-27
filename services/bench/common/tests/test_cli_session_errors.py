@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-
 from bench_common.cli import main as cli_main
 
 

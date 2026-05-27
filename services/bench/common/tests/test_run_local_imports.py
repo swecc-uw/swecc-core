@@ -7,7 +7,6 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from bench_common.cli import main as cli_main
 
 

@@ -16,15 +16,11 @@ import typer
 from rich.console import Console
 from rich.syntax import Syntax
 from swecc_mesocosm import __version__, validation
-from swecc_mesocosm.urls import (
-    default_bench_api_url,
-    default_env_adapter_url,
-    mesocosm_local_mode,
-)
 from swecc_mesocosm.bench_dispatch import try_dispatch_bench
-from swecc_mesocosm.help_text import print_root_help, print_run_help
 from swecc_mesocosm.client import BenchClient
+from swecc_mesocosm.help_text import print_root_help, print_run_help
 from swecc_mesocosm.settings import settings
+from swecc_mesocosm.urls import default_bench_api_url, default_env_adapter_url, mesocosm_local_mode
 
 app = typer.Typer(
     add_completion=False,
@@ -254,10 +250,7 @@ def cmd_doctor(
             )
 
     bench_ok = (
-        health_err is None
-        and health_code == 200
-        and openapi_err is None
-        and openapi_code == 200
+        health_err is None and health_code == 200 and openapi_err is None and openapi_code == 200
     )
 
     adapter_block: dict[str, Any] | None = None

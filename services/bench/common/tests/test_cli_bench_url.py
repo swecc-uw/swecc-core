@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-
 from bench_common.cli import main as cli_main
 from bench_common.cli.urls import (
     bench_url_from_server,
@@ -36,7 +35,9 @@ def test_guest_bench_api_url_respects_explicit_env(monkeypatch: pytest.MonkeyPat
 def test_bench_url_for_guest_ignores_saved_creds(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MESOCOSM_LOCAL", "1")
     args = argparse.Namespace(bench_url=None)
-    with patch.object(cli_main, "load_credentials", return_value={"bench_url": "http://127.0.0.1:8010"}):
+    with patch.object(
+        cli_main, "load_credentials", return_value={"bench_url": "http://127.0.0.1:8010"}
+    ):
         assert cli_main._bench_url_for_guest(args) == "https://api.swecc.org/bench"
 
 
@@ -68,10 +69,7 @@ def test_member_bench_api_url_prod_login_ignores_mesocosm_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("MESOCOSM_LOCAL", "1")
-    assert (
-        member_bench_api_url(server_url="https://api.swecc.org")
-        == "https://api.swecc.org/bench"
-    )
+    assert member_bench_api_url(server_url="https://api.swecc.org") == "https://api.swecc.org/bench"
 
 
 def test_bench_url_from_server_prod() -> None:
@@ -88,7 +86,9 @@ def test_whoami_guest_uses_saved_bench_url(monkeypatch: pytest.MonkeyPatch) -> N
     assert whoami_bench_api_url(creds=creds) == "https://api.swecc.org/bench"
 
 
-def test_cmd_auth_guest_connect_error_exits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cmd_auth_guest_connect_error_exits(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(bench_url=None)
 
     def _raise_connect(*_a, **_k):
@@ -103,7 +103,9 @@ def test_cmd_auth_guest_connect_error_exits(monkeypatch: pytest.MonkeyPatch, cap
     assert "MESOCOSM_LOCAL" in err
 
 
-def test_cmd_auth_whoami_connect_error_exits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cmd_auth_whoami_connect_error_exits(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(bench_url=None)
     creds = {"mode": "member", "token": "t", "bench_url": "http://127.0.0.1:8010"}
 
@@ -123,7 +125,9 @@ def test_cmd_auth_whoami_connect_error_exits(monkeypatch: pytest.MonkeyPatch, ca
     assert "connection refused" in err
 
 
-def test_cmd_auth_whoami_guest_anonymous_exits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cmd_auth_whoami_guest_anonymous_exits(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(bench_url=None)
     creds = {
         "mode": "guest",
@@ -151,7 +155,9 @@ def test_cmd_auth_whoami_guest_anonymous_exits(monkeypatch: pytest.MonkeyPatch, 
     assert "Guest token was not recognized" in capsys.readouterr().err
 
 
-def test_cmd_auth_whoami_prints_member(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cmd_auth_whoami_prints_member(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(bench_url=None)
     creds = {
         "mode": "member",

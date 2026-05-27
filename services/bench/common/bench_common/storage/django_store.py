@@ -20,8 +20,8 @@ from asgiref.sync import sync_to_async
 
 # These imports require django.setup() to have been called already.
 from bench.models import ActorType
-from bench.models import BenchTeam as BenchTeamRow
 from bench.models import BenchJob as BenchJobRow
+from bench.models import BenchTeam as BenchTeamRow
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
 from bench.models import Domain as DomainRow
 from bench.models import EnvScope
