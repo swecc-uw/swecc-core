@@ -158,3 +158,285 @@ uv run python -m src.env_sdk.register docs/examples/simple_trivia/domain.py --ap
 ### File created
 
 `src/env_sdk/register.py` — generic registration CLI (runs as `python -m src.env_sdk.register`)
+
+---
+
+# Audit 2 — May 2026
+
+---
+
+## Issues Found
+
+### 5. `env_client.close()` never called on exception or timeout
+
+**Severity:** Critical
+
+**Where:** `bench_common/runtime/agent_loop.py`
+
+**Problem:** `env_client.close()` was called after the `while True:` episode loop in a standalone `try/except`. Any unhandled exception (timeout, inference error, env error) would skip the `close()` call, leaving the episode instance alive on the env server forever. `asyncio.CancelledError` — a `BaseException` since Python 3.8 — was also not caught, so task cancellation silently leaked instances.
+
+**Fix:** Wrapped the entire `while True:` loop in a `try/finally` block so `close()` is called regardless of how the loop exits.
+
+---
+
+### 6. Run stays "completed" when all episodes failed
+
+**Severity:** Critical
+
+**Where:** `bench_common/orchestrator/service.py` — `_run_all_episodes()`
+
+**Problem:** After all episodes finished, the orchestrator called `compute_scores()` and set `run.status = "completed"` regardless of episode outcomes. A run where every episode failed would appear on the leaderboard with a score of 0.0 — a crash misrepresented as a legitimate zero score.
+
+**Fix:** Added an early-return check: if every episode has `status == "failed"`, the run is marked `"failed"` and `compute_scores` is skipped.
+
+---
+
+### 7. `run_test_episode()` does not handle `asyncio.CancelledError`
+
+**Severity:** Critical
+
+**Where:** `bench_common/orchestrator/service.py` — `run_test_episode()`
+
+**Problem:** The outer `except Exception` block does not catch `asyncio.CancelledError` (a `BaseException`). If the task was cancelled while the episode was running, the episode and run would stay permanently in `"running"` status in the database.
+
+**Fix:** Added an explicit `except asyncio.CancelledError` handler that marks both the episode and run as `"cancelled"` before re-raising.
+
+---
+
+### 8. `/jobs/{job_id}/claim` endpoint missing authentication
+
+**Severity:** Critical
+
+**Where:** `bench-api/app/routes/bench.py`
+
+**Problem:** The `PATCH /jobs/{job_id}/claim` endpoint had no authentication dependency. Any unauthenticated client could claim — and effectively hijack — queued benchmark jobs.
+
+**Fix:** Added `dependencies=[Depends(require_worker)]` to the route decorator.
+
+---
+
+### 9. Binding vow version regexes not anchored
+
+**Severity:** Serious
+
+**Where:** `bench_common/core/binding_vow.py`
+
+**Problem:** `_SEMVER_RE` and `_VERSION_REQ_RE` lacked `$` end anchors. Strings like `"1.0.0-beta"` or `"1.0.0 injected"` would silently pass validation.
+
+**Fix:** Added `$` to both compiled patterns: `r"^\d+\.\d+\.\d+$"` and `r"^[\^~]?\d+\.\d+(\.\d+)?$"`.
+
+---
+
+### 10. `RunConfig` accepts contradictory `seed_set` / `num_episodes`
+
+**Severity:** Serious
+
+**Where:** `bench_common/core/run.py`
+
+**Problem:** Nothing stopped callers from passing `seed_set=[1, 2, 3]` with `num_episodes=10`. The orchestrator would silently use the seed list and create 3 episodes instead of 10, making the run look partially executed.
+
+**Fix:** Added a Pydantic `@model_validator(mode="after")` that raises `ValueError` when `seed_set is not None and len(seed_set) != num_episodes`.
+
+---
+
+### 11. Scoring includes failed and cancelled episodes
+
+**Severity:** Serious
+
+**Where:** `bench_common/eval/metrics.py` — `compute_metric()`
+
+**Problem:** All episodes regardless of status were included in metric aggregation. A failed episode (crash, timeout, etc.) has a `total_reward` of 0.0 which is indistinguishable from a legitimate zero score. This pulled leaderboard scores down artificially.
+
+**Fix:** Added `_SCOREABLE_STATUSES = frozenset({"completed", "timeout"})` and filtered episodes before computing values. Failed and cancelled episodes are now excluded.
+
+---
+
+### 12. Sandbox port counter increments forever
+
+**Severity:** Serious
+
+**Where:** `bench-sandbox/app/manager.py`
+
+**Problem:** Port assignment used a monotonically increasing counter. After enough `clone_and_start` / `stop_env` cycles, the counter would eventually exhaust all available ports. Stopped environments did not return their port to the pool.
+
+**Fix:** Replaced the counter with a recycling set pool (`_available_ports`). Ports are allocated with `min()` on startup and returned with `.add()` in `stop_env()`.
+
+---
+
+### 13. `_github_url_for_domain` performed a full table scan
+
+**Severity:** Moderate
+
+**Where:** `bench_common/orchestrator/service.py` — `_github_url_for_domain()`
+
+**Problem:** The query fetched all developer environments across all domains, then picked the first result. For platforms with many environments this was a progressively slower full scan.
+
+**Fix:** Changed to `db.list_developer_environments(domain_id=domain_id)` to filter at query time.
+
+---
+
+### 14. Guest rate limit counted all-time runs instead of runs today
+
+**Severity:** Moderate
+
+**Where:** `bench-api/app/auth/policy.py` — `assert_guest_rate_limit()`
+
+**Problem:** The daily run limit was enforced by counting a guest's total historical runs with no date filter. A guest who ran 5 episodes on day 1 would be blocked for all future days.
+
+**Fix:** Added a `data__created_at__gte` filter on the ISO midnight prefix for the current UTC day. ISO-8601 strings are lexicographically ordered identically to chronological order, so `__gte` on a truncated midnight prefix is correct and index-friendly on Postgres `jsonb`.
+
+---
+
+## Changes Made
+
+### Fix 5: Wrap agent loop in `try/finally` for guaranteed `env_client.close()`
+
+**File:** `bench_common/runtime/agent_loop.py`
+
+The entire `while True:` episode loop is now enclosed in a `try/finally`. The `finally` block calls `env_client.close()` in its own `try/except` so a failed close emits a warning but does not mask the original error.
+
+---
+
+### Fix 6: Detect all-failed runs before scoring
+
+**File:** `bench_common/orchestrator/service.py`
+
+In `_run_all_episodes()`, after gathering episode results, added:
+```python
+if all_eps and all(ep.status == "failed" for ep in all_eps):
+    run.status = "failed"
+    ...
+    return
+```
+The run is marked `"failed"` and `compute_scores` is never called.
+
+---
+
+### Fix 7: Handle `asyncio.CancelledError` in `run_test_episode()`
+
+**File:** `bench_common/orchestrator/service.py`
+
+Added an explicit `except asyncio.CancelledError` block that sets `episode.status = "cancelled"`, `run.status = "cancelled"`, persists both, then re-raises.
+
+---
+
+### Fix 8: Add `require_worker` auth to claim endpoint
+
+**File:** `bench-api/app/routes/bench.py`
+
+Added `dependencies=[Depends(require_worker)]` to the `PATCH /jobs/{job_id}/claim` route decorator.
+
+---
+
+### Fix 9: Anchor binding vow version regexes
+
+**File:** `bench_common/core/binding_vow.py`
+
+Both compiled regexes now end with `$`:
+- `_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")`
+- `_VERSION_REQ_RE = re.compile(r"^[\^~]?\d+\.\d+(\.\d+)?$")`
+
+---
+
+### Fix 10: Validate `seed_set` length in `RunConfig`
+
+**File:** `bench_common/core/run.py`
+
+Added `@model_validator(mode="after")` to `RunConfig`:
+```python
+if self.seed_set is not None and len(self.seed_set) != self.num_episodes:
+    raise ValueError("seed_set length must equal num_episodes")
+```
+
+---
+
+### Fix 11: Exclude failed/cancelled episodes from scoring
+
+**File:** `bench_common/eval/metrics.py`
+
+Added `_SCOREABLE_STATUSES = frozenset({"completed", "timeout"})`. `compute_metric()` now filters to `scoreable = [ep for ep in episodes if ep.status in _SCOREABLE_STATUSES]` before building the values list.
+
+---
+
+### Fix 12: Recycling port pool in sandbox manager
+
+**File:** `bench-sandbox/app/manager.py`
+
+Replaced the incrementing counter with:
+```python
+_available_ports: set[int] = set(range(_PORT_RANGE_START, _PORT_RANGE_END + 1))
+```
+Ports are allocated with `min(_available_ports); _available_ports.discard(port)` and returned to the pool in `stop_env()` with `_available_ports.add(port)`.
+
+---
+
+### Fix 13: Filter developer environments by domain in query
+
+**File:** `bench_common/orchestrator/service.py`
+
+`_github_url_for_domain()` now passes `domain_id=domain_id` to `db.list_developer_environments()`.
+
+---
+
+### Fix 14: Scope guest rate limit to current UTC day
+
+**File:** `bench-api/app/auth/policy.py`
+
+```python
+today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00")
+count = await RunRow.objects.filter(
+    actor_type=ActorType.GUEST,
+    actor_id=guest_session_id,
+    data__created_at__gte=today_iso,
+).acount()
+```
+
+---
+
+## Feature: Provider-native Structured Outputs
+
+### Summary
+
+The platform now enforces model response format natively for all three supported providers (OpenAI, Anthropic, Gemini) when the action space is typed. Environment developers no longer need to parse free-text model responses for structured actions.
+
+### How it works
+
+When `action_space.type` is `discrete`, `continuous`, `json`, or `composite`:
+
+| Provider | Mechanism |
+|----------|-----------|
+| OpenAI (GPT-4o, o3, …) | `response_format: {"type": "json_schema", ...}` |
+| Anthropic (Claude 3/4) | Forced `submit_action` tool call |
+| Google (Gemini 1.5/2.x) | `response_format` via LiteLLM translation |
+
+Text, image, and multi-modal action spaces fall back to the existing free-text parse path.
+
+All three providers wrap the action value under a top-level `{"action": ...}` key in the schema, and the router unwraps it before calling `parse_action()`.
+
+### New `parse_action()` hook on `BaseEnv`
+
+**File:** `bench_common/env_sdk/base.py`
+
+```python
+def parse_action(self, action: Any) -> Any:
+    """Identity by default. Override to remap the structured value before step()."""
+    return action
+```
+
+The adapter server calls `env.parse_action(req.action)` before every `env.step(action)`.
+
+Override only when the schema value and what `step()` expects are different types:
+```python
+def parse_action(self, action):
+    return {"left": 0, "right": 1, "up": 2, "down": 3}[action]
+```
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `bench_common/runtime/inference.py` | New module-level helpers (`_provider_key`, `_space_to_json_schema`, `_wrap_action_schema`); `decide()` dispatches to structured or free-text path; new `_supports_structured_output()` and `_extract_structured_action()` methods; `_build_messages()` / `_build_system_prompt()` accept `use_structured` and `provider` kwargs and vary the closing instruction accordingly |
+| `bench_common/env_sdk/base.py` | Added `parse_action()` identity method with docstring |
+| `bench_common/env_sdk/server.py` | `/step` handler calls `env.parse_action(req.action)` before `env.step(action)` |
+| `services/bench/template/env.py` | Module docstring documents `parse_action` with examples |
+| `bench_common/cli/templates/env.py` | Same; adds a commented-out `parse_action` stub |

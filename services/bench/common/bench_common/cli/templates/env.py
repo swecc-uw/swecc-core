@@ -1,4 +1,14 @@
-"""Your benchmark logic — implement reset() and step()."""
+"""
+Your benchmark logic — implement reset() and step().
+
+Required: reset(), step()
+Optional: parse_action(), close(), render()
+
+parse_action(action) — override when your step() needs a different
+representation than the JSON Schema you declare in benchanything.json.
+The platform always delivers what the schema describes; use parse_action
+to remap it before step() sees it.  Default is an identity (no-op).
+"""
 
 from __future__ import annotations
 
@@ -22,6 +32,11 @@ class MyEnv(BaseEnv):
         self._rng.seed(seed)
         self._item = self._rng.choice(ITEMS)
         return {"question": self._item["question"]}
+
+    # ── Optional: remap the structured action before step() sees it ───────────
+    # def parse_action(self, action: Any) -> Any:
+    #     # Example: schema enum → int
+    #     return {"left": 0, "right": 1, "up": 2, "down": 3}[action]
 
     def step(self, action: Any) -> StepResult:
         if self._item is None:

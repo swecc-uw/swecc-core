@@ -45,6 +45,17 @@ Uses `benchanything.json` for the binding vow and scoring. Does **not** register
 | `--manifest` | `benchanything.json` | Alternate manifest path |
 | `--system-prompt` | — | Extra instruction for the agent |
 
+## Structured outputs and local dev
+
+The platform uses **provider-native structured outputs** (enforced JSON Schema) for GPT, Claude, and Gemini when the action space is `discrete`, `continuous`, `json`, or `composite`. This guarantees the model returns exactly what your schema describes — no free-text parsing.
+
+**Ollama does not support structured outputs.** When running `mesocosm run local`, the platform falls back to the free-text path: the model's reply is parsed heuristically (enum matching, JSON extraction). This means:
+
+- Your `step()` may receive a slightly different format than what cloud runs deliver (e.g. a quoted string vs a bare value)
+- Local accuracy results are only approximate — always validate with a cloud model before publishing
+
+If you want to test the exact structured-output behavior locally, run the platform API locally (`docker compose up bench-api`) and use `mesocosm run create --model openai/gpt-4o-mini` against your submitted dev env.
+
 ## Ship to Mesocosm
 
 When local runs look good:

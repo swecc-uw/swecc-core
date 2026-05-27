@@ -77,6 +77,32 @@ class BaseEnv(ABC):
         """
         ...
 
+    def parse_action(self, action: Any) -> Any:
+        """
+        Optional: remap the structured action the platform delivers to whatever
+        your ``step()`` method expects.
+
+        The platform calls this automatically after extracting the action from
+        the model's response (structured output or free-text parse).  The
+        default implementation is an identity — ``step()`` receives the raw
+        value.  Override when the schema the model fills in differs from the
+        representation your step() logic uses.
+
+        Example — the binding vow exposes ``{"type": "string", "enum": ["left",
+        "right", "up", "down"]}`` but step() wants integers::
+
+            def parse_action(self, action):
+                return {"left": 0, "right": 1, "up": 2, "down": 3}[action]
+
+        Args:
+            action: The action value extracted from the model response.
+                    Type depends on the action_space definition.
+
+        Returns:
+            The value to pass to ``step()``.
+        """
+        return action
+
     def close(self) -> None:  # noqa: B027 — intentional no-op default; subclasses may override
         """Release resources.  Called after every episode.  Override if needed."""
 

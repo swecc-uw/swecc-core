@@ -127,7 +127,8 @@ def serve(
                 detail=f"No active episode '{req.episode_id}'. Call /reset first.",
             )
         try:
-            result = env.step(req.action)
+            action = env.parse_action(req.action)
+            result = env.step(action)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
 

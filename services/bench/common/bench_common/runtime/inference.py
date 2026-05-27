@@ -59,6 +59,76 @@ def normalize_model_id(model: str) -> str:
     return model
 
 
+# ── Structured-output helpers ─────────────────────────────────────────────────
+
+# Space types for which we can derive a JSON Schema and use provider-native
+# structured output.  TEXT / IMAGE / MULTI_MODAL stay on the free-text path.
+_STRUCTURED_SPACE_TYPES = frozenset(
+    {SpaceType.DISCRETE, SpaceType.JSON, SpaceType.CONTINUOUS, SpaceType.COMPOSITE}
+)
+
+
+def _provider_key(model: str) -> str:
+    """Return a short provider tag for a normalised model ID."""
+    for prefix in ("openai/", "anthropic/", "gemini/", "ollama/"):
+        if model.startswith(prefix):
+            return prefix.rstrip("/")
+    return "unknown"
+
+
+def _space_to_json_schema(space: SpaceSpec | CompositeSpace) -> dict[str, Any]:
+    """Convert a BindingVow SpaceSpec or CompositeSpace to a JSON Schema dict.
+
+    The returned schema describes the *action value* itself (not wrapped).
+    Pass the result through ``_wrap_action_schema`` before sending to any API.
+    """
+    if isinstance(space, CompositeSpace):
+        props = {k: _space_to_json_schema(v) for k, v in space.fields.items()}
+        return {
+            "type": "object",
+            "properties": props,
+            "required": list(space.fields.keys()),
+        }
+    if space.type == SpaceType.DISCRETE:
+        schema: dict[str, Any] = {"type": "string"}
+        if space.enum_values:
+            schema["enum"] = space.enum_values
+        return schema
+    if space.type == SpaceType.JSON:
+        # schema_ref holds a raw JSON Schema string authored by the env developer.
+        if space.schema_ref:
+            try:
+                return json.loads(space.schema_ref)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return {"type": "object"}
+    if space.type == SpaceType.CONTINUOUS:
+        schema = {"type": "number"}
+        if space.bounds:
+            if "low" in space.bounds:
+                schema["minimum"] = space.bounds["low"]
+            if "high" in space.bounds:
+                schema["maximum"] = space.bounds["high"]
+        return schema
+    # TEXT, IMAGE, MULTI_MODAL — callers should not reach here for structured paths
+    return {"type": "string"}
+
+
+def _wrap_action_schema(inner: dict[str, Any]) -> dict[str, Any]:
+    """Wrap the action schema in a top-level object.
+
+    All three providers (OpenAI, Anthropic, Gemini) require the outermost JSON
+    Schema type to be ``object``.  We consistently wrap the value under an
+    ``action`` key and unwrap it after parsing, so provider-specific extraction
+    logic is uniform.
+    """
+    return {
+        "type": "object",
+        "properties": {"action": inner},
+        "required": ["action"],
+    }
+
+
 class DecideResult(NamedTuple):
     """Parsed env action plus raw model text for traces / showcase export."""
 
@@ -83,10 +153,6 @@ class InferenceRouter:
         step: int,
         env_system_prompt: str | None = None,
     ) -> DecideResult:
-        messages = self._build_messages(
-            observation, binding_vow, agent_config, extra_context, step, env_system_prompt
-        )
-
         model_name = normalize_model_id(agent_config.model)
         if not self._allow_any_model:
             allowed_models = settings.supported_models + settings.accepted_model_aliases
@@ -94,8 +160,20 @@ class InferenceRouter:
                 raise ValueError(
                     f"Model {model_name!r} is not supported. " f"Allowed: {allowed_models}"
                 )
-        is_ollama = model_name.startswith("ollama/")
-        is_gemini = model_name.startswith("gemini/")
+
+        provider = _provider_key(model_name)
+        use_structured = self._supports_structured_output(binding_vow.action_space, provider)
+
+        messages = self._build_messages(
+            observation,
+            binding_vow,
+            agent_config,
+            extra_context,
+            step,
+            env_system_prompt,
+            use_structured=use_structured,
+            provider=provider,
+        )
 
         kwargs: dict[str, Any] = dict(
             model=model_name,
@@ -103,11 +181,12 @@ class InferenceRouter:
             temperature=agent_config.temperature,
             max_tokens=agent_config.max_tokens,
         )
-        if is_ollama:
+        # ── provider-specific base kwargs ─────────────────────────────────────
+        if provider == "ollama":
             kwargs["max_tokens"] = max(agent_config.max_tokens, 512)
             kwargs["api_base"] = kwargs.get("api_base", "http://localhost:11434")
             kwargs["extra_body"] = {"think": False}
-        elif is_gemini:
+        elif provider == "gemini":
             api_key = _resolve_google_api_key()
             if not api_key:
                 raise ValueError(
@@ -117,13 +196,121 @@ class InferenceRouter:
                 )
             kwargs["api_key"] = api_key
 
+        # ── structured-output kwargs ──────────────────────────────────────────
+        if use_structured:
+            action_schema = _wrap_action_schema(_space_to_json_schema(binding_vow.action_space))
+            if provider == "anthropic":
+                # Claude: force a single tool call so the response is always a
+                # validated JSON object — no free-text parsing needed.
+                kwargs["tools"] = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "submit_action",
+                            "description": (
+                                "Submit your chosen action for this step. "
+                                "Call this exactly once per turn."
+                            ),
+                            "parameters": action_schema,
+                        },
+                    }
+                ]
+                kwargs["tool_choice"] = {
+                    "type": "function",
+                    "function": {"name": "submit_action"},
+                }
+            else:
+                # OpenAI and Gemini: JSON Schema response_format (LiteLLM
+                # translates to each provider's native wire format).
+                kwargs["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "action",
+                        "schema": action_schema,
+                    },
+                }
+
         response = await litellm.acompletion(**kwargs)
 
-        raw = response.choices[0].message.content or ""
-        reasoning_text = self._strip_thinking(raw)
-        log.debug("inference_raw", step=step, model=model_name, raw=reasoning_text[:200])
-        action = self._parse_action(reasoning_text, binding_vow)
+        if use_structured:
+            action, reasoning_text = self._extract_structured_action(response, provider)
+        else:
+            raw = response.choices[0].message.content or ""
+            reasoning_text = self._strip_thinking(raw)
+            log.debug("inference_raw", step=step, model=model_name, raw=reasoning_text[:200])
+            action = self._parse_action(reasoning_text, binding_vow)
+
+        log.debug(
+            "inference_decision",
+            step=step,
+            model=model_name,
+            structured=use_structured,
+            action=str(action)[:120],
+        )
         return DecideResult(action=action, reasoning_text=reasoning_text)
+
+    # ── structured-output helpers ─────────────────────────────────────────────
+
+    def _supports_structured_output(self, space: SpaceSpec | CompositeSpace, provider: str) -> bool:
+        """Return True when provider-native structured output can be applied.
+
+        Requires a known provider (OpenAI, Anthropic, or Gemini) *and* a space
+        type for which we can derive a JSON Schema.  Unknown / custom endpoints
+        (``allow_any_model=True``) always use the free-text fallback path.
+        """
+        if self._allow_any_model:
+            return False
+        if provider not in ("openai", "anthropic", "gemini"):
+            return False
+        if isinstance(space, CompositeSpace):
+            return True
+        return space.type in _STRUCTURED_SPACE_TYPES
+
+    def _extract_structured_action(self, response: Any, provider: str) -> tuple[Any, str]:
+        """Unpack the action value from a structured-output API response.
+
+        Returns ``(action, reasoning_text)``.
+
+        *   **Anthropic** responses carry a tool call; any text emitted before
+            the call is captured as ``reasoning_text``.
+        *   **OpenAI / Gemini** responses have the JSON object directly in
+            ``message.content``; ``reasoning_text`` is empty.
+        """
+        if provider == "anthropic":
+            message = response.choices[0].message
+
+            # Collect any pre-tool reasoning text from the content blocks.
+            reasoning_text = ""
+            content = message.content
+            if isinstance(content, str):
+                reasoning_text = content.strip()
+            elif isinstance(content, list):
+                reasoning_text = " ".join(
+                    (b.get("text", "") if isinstance(b, dict) else getattr(b, "text", ""))
+                    for b in content
+                    if (isinstance(b, dict) and b.get("type") == "text")
+                    or (hasattr(b, "type") and b.type == "text")
+                ).strip()
+
+            tool_calls = message.tool_calls or []
+            if tool_calls:
+                args = tool_calls[0].function.arguments
+                parsed = json.loads(args) if isinstance(args, str) else args
+                return parsed.get("action", parsed), reasoning_text
+
+            # Model did not call the tool (should not happen with tool_choice forced).
+            log.warning("structured_tool_call_missing", provider=provider)
+            return reasoning_text, reasoning_text
+
+        # OpenAI / Gemini — message.content is the JSON object string.
+        raw = response.choices[0].message.content or ""
+        try:
+            parsed = json.loads(raw)
+            action = parsed.get("action", parsed) if isinstance(parsed, dict) else parsed
+            return action, ""
+        except json.JSONDecodeError:
+            log.warning("structured_output_parse_failed", provider=provider, raw=raw[:200])
+            return raw, raw
 
     def _strip_thinking(self, text: str) -> str:
         """Remove <think>...</think> blocks that some reasoning models emit."""
@@ -139,8 +326,18 @@ class InferenceRouter:
         extra_context: dict[str, Any],
         step: int,
         env_system_prompt: str | None = None,
+        *,
+        use_structured: bool = False,
+        provider: str = "unknown",
     ) -> list[dict[str, Any]]:
-        system = self._build_system_prompt(vow, config, extra_context, env_system_prompt)
+        system = self._build_system_prompt(
+            vow,
+            config,
+            extra_context,
+            env_system_prompt,
+            use_structured=use_structured,
+            provider=provider,
+        )
         user = self._serialize_observation(observation, vow, step)
         messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
         messages.append({"role": "user", "content": user})
@@ -152,6 +349,9 @@ class InferenceRouter:
         config: AgentConfig,
         extra_context: dict[str, Any],
         env_system_prompt: str | None = None,
+        *,
+        use_structured: bool = False,
+        provider: str = "unknown",
     ) -> str:
         parts: list[str] = []
         if env_system_prompt:
@@ -168,12 +368,28 @@ class InferenceRouter:
             for key, value in extra_context.items():
                 parts.append(f"## {key}\n{value}")
 
-        parts.append(
-            "Respond with your action. You may include one or two sentences of reasoning first; "
-            "the platform records your full reply. "
-            "If the action space is discrete, include exactly one allowed value in your response. "
-            "If the action space is JSON, end with valid JSON only."
-        )
+        if use_structured:
+            if provider == "anthropic":
+                parts.append(
+                    "Call the submit_action tool with your chosen action. "
+                    "You may reason briefly before calling the tool; "
+                    "the platform records your full reply."
+                )
+            else:
+                # OpenAI / Gemini — response_format enforces the JSON Schema
+                parts.append(
+                    "Respond with a JSON object containing your chosen action "
+                    "in the required schema. "
+                    "You may include a brief reasoning field if the schema allows it; "
+                    "the platform records your full reply."
+                )
+        else:
+            parts.append(
+                "Respond with your action. You may include one or two sentences of reasoning first; "
+                "the platform records your full reply. "
+                "If the action space is discrete, include exactly one allowed value in your response. "
+                "If the action space is JSON, end with valid JSON only."
+            )
         return "\n\n".join(parts)
 
     def _describe_space(self, space: SpaceSpec | CompositeSpace) -> str:

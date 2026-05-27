@@ -497,59 +497,43 @@ class AgentLoop:
 
 ### 7.1 Inference Router (LiteLLM)
 
-```python
-# src/runtime/inference.py
+The router wraps LiteLLM and dispatches between two response paths:
 
-import litellm
+**Structured output path** — used when all of the following are true:
+- The model provider is OpenAI, Anthropic, or Gemini (not Ollama or custom endpoints)
+- The action space type is `discrete`, `continuous`, `json`, or `composite`
 
+**Free-text path** — used for all other combinations (text/image/multi-modal spaces, or Ollama/unknown providers)
 
-class InferenceRouter:
-    """
-    Wraps LiteLLM to provide model-agnostic inference.
-    Handles prompt construction from observation + binding vow + technique context.
-    """
-
-    async def decide(
-        self,
-        observation,
-        binding_vow: BindingVow,
-        agent_config: AgentConfig,
-        extra_context: dict,
-        step: int,
-    ) -> dict:
-        messages = self._build_messages(observation, binding_vow, agent_config, extra_context, step)
-
-        response = await litellm.acompletion(
-            model=agent_config.model,
-            messages=messages,
-            temperature=agent_config.temperature,
-            max_tokens=agent_config.max_tokens,
-        )
-
-        return self._parse_action(response, binding_vow.action_space)
-
-    def _build_messages(self, observation, vow, config, extra_context, step) -> list[dict]:
-        system = self._build_system_prompt(vow, config, extra_context)
-        user = self._serialize_observation(observation, vow.observation_space, step)
-        return [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
-
-    def _build_system_prompt(self, vow, config, extra_context) -> str:
-        parts = []
-        if config.system_prompt:
-            parts.append(config.system_prompt)
-
-        parts.append(f"## Domain Contract\n{vow.description}")
-        parts.append(f"## Action Space\n{self._describe_space(vow.action_space)}")
-
-        if extra_context:
-            for key, value in extra_context.items():
-                parts.append(f"## {key}\n{value}")
-
-        return "\n\n".join(parts)
 ```
+decide()
+  ├── normalize_model_id()         map legacy "google/gemini-*" → "gemini/*"
+  ├── _provider_key()              extract "openai" | "anthropic" | "gemini" | "ollama" | "unknown"
+  ├── _supports_structured_output() check provider + space type
+  │
+  ├── [structured] _space_to_json_schema()  convert SpaceSpec → JSON Schema
+  │              _wrap_action_schema()       wrap in {"type":"object","properties":{"action":...}}
+  │              provider == "anthropic"?    → tools + tool_choice kwargs
+  │              else (openai/gemini)?       → response_format kwargs
+  │
+  ├── litellm.acompletion()
+  │
+  ├── [structured] _extract_structured_action()
+  │     anthropic: tool_calls[0].function.arguments["action"]
+  │     openai/gemini: json.loads(message.content)["action"]
+  │
+  └── [free-text] _parse_action()           heuristic regex / JSON extraction
+```
+
+**Note on `litellm.num_retries = 0`:** LiteLLM's default retry-with-backoff behavior burns through rate-limit quotas instantly when a 429 surfaces. Retries are disabled; the orchestrator or worker decides how to handle the error.
+
+The system prompt closing instruction varies by path:
+
+| Path | Instruction |
+|------|-------------|
+| Anthropic structured | "Call the submit_action tool with your chosen action." |
+| OpenAI/Gemini structured | "Respond with a JSON object containing your chosen action in the required schema." |
+| Free-text | "Respond with your action. If discrete, include one allowed value. If JSON, end with valid JSON." |
 
 ---
 

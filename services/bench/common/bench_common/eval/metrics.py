@@ -10,7 +10,6 @@ from typing import Any
 from bench_common.core.run import Episode
 from bench_common.core.scoring import MetricDef, ScoringConfig
 
-
 _SCOREABLE_STATUSES = frozenset({"completed", "timeout"})
 
 
