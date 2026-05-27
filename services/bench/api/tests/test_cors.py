@@ -78,6 +78,41 @@ async def test_options_preflight_runs_post_for_mesocosm():
 
 
 @pytest.mark.asyncio
+async def test_create_run_internal_error_includes_cors_for_mesocosm(monkeypatch):
+    """500 responses must include CORS headers so Mesocosm shows the real error."""
+
+    async def boom(*_args, **_kwargs):
+        raise RuntimeError("simulated failure")
+
+    from app.auth.deps import get_principal
+    from app.auth.principal import Guest
+
+    async def fake_principal():
+        return Guest(session_id="guest-test")
+
+    app.dependency_overrides[get_principal] = fake_principal
+    monkeypatch.setattr("app.routes.runs.orchestrator.create_run", boom)
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/runs",
+                headers={"Origin": MESOCOSM_ORIGIN, "Content-Type": "application/json"},
+                json={
+                    "domain_id": "example",
+                    "binding_vow_version": "1",
+                    "agent_config": {"model": "openai/gpt-4o"},
+                    "num_episodes": 1,
+                },
+            )
+        assert resp.status_code == 500
+        assert resp.headers.get("access-control-allow-origin") == MESOCOSM_ORIGIN
+    finally:
+        app.dependency_overrides.pop(get_principal, None)
+
+
+@pytest.mark.asyncio
 async def test_create_run_unauthorized_includes_cors_for_mesocosm(monkeypatch):
     monkeypatch.delenv("BENCH_AUTH_DISABLED", raising=False)
     transport = ASGITransport(app=app)

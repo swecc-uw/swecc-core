@@ -103,10 +103,26 @@ app.add_middleware(
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
+def _cors_headers_for_request(request: Request) -> dict[str, str]:
+    """Ensure error responses include CORS headers for allowed SPA origins."""
+    origin = request.headers.get("origin")
+    if origin and origin in CORS_ORIGINS:
+        return {
+            "access-control-allow-origin": origin,
+            "access-control-allow-credentials": "true",
+            "vary": "Origin",
+        }
+    return {}
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log.exception("unhandled_request_error", path=request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=_cors_headers_for_request(request),
+    )
 
 
 app.include_router(auth_routes.router)

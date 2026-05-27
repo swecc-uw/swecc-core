@@ -37,6 +37,7 @@ class RunConfig(BaseModel):
     seed_set: list[int] | None = None
     num_episodes: int = 1
     max_parallel: int = 1
+    env_id: str | None = None
 
 
 class Run(BaseModel):
