@@ -3,49 +3,10 @@
 from __future__ import annotations
 
 import os
-import tempfile
-from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from jose import jwt
-
-
-@pytest.fixture(scope="module")
-def django_db():
-    fd, db_path = tempfile.mkstemp(suffix=".sqlite3")
-    os.close(fd)
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.django_settings")
-    os.environ.setdefault("DB_HOST", "localhost")
-    os.environ.setdefault("DB_NAME", "test")
-    os.environ.setdefault("DB_PORT", "5432")
-    os.environ.setdefault("DB_USER", "test")
-    os.environ.setdefault("DB_PASSWORD", "test")
-    os.environ.setdefault("JWT_SECRET", "test-jwt-secret")
-
-    import django
-    from django.conf import settings
-
-    settings.DATABASES["default"] = {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": db_path,
-    }
-    django.setup()
-
-    from django.core.management import call_command
-
-    call_command("migrate", "bench", verbosity=0)
-
-    yield
-
-    Path(db_path).unlink(missing_ok=True)
-
-
-@pytest.fixture
-def api_app(django_db):
-    from app.main import app
-
-    return app
 
 
 def _member_token(
