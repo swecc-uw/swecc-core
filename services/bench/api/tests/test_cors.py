@@ -84,6 +84,9 @@ async def test_create_run_internal_error_includes_cors_for_mesocosm(monkeypatch)
     async def boom(*_args, **_kwargs):
         raise RuntimeError("simulated failure")
 
+    async def noop_guest_rate_limit(_session_id: str) -> None:
+        return
+
     from app.auth.deps import get_principal
     from app.auth.principal import Guest
 
@@ -91,10 +94,11 @@ async def test_create_run_internal_error_includes_cors_for_mesocosm(monkeypatch)
         return Guest(session_id="guest-test")
 
     app.dependency_overrides[get_principal] = fake_principal
+    monkeypatch.setattr("app.routes.runs.assert_guest_rate_limit", noop_guest_rate_limit)
     monkeypatch.setattr("app.routes.runs.orchestrator.create_run", boom)
 
     try:
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/v1/runs",
