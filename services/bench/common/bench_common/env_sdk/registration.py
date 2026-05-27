@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 from bench_common.auth.session import get_bench_session
+from bench_common.cli.urls import default_bench_api_url
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
@@ -51,7 +52,7 @@ def register_domain(
     BENCH_AUTH_DISABLED=1).
     """
     if os.environ.get("BENCH_AUTH_DISABLED", "").lower() in ("1", "true", "yes"):
-        base = (api_url or "http://localhost:8010").rstrip("/")
+        base = (api_url or default_bench_api_url()).rstrip("/")
         payload = config.model_dump(mode="json")
         if not payload.get("owner_id"):
             payload["owner_id"] = "local"
@@ -116,7 +117,7 @@ def publish_domain(
 ) -> dict[str, Any]:
     """Publish a domain (requires member auth)."""
     if os.environ.get("BENCH_AUTH_DISABLED", "").lower() in ("1", "true", "yes"):
-        base = (api_url or "http://localhost:8010").rstrip("/")
+        base = (api_url or default_bench_api_url()).rstrip("/")
         with httpx.Client(base_url=base, timeout=30.0) as client:
             r = client.post(f"/v1/domains/{domain_id}/publish")
             r.raise_for_status()

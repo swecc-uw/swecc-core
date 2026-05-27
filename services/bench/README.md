@@ -84,7 +84,7 @@ If production broke after a deploy that ran `makemigrations` on boot (auto-gener
 - **Members:** JWT from swecc-server `GET /auth/jwt/` (validated via shared `packages/swecc-jwt`, same as sockets).
 - **Guests:** `POST /v1/auth/guest` → Bearer guest token or `bench_guest` cookie.
 - **Teams:** create team → 4-char `join_code`; join with `POST /v1/teams/join` (max 4 members). No owner-direct add.
-- **CLI:** `bench auth login|guest|whoami`, `team create|join|list`, `env submit|list`, `run create|export`, `init` (scaffold a repo). See `docs/SHOWCASE_DEVELOPER.md`.
+- **CLI (PyPI):** `mesocosm` only via `swecc-mesocosm` — `auth`, `team`, `env submit`, `run create|local|export`, `init`. See `docs/SHOWCASE_DEVELOPER.md` and `packages/swecc-mesocosm/PACKAGING.md`.
 - **Local dev without auth:** `BENCH_AUTH_DISABLED=1`.
 - **Migrate:** `docker compose exec server bash -c "cd server && python manage.py migrate bench"`.
 

@@ -82,6 +82,8 @@ Deploy is GitHub-Actions-driven on push to `main` — path filters in `.github/w
 
 **Bench is one product, three containers.** `services/bench/{api,sandbox,worker}` are independently deployed but share `services/bench/common/bench_common/` (a pip-installable kernel). Build contexts are non-standard so the Dockerfiles can `COPY common/` into the image — `bench-api`'s context is even wider (`./services`) because it also embeds the Django bench app from `services/server/server/bench/`. See `s/lib.sh:build_context()` and `services/bench/README.md` for the full picture. `bench-api` is FastAPI but uses Django's async ORM — it calls `django.setup()` at boot with a minimal `app/django_settings.py`.
 
+**Env-author CLI (PyPI):** Only **`swecc-mesocosm`** is published (`packages/swecc-mesocosm/`). Users run **`mesocosm`** only (`mesocosm init`, `mesocosm run local`, `mesocosm auth login`, …). Implementation lives in `bench_common` (`services/bench/common/`) and is bundled into that wheel — not a separate PyPI package and no `bench` console script. See `packages/swecc-mesocosm/PACKAGING.md`.
+
 **RabbitMQ is the cross-service bus.** `server` and `bot` publish; `ai` and `sockets` consume. Each service owns its `mq/` module with producer/consumer code; there is no shared client library.
 
 **Per-service deploys with shared CI.** `.github/workflows/ci.yml` runs lint+test for *every* service on every PR (matrix build, fail-fast off). `detect-changes` then path-filters which services actually need a Docker image rebuild — only those run the `build` job. Each `deploy-<service>.yml` has its own path filter so a server-only PR doesn't redeploy the bot.

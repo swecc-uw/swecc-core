@@ -71,6 +71,9 @@ class InferenceRouter:
 
     _THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
+    def __init__(self, *, allow_any_model: bool = False) -> None:
+        self._allow_any_model = allow_any_model
+
     async def decide(
         self,
         observation: Observation,
@@ -85,11 +88,12 @@ class InferenceRouter:
         )
 
         model_name = normalize_model_id(agent_config.model)
-        allowed_models = settings.supported_models + settings.accepted_model_aliases
-        if model_name not in allowed_models:
-            raise ValueError(
-                f"Model {model_name!r} is not supported. " f"Allowed: {allowed_models}"
-            )
+        if not self._allow_any_model:
+            allowed_models = settings.supported_models + settings.accepted_model_aliases
+            if model_name not in allowed_models:
+                raise ValueError(
+                    f"Model {model_name!r} is not supported. " f"Allowed: {allowed_models}"
+                )
         is_ollama = model_name.startswith("ollama/")
         is_gemini = model_name.startswith("gemini/")
 

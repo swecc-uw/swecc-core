@@ -46,6 +46,7 @@ from bench_common.storage.trace_store import trace_store  # noqa: E402
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # noqa: E402
 
 log = structlog.get_logger()
 
@@ -84,8 +85,14 @@ app = FastAPI(
     description="Distributed evaluation protocol for AI agent benchmarks",
     lifespan=lifespan,
     root_path=GATEWAY_PREFIX,
+    # SWAG strips /bench/ before proxying; trailing-slash redirects would send
+    # Location: http://api.swecc.org/v1/... (drops /bench, wrong scheme) and break
+    # Mesocosm CORS even when the canonical path is correct.
+    redirect_slashes=False,
 )
 
+# ProxyHeaders outermost, then CORS, then Principal — CORS must wrap error responses.
+app.add_middleware(PrincipalMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -93,13 +100,29 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
-app.add_middleware(PrincipalMiddleware)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+
+def _cors_headers_for_request(request: Request) -> dict[str, str]:
+    """Ensure error responses include CORS headers for allowed SPA origins."""
+    origin = request.headers.get("origin")
+    if origin and origin in CORS_ORIGINS:
+        return {
+            "access-control-allow-origin": origin,
+            "access-control-allow-credentials": "true",
+            "vary": "Origin",
+        }
+    return {}
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log.exception("unhandled_request_error", path=request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=_cors_headers_for_request(request),
+    )
 
 
 app.include_router(auth_routes.router)

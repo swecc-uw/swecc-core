@@ -15,22 +15,23 @@ import httpx
 import typer
 from rich.console import Console
 from rich.syntax import Syntax
-from rich.table import Table
 from swecc_mesocosm import __version__, validation
-from swecc_mesocosm.artifacts import compile_benchmark_artifacts, sha256_digest
+from swecc_mesocosm.bench_dispatch import try_dispatch_bench
 from swecc_mesocosm.client import BenchClient
-from swecc_mesocosm.infer import ScoringSource, build_domain_payload, shape_from_hint
-from swecc_mesocosm.infer import suggest_benchmark_shape as infer_suggest_benchmark_shape
-from swecc_mesocosm.infer import sync_binding_vow_to_domain_id
+from swecc_mesocosm.help_text import print_root_help, print_run_help
 from swecc_mesocosm.settings import settings
+from swecc_mesocosm.urls import default_bench_api_url, default_env_adapter_url, mesocosm_local_mode
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="CLI for SWECC's benchmark and eval platform.",
+    help="CLI for SWECC BenchAnything / Mesocosm (see mesocosm --help for all commands).",
 )
 eval_app = typer.Typer(no_args_is_help=True, help="Run dev or private evaluations.")
-run_app = typer.Typer(no_args_is_help=True, help="Inspect existing runs.")
+run_app = typer.Typer(
+    no_args_is_help=True,
+    help="Platform runs, local Ollama, or inspect runs (mesocosm run --help).",
+)
 app.add_typer(eval_app, name="eval")
 app.add_typer(run_app, name="run")
 
@@ -166,25 +167,6 @@ def _exit_if_run_unsuccessful(run: dict[str, Any], episodes: list[dict[str, Any]
                 _exit_if_episode_failed(ep)
 
 
-def _print_register_next_steps(domain: dict[str, Any], base_url: str | None) -> None:
-    if not sys.stdout.isatty():
-        return
-    domain_id = str(domain.get("id", ""))
-    binding_vow = domain.get("binding_vow")
-    vow = cast(dict[str, Any], binding_vow) if isinstance(binding_vow, dict) else {}
-    vow_version = str(vow.get("version", "1.0.0"))
-    base = _effective_base_url(base_url)
-    console.print("\n[bold]Next steps[/bold] (copy/paste):")
-    console.print(f"  mesocosm publish {domain_id} --base-url {base}")
-    console.print(
-        f"  mesocosm eval test --domain-id {domain_id} --vow-version {vow_version} "
-        f"--model openai/gpt-4o-mini --base-url {base}"
-    )
-    console.print(
-        "  Use a public env URL in production (not localhost) so bench-api can reach your adapter."
-    )
-
-
 def _probe_url(url: str, *, timeout_s: float = 10.0) -> tuple[int | None, str | None]:
     try:
         response = httpx.get(url, timeout=timeout_s)
@@ -200,38 +182,8 @@ BaseUrlOpt = typer.Option(
     help=f"bench API URL (default: {settings.base_url}).",
 )
 
-RegisterFromJsonOpt = typer.Option(
-    None,
-    "--from-json",
-    exists=True,
-    readable=True,
-    help=(
-        "Send this JSON file as the request body. With this set, per-field "
-        "flags (--id/--name/--owner-id/--description/--env-url) become optional "
-        "overrides; without it, all five are required and the body is inferred."
-    ),
-)
 
-
-# ── helpers / inference (no API) ───────────────────────────────────────
-
-
-@app.command("suggest")
-def cmd_suggest(
-    description: str = typer.Argument(..., help="Short plain-text description of the benchmark."),
-) -> None:
-    """Recommend benchmark_kind, scoring_source, and max_steps from a description."""
-    s = infer_suggest_benchmark_shape(description)
-    _print_json(
-        {
-            "benchmark_kind": s.benchmark_kind,
-            "scoring_source": s.scoring_source,
-            "max_steps": s.max_steps,
-            "primary_metric": s.primary_metric,
-            "reasoning": s.reasoning,
-            "tags": s.tags,
-        }
-    )
+# ── helpers (no API) ───────────────────────────────────────────────────
 
 
 @app.command("validate")
@@ -261,8 +213,14 @@ def cmd_validate(
 @app.command("doctor")
 def cmd_doctor(
     base_url: str | None = BaseUrlOpt,
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Local dev: check env adapter (:8765) and bench-api (:8010); sets profile like MESOCOSM_LOCAL=1.",
+    ),
 ) -> None:
-    """Check bench-api reachability and whether the base URL includes /bench."""
+    """Check bench-api reachability (and local env adapter when --local / MESOCOSM_LOCAL=1)."""
+    local_profile = local or mesocosm_local_mode()
     base = _effective_base_url(base_url)
     health_url = f"{base}/health"
     openapi_url = f"{base}/openapi.json"
@@ -272,249 +230,86 @@ def cmd_doctor(
 
     issues: list[str] = []
     if health_err:
-        issues.append(f"health unreachable: {health_err}")
+        issues.append(f"bench-api health unreachable: {health_err}")
+        if "Connection refused" in health_err and not local_profile:
+            issues.append(
+                "hint: default is production — https://api.swecc.org/bench "
+                "(use MESOCOSM_LOCAL=1 or mesocosm doctor --local for docker + adapter)"
+            )
     elif health_code != 200:
-        issues.append(f"GET /health returned {health_code}")
+        issues.append(f"bench-api GET /health returned {health_code}")
 
     if openapi_err:
-        issues.append(f"openapi unreachable: {openapi_err}")
+        issues.append(f"bench-api openapi unreachable: {openapi_err}")
     elif openapi_code != 200:
-        issues.append(f"GET /openapi.json returned {openapi_code}")
+        issues.append(f"bench-api GET /openapi.json returned {openapi_code}")
         if not base.rstrip("/").endswith("/bench"):
             issues.append(
                 "hint: production bench-api is at https://api.swecc.org/bench — "
                 "set MESOCOSM_BASE_URL to include the /bench prefix"
             )
 
-    ok = not issues
-    _print_json(
-        {
-            "ok": ok,
-            "base_url": base,
-            "health": {
-                "url": health_url,
-                "status_code": health_code,
-                "error": health_err,
-            },
-            "openapi": {
-                "url": openapi_url,
-                "status_code": openapi_code,
-                "error": openapi_err,
-            },
-            "issues": issues,
-        }
+    bench_ok = (
+        health_err is None and health_code == 200 and openapi_err is None and openapi_code == 200
     )
+
+    adapter_block: dict[str, Any] | None = None
+    adapter_ok = False
+    notes: list[str] = []
+    if local_profile:
+        adapter_base = default_env_adapter_url()
+        adapter_health = f"{adapter_base}/health"
+        adapter_code, adapter_err = _probe_url(adapter_health)
+        adapter_block = {
+            "url": adapter_health,
+            "status_code": adapter_code,
+            "error": adapter_err,
+        }
+        adapter_ok = adapter_err is None and adapter_code == 200
+        if adapter_err:
+            issues.append(f"env adapter unreachable: {adapter_err} (run: python adapter.py)")
+        elif adapter_code != 200:
+            issues.append(f"env adapter GET /health returned {adapter_code}")
+        elif adapter_code == 200:
+            notes.append(
+                "env adapter health returned 200; if `python adapter.py` fails with "
+                "address already in use, another process may be bound to the port"
+            )
+        if bench_ok and not adapter_ok:
+            issues.append("bench-api ok; start env adapter for mesocosm run local")
+        if adapter_ok and not bench_ok:
+            issues.append(
+                "env adapter ok; bench-api down — fine for `run local`, "
+                "need docker compose for env submit / run create"
+            )
+
+    if local_profile:
+        ok = adapter_ok
+    else:
+        ok = bench_ok
+
+    payload: dict[str, Any] = {
+        "ok": ok,
+        "profile": "local" if local_profile else "remote",
+        "base_url": base,
+        "health": {
+            "url": health_url,
+            "status_code": health_code,
+            "error": health_err,
+        },
+        "openapi": {
+            "url": openapi_url,
+            "status_code": openapi_code,
+            "error": openapi_err,
+        },
+        "issues": issues,
+    }
+    if adapter_block is not None:
+        payload["env_adapter"] = adapter_block
+    if notes:
+        payload["notes"] = notes
+    _print_json(payload)
     raise typer.Exit(0 if ok else 1)
-
-
-# ── domain CRUD ────────────────────────────────────────────────────────
-
-
-@app.command("register")
-def cmd_register(
-    benchmark_id: str | None = typer.Option(None, "--id", help="Domain id (slug)."),
-    name: str | None = typer.Option(None, "--name", help="Human-readable name."),
-    owner_id: str | None = typer.Option(None, "--owner-id", help="Owning user/team id."),
-    description: str | None = typer.Option(None, "--description", help="Plain-text description."),
-    env_url: str | None = typer.Option(
-        None, "--env-url", help="Stable HTTP URL of the eval environment."
-    ),
-    max_steps: int | None = typer.Option(None, "--max-steps", help="Override inferred max_steps."),
-    scoring_source: str | None = typer.Option(
-        None,
-        "--scoring-source",
-        help="Override inferred scoring source: 'terminal' or 'episode_reward'.",
-    ),
-    benchmark_kind: str | None = typer.Option(
-        None, "--kind", help="Hint for shape inference (e.g. qa_mcq, interactive_env)."
-    ),
-    domain_json: Path | None = RegisterFromJsonOpt,
-    base_url: str | None = BaseUrlOpt,
-    skip_validation: bool = typer.Option(
-        False, "--skip-validation", help="Skip the local pre-flight validation."
-    ),
-) -> None:
-    """Register (or upsert as draft) a domain via POST /v1/domains."""
-    if domain_json:
-        try:
-            body = json.loads(domain_json.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            _die(f"invalid JSON in {domain_json}: {e}")
-        if not isinstance(body, dict):
-            _die(f"--from-json must contain a JSON object, got {type(body).__name__}")
-        body = cast(dict[str, Any], body)
-        if benchmark_id is not None:
-            body["id"] = benchmark_id
-        if name is not None:
-            body["name"] = name
-        if owner_id is not None:
-            body["owner_id"] = owner_id
-        if description is not None:
-            body["description"] = description
-        if env_url is not None:
-            body["endpoint"] = {
-                **body.get("endpoint", {}),
-                "mode": "remote",
-                "url": env_url,
-            }
-    else:
-        missing = [
-            flag
-            for flag, value in (
-                ("--id", benchmark_id),
-                ("--name", name),
-                ("--owner-id", owner_id),
-                ("--description", description),
-                ("--env-url", env_url),
-            )
-            if value is None
-        ]
-        if missing:
-            _die(
-                "missing required flag(s) for inference mode: "
-                + ", ".join(missing)
-                + " (or pass --from-json with the full payload)"
-            )
-        assert benchmark_id is not None
-        assert name is not None
-        assert owner_id is not None
-        assert description is not None
-        assert env_url is not None
-        src: ScoringSource | None = None
-        if scoring_source in ("terminal", "episode_reward"):
-            src = scoring_source  # type: ignore[assignment]
-        elif scoring_source not in (None, ""):
-            _die("--scoring-source must be 'terminal' or 'episode_reward'")
-        shape = shape_from_hint(benchmark_kind, description)
-        body = build_domain_payload(
-            benchmark_id=benchmark_id,
-            name=name,
-            owner_id=owner_id,
-            description=description,
-            env_url=env_url,
-            shape=shape,
-            max_steps_override=max_steps,
-            scoring_source_override=src,
-        )
-
-    sync_binding_vow_to_domain_id(body)
-
-    if not skip_validation:
-        v = validation.validate_benchmark_config(body)
-        if not v.get("ok"):
-            err_console.print("[red]validation failed[/red] — payload NOT sent.")
-            _print_json(v)
-            raise typer.Exit(1)
-
-    async def _go() -> dict[str, Any]:
-        c = _client(base_url)
-        try:
-            return await c.upsert_domain(body)
-        finally:
-            await c.aclose()
-
-    created = _run_with_http_errors(_go())
-    _print_json(created)
-    _print_register_next_steps(created, base_url)
-
-
-@app.command("publish")
-def cmd_publish(
-    benchmark_id: str = typer.Argument(..., help="Domain id to publish."),
-    base_url: str | None = BaseUrlOpt,
-) -> None:
-    """Publish a domain (POST /v1/domains/{id}/publish)."""
-
-    async def _go() -> dict[str, Any]:
-        c = _client(base_url)
-        try:
-            return await c.publish_domain(benchmark_id)
-        finally:
-            await c.aclose()
-
-    domain = _run_with_http_errors(_go())
-    arts = compile_benchmark_artifacts(domain)
-    _print_json(
-        {
-            "domain": domain,
-            "artifact_digests": {name: sha256_digest(content) for name, content in arts.items()},
-        }
-    )
-
-
-@app.command("get")
-def cmd_get(
-    benchmark_id: str = typer.Argument(..., help="Domain id to fetch."),
-    artifacts: bool = typer.Option(
-        False,
-        "--artifacts",
-        help="Include synthesized contract/eval_profile/dataset_lock.",
-    ),
-    base_url: str | None = BaseUrlOpt,
-) -> None:
-    """Fetch a domain (GET /v1/domains/{id})."""
-
-    async def _go() -> dict[str, Any]:
-        c = _client(base_url)
-        try:
-            return await c.get_domain(benchmark_id)
-        finally:
-            await c.aclose()
-
-    domain = _run_with_http_errors(_go())
-    if artifacts:
-        arts = compile_benchmark_artifacts(domain)
-        _print_json(
-            {
-                "domain": domain,
-                "artifacts": arts,
-                "artifact_digests": {n: sha256_digest(c) for n, c in arts.items()},
-            }
-        )
-    else:
-        _print_json(domain)
-
-
-@app.command("list")
-def cmd_list(
-    status: str = typer.Option("all", "--status", help="One of: all, published, draft."),
-    plain: bool = typer.Option(False, "--json", help="Output raw JSON instead of a table."),
-    base_url: str | None = BaseUrlOpt,
-) -> None:
-    """List domains (GET /v1/domains)."""
-    if status not in ("all", "published", "draft"):
-        _die("--status must be one of: all, published, draft")
-
-    async def _go() -> list[dict[str, Any]]:
-        c = _client(base_url)
-        try:
-            if status == "published":
-                return await c.list_domains(published_only=True)
-            return await c.list_domains(published_only=None)
-        finally:
-            await c.aclose()
-
-    items = _run_with_http_errors(_go())
-    if status == "draft":
-        items = [d for d in items if d.get("status") == "draft"]
-
-    if plain or not sys.stdout.isatty():
-        _print_json(items)
-        return
-
-    table = Table(title=f"benchmarks ({len(items)} total, status={status})")
-    table.add_column("id", style="cyan")
-    table.add_column("name")
-    table.add_column("status", style="green")
-    table.add_column("owner")
-    for d in items:
-        table.add_row(
-            str(d.get("id", "")),
-            str(d.get("name", "")),
-            str(d.get("status", "")),
-            str(d.get("owner_id", "")),
-        )
-    console.print(table)
 
 
 # ── eval execution ──────────────────────────────────────────────────────
@@ -684,6 +479,15 @@ def cmd_run_episodes(
 
 
 def main() -> None:
+    argv = sys.argv[1:]
+    if not argv or argv in (["--help"], ["-h"]):
+        print_root_help()
+        return
+    if argv[:1] == ["run"] and (len(argv) == 1 or argv[1:] in (["--help"], ["-h"])):
+        print_run_help()
+        return
+    if try_dispatch_bench(argv):
+        return
     app()
 
 

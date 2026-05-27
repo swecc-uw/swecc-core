@@ -346,9 +346,15 @@ async def delete_environment(
     principal=Depends(get_optional_principal),
 ) -> None:
     await assert_dev_env_access(env_id, principal)
+    env = await db.get_developer_environment(env_id)
+    if env is None:
+        raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
+    domain_id = env.get("domain_id")
     deleted = await db.delete_developer_environment(env_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
+    if domain_id:
+        await db.archive_domain_gallery(domain_id)
 
 
 @router.get("/environments/{env_id}/poll", response_model=EnvPollResponse)

@@ -9,7 +9,7 @@ from bench_common.runtime.inference import _resolve_google_api_key, normalize_mo
 
 
 def test_normalize_model_id_maps_google_prefix_to_gemini() -> None:
-    assert normalize_model_id("google/gemini-2.0-flash") == "gemini/gemini-2.0-flash"
+    assert normalize_model_id("google/gemini-3.1-flash-lite") == "gemini/gemini-3.1-flash-lite"
     assert normalize_model_id("gemini/gemini-3.1-flash-lite") == "gemini/gemini-3.1-flash-lite"
 
 

@@ -35,11 +35,11 @@ from typing import Any
 
 import structlog
 from bench_common.core.run import AgentConfig, Episode, TechniqueConfig
+from bench_common.env_sdk.registration import DomainConfig
 from bench_common.eval.metrics import compute_scores
 from bench_common.runtime.agent_loop import AgentLoop
 from bench_common.runtime.env_client import HttpEnvClient
 from bench_common.runtime.inference import InferenceRouter
-from bench_common.storage import database as db
 from bench_common.storage.trace_store import TraceStore
 from bench_common.techniques import TECHNIQUE_REGISTRY
 from bench_common.techniques.base import Technique
@@ -134,13 +134,16 @@ async def bench(
     max_tokens: int = 512,
     max_parallel: int = 1,
     quiet: bool = False,
+    *,
+    domain: DomainConfig | None = None,
+    allow_any_model: bool = False,
 ) -> BenchResult:
     """
-    Run *model* against *domain_id* for *num_episodes* episodes.
+    Run *model* against a domain for *num_episodes* episodes.
 
     Args:
         model:         LiteLLM model string, e.g. "ollama/llama3.2".
-        domain_id:     ID of a registered Domain (must be in the configured DB).
+        domain_id:     Domain ID (for results labeling; also used for DB lookup).
         env_url:       Base URL of the environment's HTTP server.
         num_episodes:  How many episodes to run (default 5).
         seed_set:      Explicit seeds — overrides num_episodes if given.
@@ -149,6 +152,9 @@ async def bench(
         max_tokens:    Max tokens per model call (default 512).
         max_parallel:  Episode concurrency (default 1 — sequential).
         quiet:         Suppress per-episode progress output.
+        domain:        When set, use this config instead of loading from the platform DB
+                       (for local ``mesocosm run local`` / benchanything.json workflows).
+        allow_any_model: Skip the platform model allowlist (local dev with Ollama, etc.).
 
     Returns:
         BenchResult with episode list and computed domain scores.
@@ -157,14 +163,19 @@ async def bench(
         ValueError:       Domain not found or model not supported.
         ConnectionError:  Environment server not reachable at env_url.
     """
-    await db.init_db()
-
-    domain = await db.get_domain(domain_id)
     if domain is None:
-        raise ValueError(
-            f"Domain '{domain_id}' not found.\n"
-            f"Register it first with POST /v1/domains or by submitting a GitHub env."
-        )
+        from bench_common.storage import database as db
+
+        await db.init_db()
+        domain = await db.get_domain(domain_id)
+        if domain is None:
+            raise ValueError(
+                f"Domain '{domain_id}' not found.\n"
+                f"Register it first with POST /v1/domains, submit via mesocosm env submit, "
+                f"or run locally with mesocosm run local (reads benchanything.json)."
+            )
+    elif domain_id != domain.id:
+        domain_id = domain.id
 
     async with HttpEnvClient(env_url, timeout=5.0) as probe:
         if not await probe.health():
@@ -185,7 +196,7 @@ async def bench(
     )
 
     trace = TraceStore()
-    inference = InferenceRouter()
+    inference = InferenceRouter(allow_any_model=allow_any_model)
     sem = asyncio.Semaphore(max(1, max_parallel))
 
     if not quiet:

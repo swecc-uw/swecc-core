@@ -47,3 +47,23 @@ def test_doctor_fails_when_health_down(
     )
     result = cli_runner.invoke(app, ["doctor", "--base-url", "http://bench.test/bench"])
     assert result.exit_code == 1
+
+
+def test_doctor_local_ok_when_adapter_healthy(
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_get(url: str, timeout: float = 10.0) -> httpx.Response:
+        if "8765" in url:
+            return httpx.Response(200, json={"status": "ok"})
+        return httpx.Response(503, json={"detail": "bench down"})
+
+    monkeypatch.setattr("swecc_mesocosm.cli.httpx.get", fake_get)
+    result = cli_runner.invoke(app, ["doctor", "--local", "--base-url", "http://bench.test/bench"])
+    assert result.exit_code == 0, result.stdout
+    body = json.loads(result.stdout)
+    assert body["profile"] == "local"
+    assert body["ok"] is True
+    assert body["env_adapter"]["status_code"] == 200
+    assert "notes" in body
+    assert "address already in use" in body["notes"][0]

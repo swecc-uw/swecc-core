@@ -193,14 +193,8 @@ async def export_run(
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
     tid = str(row.team_id) if row.team_id else None
-    eid = str(row.environment_id) if row.environment_id else None
-    updates: dict[str, str | None] = {}
     if run.team_id != tid:
-        updates["team_id"] = tid
-    if run.env_id != eid:
-        updates["env_id"] = eid
-    if updates:
-        run = run.model_copy(update=updates)
+        run = run.model_copy(update={"team_id": tid})
 
     domain = await db.get_domain(run.config.domain_id)
     episodes = await db.get_episodes(run_id)

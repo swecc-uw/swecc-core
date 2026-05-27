@@ -40,10 +40,10 @@ def get_csrf(request):
 @require_POST
 def login_view(request):
     data = json.loads(request.body)
-    username = data.get("username").strip()
+    username = (data.get("username") or "").strip()
     password = data.get("password")
 
-    if username is None or password is None:
+    if not username or password is None:
         logger.error("Error logging in: username or password not provided")
         return JsonResponse({"detail": "Please provide username and password."}, status=400)
 
@@ -240,8 +240,9 @@ class CreateTokenView(views.APIView):
         }
 
         token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+        token_str = token if isinstance(token, str) else token.decode()
 
-        return JsonResponse({"token": token.decode()})
+        return JsonResponse({"token": token_str})
 
 
 class RegisterWithApiKeyView(views.APIView):

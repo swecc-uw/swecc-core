@@ -4,14 +4,14 @@ Build a marketing or demo UI **in this repository** that replays a real bench ru
 
 ## Workflow
 
-1. Submit this repo: `bench env submit --name "..." --github-url https://github.com/you/your-repo`
+1. Submit this repo: `mesocosm env submit --name "..." --github-url https://github.com/you/your-repo`
 2. Wait for `ready`, then bench a model:
    ```bash
-   bench run create --domain YOUR_DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-2.0-flash --episodes 1 --visibility gallery_public
+   mesocosm run create --domain YOUR_DOMAIN_ID --vow-version 1.0.0 --model gemini/gemini-3.1-flash-lite --episodes 1 --visibility gallery_public
    ```
 3. Export the run (after it completes):
    ```bash
-   bench run export RUN_ID -o showcase/data/replay.json
+   mesocosm run export RUN_ID -o showcase/data/replay.json
    ```
 4. Point your frontend at `replay.json`. Each turn includes:
    - `observation` — env state for your UI

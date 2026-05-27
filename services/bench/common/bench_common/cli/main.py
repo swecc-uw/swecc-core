@@ -3,27 +3,139 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import sys
+import warnings
 
 import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
-from bench_common.auth.session import get_bench_session
+from bench_common.auth.session import BenchSession, get_bench_session
 from bench_common.auth.swecc_server import fetch_jwt, login
+from bench_common.cli.urls import (
+    default_bench_api_url,
+    default_server_url,
+    guest_bench_api_url,
+    is_stale_local_bench_url,
+    member_bench_api_url,
+    whoami_bench_api_url,
+)
 
 
 def _default_bench_url() -> str:
-    return os.environ.get("SWECC_BENCH_URL", "https://api.swecc.org/bench").rstrip("/")
+    return default_bench_api_url()
 
 
 def _default_server_url() -> str:
-    return os.environ.get("SWECC_SERVER_URL", "https://api.swecc.org").rstrip("/")
+    return default_server_url()
 
 
 def _bench_url(args: argparse.Namespace) -> str:
     creds = load_credentials() or {}
-    return (args.bench_url or creds.get("bench_url") or _default_bench_url()).rstrip("/")
+    return member_bench_api_url(
+        server_url=creds.get("server_url"),
+        cli_bench_url=args.bench_url,
+        creds=creds,
+    )
+
+
+def _bench_url_for_guest(args: argparse.Namespace) -> str:
+    """Guest creation URL: CLI flag or explicit env only (never saved creds or MESOCOSM_LOCAL)."""
+    if args.bench_url:
+        return args.bench_url.rstrip("/")
+    return guest_bench_api_url()
+
+
+def _session_auth_error_message(exc: RuntimeError) -> str | None:
+    msg = str(exc)
+    if msg.startswith("Not authenticated."):
+        return msg
+    return None
+
+
+def _get_bench_session_or_exit(**kwargs: object) -> BenchSession:
+    try:
+        return get_bench_session(**kwargs)  # type: ignore[arg-type]
+    except RuntimeError as exc:
+        hint = _session_auth_error_message(exc)
+        if hint is not None:
+            print(hint, file=sys.stderr)
+            sys.exit(1)
+        raise
+
+
+def _format_http_error(response: httpx.Response) -> str:
+    """Best-effort message for bench-api HTTP errors (includes JSON detail when present)."""
+    try:
+        body = response.json()
+        detail = body.get("detail")
+        if detail is not None:
+            if not isinstance(detail, str):
+                detail = json.dumps(detail)
+            return f"HTTP {response.status_code} for {response.request.method} {response.url}: {detail}"
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return f"HTTP {response.status_code} for {response.request.method} {response.url}"
+
+
+def _guest_connect_error_message(bench: str, exc: httpx.ConnectError) -> str:
+    return (
+        f"Could not connect to bench-api at {bench}\n"
+        f"  ({exc})\n"
+        "For production guest auth:\n"
+        "  unset MESOCOSM_LOCAL\n"
+        "  mesocosm auth guest\n"
+        "Or set the API explicitly:\n"
+        "  export SWECC_BENCH_URL=https://api.swecc.org/bench\n"
+        "  mesocosm auth guest\n"
+        "For local docker:\n"
+        "  docker compose up bench-api\n"
+        "  mesocosm auth guest --bench-url http://127.0.0.1:8010"
+    )
+
+
+def _whoami_connect_error_message(bench: str, exc: httpx.ConnectError, creds: dict | None) -> str:
+    creds = creds or {}
+    lines = [
+        f"Could not connect to bench-api at {bench}\n",
+        f"  ({exc})",
+    ]
+    if creds.get("mode") == "guest":
+        lines.extend(
+            [
+                "For production guest whoami:",
+                "  unset MESOCOSM_LOCAL",
+                "  mesocosm auth guest",
+                "Or set the API explicitly:",
+                "  export SWECC_BENCH_URL=https://api.swecc.org/bench",
+                "  mesocosm auth whoami",
+            ]
+        )
+    else:
+        saved = creds.get("bench_url") or ""
+        server = creds.get("server_url") or ""
+        if server and saved and is_stale_local_bench_url(saved, server_url=server):
+            lines.append(f"Credentials have stale bench_url ({saved}) for server {server}.")
+            lines.append(f"  mesocosm auth login --server-url {server}")
+        lines.extend(
+            [
+                "For production member whoami:",
+                "  unset MESOCOSM_LOCAL",
+                "  mesocosm auth login --server-url https://api.swecc.org",
+                "Or fix ~/.config/swecc/bench_credentials.json:",
+                '  "bench_url": "https://api.swecc.org/bench"',
+                "Or: mesocosm auth logout && mesocosm auth login ...",
+            ]
+        )
+    lines.extend(
+        [
+            "For local docker:",
+            "  docker compose up bench-api",
+            "  mesocosm auth whoami --bench-url http://127.0.0.1:8010",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _active_team_id(args: argparse.Namespace) -> str | None:
@@ -35,36 +147,89 @@ def _active_team_id(args: argparse.Namespace) -> str | None:
     return creds.get("active_team_id")
 
 
+def _prompt_login_credentials() -> tuple[str, str]:
+    default_user = getpass.getuser()
+    if default_user:
+        username = input(f"Username [{default_user}]: ").strip() or default_user
+    else:
+        username = input("Username: ").strip()
+    if not username:
+        print("Username cannot be empty.", file=sys.stderr)
+        sys.exit(1)
+    with warnings.catch_warnings():
+        if not sys.stdin.isatty():
+            warnings.filterwarnings("ignore", category=getpass.GetPassWarning)
+        password = getpass.getpass("Password: ")
+    if not password:
+        print("Password cannot be empty.", file=sys.stderr)
+        sys.exit(1)
+    return username, password
+
+
 def _cmd_auth_login(args: argparse.Namespace) -> None:
+    username, password = _prompt_login_credentials()
     server = (args.server_url or _default_server_url()).rstrip("/")
-    with httpx.Client(base_url=server, follow_redirects=True) as client:
-        login(client, server, args.username, args.password)
-        token = fetch_jwt(client, server)
+    try:
+        with httpx.Client(base_url=server, follow_redirects=True) as client:
+            login(client, server, username, password)
+            token = fetch_jwt(client, server)
+    except httpx.HTTPStatusError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
     save_credentials(
         {
             "mode": "member",
             "token": token,
             "server_url": server,
-            "bench_url": _bench_url(args),
+            "bench_url": member_bench_api_url(
+                server_url=server,
+                cli_bench_url=args.bench_url,
+            ),
         }
     )
     print("Logged in. Member JWT saved.")
 
 
 def _cmd_auth_guest(args: argparse.Namespace) -> None:
-    bench = _bench_url(args)
-    r = httpx.post(f"{bench}/v1/auth/guest", timeout=30.0)
-    r.raise_for_status()
+    bench = _bench_url_for_guest(args)
+    try:
+        r = httpx.post(f"{bench}/v1/auth/guest", timeout=30.0)
+        r.raise_for_status()
+    except httpx.ConnectError as exc:
+        print(_guest_connect_error_message(bench, exc), file=sys.stderr)
+        sys.exit(1)
     data = r.json()
     save_credentials({"mode": "guest", "token": data["guest_token"], "bench_url": bench})
     print(f"Guest session created (expires {data['expires_at']}).")
 
 
 def _cmd_auth_whoami(args: argparse.Namespace) -> None:
-    with get_bench_session(bench_url=_bench_url(args)) as session:
-        r = session.client.get("/v1/me")
-        r.raise_for_status()
-        print(json.dumps(r.json(), indent=2))
+    creds = load_credentials() or {}
+    bench = whoami_bench_api_url(cli_bench_url=args.bench_url, creds=creds)
+    try:
+        with _get_bench_session_or_exit(bench_url=bench) as session:
+            r = session.client.get("/v1/me")
+            try:
+                r.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                print(_format_http_error(exc.response), file=sys.stderr)
+                sys.exit(1)
+            data = r.json()
+    except httpx.ConnectError as exc:
+        print(_whoami_connect_error_message(bench, exc, creds), file=sys.stderr)
+        sys.exit(1)
+
+    if data.get("type") == "anonymous" and creds.get("mode") == "guest":
+        print(
+            "Guest token was not recognized at this bench-api URL.\n"
+            f"  Tried: {bench}\n"
+            "  mesocosm auth guest   # refresh credentials\n"
+            "  Or: export SWECC_BENCH_URL=https://api.swecc.org/bench",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(json.dumps(data, indent=2))
 
 
 def _cmd_auth_logout(_args: argparse.Namespace) -> None:
@@ -77,7 +242,7 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
     creds = load_credentials()
     if not creds or creds.get("mode") != "member" or not creds.get("token"):
         print(
-            "No member session. Run: bench auth login --username USER --password PASS",
+            "No member session. Run: mesocosm auth login",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -87,15 +252,19 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
 def _require_member_session(args: argparse.Namespace):
     creds = load_credentials()
     if creds and creds.get("mode") == "guest":
-        print("This command requires a member account. Run: bench auth login", file=sys.stderr)
+        print("This command requires a member account. Run: mesocosm auth login", file=sys.stderr)
         sys.exit(1)
-    return get_bench_session(bench_url=_bench_url(args))
+    return _get_bench_session_or_exit(bench_url=_bench_url(args))
 
 
 def _cmd_team_create(args: argparse.Namespace) -> None:
     with _require_member_session(args) as session:
         r = session.client.post("/v1/teams", json={"name": args.name})
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            print(_format_http_error(exc.response), file=sys.stderr)
+            sys.exit(1)
         data = r.json()
         print(f"team_id={data['team_id']}")
         print(
@@ -226,6 +395,13 @@ def _cmd_env_list(args: argparse.Namespace) -> None:
             print(f"{env['id']}  {env['status']}  {env.get('scope', 'solo')}  {env['name']}")
 
 
+def _cmd_env_delete(args: argparse.Namespace) -> None:
+    with _require_member_session(args) as session:
+        r = session.client.delete(f"/v1/developer/environments/{args.env_id}")
+        r.raise_for_status()
+        print("Environment deleted.")
+
+
 def _cmd_run_create(args: argparse.Namespace) -> None:
     team_id = _active_team_id(args)
     payload: dict = {
@@ -247,17 +423,67 @@ def _cmd_run_create(args: argparse.Namespace) -> None:
     if getattr(args, "env_id", None):
         payload["env_id"] = args.env_id
 
-    with get_bench_session(bench_url=_bench_url(args)) as session:
+    with _get_bench_session_or_exit(bench_url=_bench_url(args)) as session:
         r = session.client.post("/v1/runs", json=payload)
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            print(_format_http_error(exc.response), file=sys.stderr)
+            sys.exit(1)
         print(json.dumps(r.json(), indent=2))
+
+
+def _cmd_run_local(args: argparse.Namespace) -> None:
+    """Run episodes locally via Ollama + benchanything.json (no platform submit)."""
+    import asyncio
+    from pathlib import Path
+
+    from bench_common.env_sdk.manifest import domain_config_from_manifest
+    from bench_common.inference.bench import bench
+
+    model = args.model or "ollama/llama3.2"
+    if not model.startswith("ollama/"):
+        print(
+            "mesocosm run local only supports Ollama models (e.g. ollama/llama3.2).\n"
+            "Install Ollama, run `ollama pull llama3.2`, then retry.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    manifest_path = Path(args.manifest).resolve()
+    domain = domain_config_from_manifest(
+        manifest_path,
+        domain_id=args.domain_id,
+        env_url=args.env_url,
+    )
+    result = asyncio.run(
+        bench(
+            model=model,
+            domain_id=domain.id,
+            env_url=args.env_url,
+            num_episodes=args.episodes,
+            seed_set=args.seeds,
+            system_prompt=args.system_prompt,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            max_parallel=args.parallel,
+            quiet=args.quiet,
+            domain=domain,
+            allow_any_model=True,
+        )
+    )
+    print(result)
 
 
 def _cmd_run_export(args: argparse.Namespace) -> None:
     out_path = args.output
-    with get_bench_session(bench_url=_bench_url(args)) as session:
+    with _get_bench_session_or_exit(bench_url=_bench_url(args)) as session:
         r = session.client.get(f"/v1/runs/{args.run_id}/export")
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            print(_format_http_error(exc.response), file=sys.stderr)
+            sys.exit(1)
         data = r.json()
     text = json.dumps(data, indent=2)
     if out_path:
@@ -282,6 +508,7 @@ def _cmd_init(args: argparse.Namespace) -> None:
         "adapter.py": "adapter.py",
         "env.py": "env.py",
         "requirements.txt": "requirements.txt",
+        "LOCAL_DEV.md": "LOCAL_DEV.md",
     }
     for src_name, out_name in files.items():
         target = dest / out_name
@@ -304,7 +531,16 @@ def _cmd_init(args: argparse.Namespace) -> None:
         target.write_text(pkg.joinpath(src).read_text(encoding="utf-8"), encoding="utf-8")
         print(f"wrote {target}")
 
-    print("\nNext: edit env.py + benchanything.json, then bench env submit --github-url ...")
+    print(
+        "\nNext:\n"
+        "  1. pip install swecc-mesocosm  (CLI + adapter deps; not requirements.txt)\n"
+        "  2. Edit env.py + benchanything.json\n"
+        "  3. Local Ollama loop (see LOCAL_DEV.md):\n"
+        "       ollama pull llama3.2 && python adapter.py\n"
+        "       mesocosm run local\n"
+        "  4. When ready: mesocosm env submit --github-url ...\n"
+        "  (requirements.txt: optional extras for your env — see file header)"
+    )
 
 
 def _cmd_register(args: argparse.Namespace) -> None:
@@ -323,7 +559,7 @@ def _cmd_register(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="bench", description="SWECC Bench CLI")
+    parser = argparse.ArgumentParser(prog="mesocosm", description="SWECC Bench / Mesocosm CLI")
     parser.add_argument(
         "--bench-url",
         default=None,
@@ -333,19 +569,38 @@ def main(argv: list[str] | None = None) -> None:
 
     auth = sub.add_parser("auth")
     auth_sub = auth.add_subparsers(dest="auth_cmd", required=True)
-    p = auth_sub.add_parser("login")
+    p = auth_sub.add_parser(
+        "login",
+        description=(
+            "Log in with swecc-server. Prompts for username and password (not stored in "
+            "shell history). Passwords are verified server-side over HTTPS; the CLI never "
+            "hashes them locally. For non-interactive use, set SWECC_BENCH_TOKEN or run "
+            "mesocosm auth guest."
+        ),
+    )
     p.add_argument(
         "--server-url",
         default=None,
         help=f"swecc-server base URL (default: {_default_server_url()} or SWECC_SERVER_URL)",
     )
-    p.add_argument("--username", required=True)
-    p.add_argument("--password", required=True)
     p.set_defaults(func=_cmd_auth_login)
     p = auth_sub.add_parser("token")
     p.help = "Print saved member JWT (for curl); login first"
     p.set_defaults(func=_cmd_auth_token)
-    p = auth_sub.add_parser("guest")
+    p = auth_sub.add_parser(
+        "guest",
+        help="Create a guest session (defaults to production bench-api)",
+    )
+    p.add_argument(
+        "--bench-url",
+        default=None,
+        dest="bench_url",
+        metavar="URL",
+        help=(
+            "bench-api base URL (default: https://api.swecc.org/bench; "
+            "ignores saved credentials and MESOCOSM_LOCAL)"
+        ),
+    )
     p.set_defaults(func=_cmd_auth_guest)
     p = auth_sub.add_parser("whoami")
     p.set_defaults(func=_cmd_auth_whoami)
@@ -412,6 +667,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--team", default=None)
     p.add_argument("--solo", action="store_true")
     p.set_defaults(func=_cmd_env_list)
+    p = env_sub.add_parser("delete")
+    p.add_argument("env_id")
+    p.set_defaults(func=_cmd_env_delete)
 
     reg = sub.add_parser("register")
     reg.add_argument("domain_file")
@@ -435,6 +693,38 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--visibility", choices=["private", "gallery_public"], default=None)
     p.add_argument("--env-id", default=None, dest="env_id", help="Developer environment id")
     p.set_defaults(func=_cmd_run_create)
+    p = run_sub.add_parser(
+        "local",
+        help="Bench via Ollama + benchanything.json (no API submit; see LOCAL_DEV.md)",
+    )
+    p.add_argument(
+        "--manifest",
+        default="benchanything.json",
+        help="Path to benchanything.json (default: ./benchanything.json)",
+    )
+    p.add_argument(
+        "--domain-id",
+        default=None,
+        help="Override domain id (default: manifest id or parent folder name)",
+    )
+    p.add_argument(
+        "--model",
+        default="ollama/llama3.2",
+        help="Ollama model via LiteLLM (default: ollama/llama3.2)",
+    )
+    p.add_argument(
+        "--env-url",
+        default="http://localhost:8765",
+        help="Adapter base URL (default: http://localhost:8765)",
+    )
+    p.add_argument("--episodes", type=int, default=5)
+    p.add_argument("--seeds", type=int, nargs="+", default=None)
+    p.add_argument("--system-prompt", default=None)
+    p.add_argument("--temperature", type=float, default=0.0)
+    p.add_argument("--max-tokens", type=int, default=512)
+    p.add_argument("--parallel", type=int, default=1)
+    p.add_argument("--quiet", action="store_true")
+    p.set_defaults(func=_cmd_run_local)
     p = run_sub.add_parser("export", help="Download run + traces + replay JSON for a showcase")
     p.add_argument("run_id")
     p.add_argument("-o", "--output", default=None, help="Write to file (default: stdout)")

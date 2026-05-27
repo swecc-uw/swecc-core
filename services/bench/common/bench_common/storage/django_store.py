@@ -21,6 +21,7 @@ from asgiref.sync import sync_to_async
 # These imports require django.setup() to have been called already.
 from bench.models import ActorType
 from bench.models import BenchJob as BenchJobRow
+from bench.models import BenchTeam as BenchTeamRow
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
 from bench.models import Domain as DomainRow
 from bench.models import EnvScope
@@ -50,28 +51,17 @@ def _iso_dt(value: datetime | str | None) -> str | None:
     return value.isoformat()
 
 
+from bench_common.storage.db_hints import init_db_hint
+
+
 async def init_db() -> None:
     """Verify the bench tables exist; they are created by `swecc-server`'s
     `manage.py migrate` step. Fails loudly with an actionable message if not."""
     try:
         await DomainRow.objects.acount()
+        await BenchTeamRow.objects.acount()
     except Exception as exc:  # pragma: no cover - defensive
-        hint = (
-            "bench tables missing — run swecc-server `manage.py migrate` first, "
-            "then restart bench-api."
-        )
-        err = str(exc).lower()
-        if "tenant or user not found" in err or "password authentication failed" in err:
-            hint = (
-                "Postgres auth failed for bench-api. On Swarm, bench-api uses Docker "
-                "config server_env (same as server) — fix DB_* there and redeploy."
-            )
-        elif "connection" in err or "operationalerror" in type(exc).__name__.lower():
-            hint = (
-                "Postgres unreachable from bench-api. Check DB_HOST/DB_PORT/DB_USER "
-                "(Supabase pooler :6543 needs user postgres.<project-ref>)."
-            )
-        raise RuntimeError(f"{hint} Original error: {exc}") from exc
+        raise RuntimeError(f"{init_db_hint(exc)} Original error: {exc}") from exc
 
 
 # ── Domain ────────────────────────────────────────────────────────────────────
@@ -95,11 +85,21 @@ async def get_domain(domain_id: str) -> Domain | None:
     return _model_from_row_data(Domain, row.data)
 
 
-async def list_domains(*, published_only: bool = False) -> list[Domain]:
+async def list_domains(
+    *,
+    published_only: bool = False,
+    include_archived: bool = False,
+) -> list[Domain]:
     qs = DomainRow.objects.all()
     if published_only:
         qs = qs.filter(published=True)
-    return [_model_from_row_data(Domain, row.data) async for row in qs]
+    out: list[Domain] = []
+    async for row in qs:
+        domain = _model_from_row_data(Domain, row.data)
+        if not include_archived and domain.status == "archived":
+            continue
+        out.append(domain)
+    return out
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
@@ -129,8 +129,6 @@ async def save_run(
         defaults["actor_id"] = actor_id
     if team_id is not None:
         defaults["team_id"] = team_id
-    if effective_env_id is not None:
-        defaults["environment_id"] = effective_env_id
     if visibility is not None:
         defaults["visibility"] = visibility
     if expires_at is not None:
@@ -141,14 +139,8 @@ async def save_run(
 def _run_from_row(row: RunRow) -> Run:
     run = _model_from_row_data(Run, row.data)
     tid = str(row.team_id) if row.team_id else None
-    eid = str(row.environment_id) if row.environment_id else None
-    updates: dict[str, Any] = {}
     if run.team_id != tid:
-        updates["team_id"] = tid
-    if run.env_id != eid:
-        updates["env_id"] = eid
-    if updates:
-        return run.model_copy(update=updates)
+        return run.model_copy(update={"team_id": tid})
     return run
 
 
@@ -180,10 +172,21 @@ async def list_runs(
     if team_id:
         qs = qs.filter(team_id=team_id)
     if env_id:
-        qs = qs.filter(environment_id=env_id)
+        qs = qs.filter(data__env_id=env_id)
     if visibility:
         qs = qs.filter(visibility=visibility)
     return [_run_from_row(row) async for row in qs.order_by("-id")[:limit]]
+
+
+async def archive_domain_gallery(domain_id: str) -> None:
+    """Remove a domain and its runs from public gallery surfaces."""
+    domain = await get_domain(domain_id)
+    if domain is not None and domain.status != "archived":
+        await save_domain(domain.model_copy(update={"status": "archived"}))
+    await RunRow.objects.filter(
+        domain_id=domain_id,
+        visibility=Visibility.GALLERY_PUBLIC,
+    ).aupdate(visibility=Visibility.PRIVATE)
 
 
 async def list_gallery_runs(
@@ -194,6 +197,7 @@ async def list_gallery_runs(
     qs = RunRow.objects.filter(
         visibility=Visibility.GALLERY_PUBLIC,
         status="completed",
+        domain__published=True,
     )
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
@@ -332,7 +336,7 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
 
 async def get_environment_usage_stats(env_id: str) -> dict[str, Any]:
     """Usage for runs attributed to one developer environment."""
-    run_rows = [row async for row in RunRow.objects.filter(environment_id=env_id)]
+    run_rows = [row async for row in RunRow.objects.filter(data__env_id=env_id)]
     total_runs = len(run_rows)
     domain_id = run_rows[0].domain_id if run_rows else None
     if domain_id is None:

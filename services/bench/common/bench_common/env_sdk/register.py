@@ -81,8 +81,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--api",
-        default="http://localhost:8010",
-        help="bench-api URL (default: http://localhost:8010)",
+        default=None,
+        help="bench-api URL (default: https://api.swecc.org/bench, or local with MESOCOSM_LOCAL=1)",
     )
     parser.add_argument(
         "--id",

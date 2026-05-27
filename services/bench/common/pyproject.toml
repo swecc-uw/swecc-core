@@ -1,7 +1,7 @@
 [project]
 name = "bench_common"
 version = "0.1.0"
-description = "Shared runtime kernel for the BenchAnything services in swecc-core."
+description = "Shared runtime kernel for BenchAnything (monorepo internal; PyPI users install swecc-mesocosm)."
 requires-python = ">=3.11"
 dependencies = [
     "python-jose[cryptography]>=3.3",
@@ -22,9 +22,6 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[project.scripts]
-bench = "bench_common.cli.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bench_common"]

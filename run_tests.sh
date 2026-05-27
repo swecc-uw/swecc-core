@@ -198,13 +198,31 @@ test_bench_service() {
   log INFO "Installing bench_common (shared kernel)..."
   python3 -m pip install -q -e ./services/bench/common 2>&1 | grep -v "Requirement already satisfied" || true
 
+  if [[ "$sub" == "api" ]]; then
+    python3 -m pip install -q -e ./packages/swecc-jwt 2>&1 | grep -v "Requirement already satisfied" || true
+  fi
+
   cd "services/bench/$sub"
   python3 -m pip install -q -r requirements-test.txt 2>&1 | grep -v "Requirement already satisfied" || true
 
-  ORCH_TRACE_DIR="${ORCH_TRACE_DIR:-/tmp/bench-traces}" \
-  ORCH_SANDBOX_URL="${ORCH_SANDBOX_URL:-http://localhost:8001}" \
-  WORKER_API_URL="${WORKER_API_URL:-http://localhost:8000}" \
-    python3 -m pytest tests/ -v
+  local -a pytest_env=(
+    "ORCH_TRACE_DIR=${ORCH_TRACE_DIR:-/tmp/bench-traces}"
+    "ORCH_SANDBOX_URL=${ORCH_SANDBOX_URL:-http://localhost:8001}"
+    "WORKER_API_URL=${WORKER_API_URL:-http://localhost:8000}"
+  )
+  if [[ "$sub" == "api" ]]; then
+    pytest_env+=(
+      "PYTHONPATH=${SCRIPT_DIR}/services/server/server:${SCRIPT_DIR}/services/bench/api"
+      "DB_HOST=${DB_HOST:-localhost}"
+      "DB_NAME=${DB_NAME:-test}"
+      "DB_PORT=${DB_PORT:-5432}"
+      "DB_USER=${DB_USER:-test}"
+      "DB_PASSWORD=${DB_PASSWORD:-test}"
+      "JWT_SECRET=${JWT_SECRET:-test-jwt-secret}"
+    )
+  fi
+
+  env "${pytest_env[@]}" python3 -m pytest tests/ -v
   local exit_code=$?
   cd "$SCRIPT_DIR"
   return $exit_code

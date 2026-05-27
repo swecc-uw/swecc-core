@@ -16,6 +16,7 @@ This folder defines the **linuxserver/swag** reverse-proxy deployment used to te
   | Path | Upstream | Notes |
   |---|---|---|
   | `/ws`, `/ws/` | `swecc_stack_sockets:8004` | WebSocket upgrade |
+  | `/bench` (exact) | `swecc_stack_bench-api:8000` | bench-api root (no 301; Mesocosm CORS) |
   | `/bench/v1/ws/` | `swecc_stack_bench-api:8000` | bench-api trace stream (WS, no buffering) |
   | `/bench/` | `swecc_stack_bench-api:8000` | bench-api HTTP (strips `/bench/`) |
   | `/` (catch-all) | `swecc_stack_server:8000` | Django (auth, members, leaderboard, …) |
