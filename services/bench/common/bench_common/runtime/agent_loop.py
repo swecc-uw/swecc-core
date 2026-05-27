@@ -84,119 +84,125 @@ class AgentLoop:
         max_wall = self.vow.episode.max_wall_seconds
         deadline = datetime.utcnow().timestamp() + max_wall if max_wall else None
 
-        while True:
-            step += 1
+        try:
+            # Wrap the entire episode loop so env_client.close() is always called
+            # — on normal exit, on exceptions from inference/step, and on CancelledError.
+            while True:
+                step += 1
 
-            # wall-time timeout
-            if deadline and datetime.utcnow().timestamp() > deadline:
-                episode.status = "timeout"
-                break
+                # wall-time timeout
+                if deadline and datetime.utcnow().timestamp() > deadline:
+                    episode.status = "timeout"
+                    break
 
-            await self.trace.append(
-                TraceEvent(
-                    episode_id=episode_id,
-                    step=step,
-                    event_type="observation",
-                    payload={
-                        "phase": "before_agent",
-                        "data": obs.data,
-                        "content_type": obs.content_type,
-                        "system_prompt": obs.system_prompt,
-                    },
-                )
-            )
-
-            # ── pre-action technique pass ─────────────────────────────────────
-            augmented_context: dict[str, Any] = {}
-            for technique in self.techniques:
-                ctx = await technique.before_action(obs, self.state)
-                augmented_context.update(ctx)
-
-            # ── model inference ───────────────────────────────────────────────
-            decision = await self.inference.decide(
-                observation=obs,
-                binding_vow=self.vow,
-                agent_config=self.config,
-                extra_context=augmented_context,
-                step=step,
-                env_system_prompt=env_system_prompt,
-            )
-            if decision.reasoning_text:
                 await self.trace.append(
                     TraceEvent(
                         episode_id=episode_id,
                         step=step,
-                        event_type="model_call",
+                        event_type="observation",
                         payload={
-                            "text": decision.reasoning_text,
-                            "model": normalize_model_id(self.config.model),
+                            "phase": "before_agent",
+                            "data": obs.data,
+                            "content_type": obs.content_type,
+                            "system_prompt": obs.system_prompt,
                         },
                     )
                 )
-            await self.trace.append(
-                TraceEvent(
-                    episode_id=episode_id,
+
+                # ── pre-action technique pass ─────────────────────────────────────
+                augmented_context: dict[str, Any] = {}
+                for technique in self.techniques:
+                    ctx = await technique.before_action(obs, self.state)
+                    augmented_context.update(ctx)
+
+                # ── model inference ───────────────────────────────────────────────
+                decision = await self.inference.decide(
+                    observation=obs,
+                    binding_vow=self.vow,
+                    agent_config=self.config,
+                    extra_context=augmented_context,
                     step=step,
-                    event_type="action",
-                    payload={"action": decision.action},
+                    env_system_prompt=env_system_prompt,
                 )
-            )
-
-            # ── environment step ──────────────────────────────────────────────
-            result = await env_client.step(episode_id=episode_id, action=decision.action)
-            total_reward += result.reward
-            await self.trace.append(
-                TraceEvent(
-                    episode_id=episode_id,
-                    step=step,
-                    event_type="step_result",
-                    payload={
-                        "reward": result.reward,
-                        "terminated": result.terminated,
-                        "truncated": result.truncated,
-                        "info": result.info,
-                        "system_prompt": result.system_prompt,
-                    },
+                if decision.reasoning_text:
+                    await self.trace.append(
+                        TraceEvent(
+                            episode_id=episode_id,
+                            step=step,
+                            event_type="model_call",
+                            payload={
+                                "text": decision.reasoning_text,
+                                "model": normalize_model_id(self.config.model),
+                            },
+                        )
+                    )
+                await self.trace.append(
+                    TraceEvent(
+                        episode_id=episode_id,
+                        step=step,
+                        event_type="action",
+                        payload={"action": decision.action},
+                    )
                 )
-            )
-            await self.trace.append(
-                TraceEvent(
-                    episode_id=episode_id,
-                    step=step,
-                    event_type="observation",
-                    payload={
-                        "phase": "after_env",
-                        "data": result.observation.data,
-                        "content_type": result.observation.content_type,
-                        "system_prompt": result.observation.system_prompt,
-                    },
+
+                # ── environment step ──────────────────────────────────────────────
+                result = await env_client.step(episode_id=episode_id, action=decision.action)
+                total_reward += result.reward
+                await self.trace.append(
+                    TraceEvent(
+                        episode_id=episode_id,
+                        step=step,
+                        event_type="step_result",
+                        payload={
+                            "reward": result.reward,
+                            "terminated": result.terminated,
+                            "truncated": result.truncated,
+                            "info": result.info,
+                            "system_prompt": result.system_prompt,
+                        },
+                    )
                 )
-            )
+                await self.trace.append(
+                    TraceEvent(
+                        episode_id=episode_id,
+                        step=step,
+                        event_type="observation",
+                        payload={
+                            "phase": "after_env",
+                            "data": result.observation.data,
+                            "content_type": result.observation.content_type,
+                            "system_prompt": result.observation.system_prompt,
+                        },
+                    )
+                )
 
-            # ── carry env system prompt forward ───────────────────────────────
-            if result.system_prompt is not None:
-                env_system_prompt = result.system_prompt
+                # ── carry env system prompt forward ───────────────────────────────
+                if result.system_prompt is not None:
+                    env_system_prompt = result.system_prompt
 
-            # ── post-action technique pass ────────────────────────────────────
-            for technique in self.techniques:
-                await technique.after_action(decision.action, result, self.state)
+                # ── post-action technique pass ────────────────────────────────────
+                for technique in self.techniques:
+                    await technique.after_action(decision.action, result, self.state)
 
-            if result.terminated or result.truncated:
-                episode.status = "completed"
-                break
-            if max_steps and step >= max_steps:
-                episode.status = "completed"
-                break
+                if result.terminated or result.truncated:
+                    episode.status = "completed"
+                    break
+                if max_steps and step >= max_steps:
+                    episode.status = "completed"
+                    break
 
-            obs = result.observation
+                obs = result.observation
+
+        finally:
+            # ── clean up env instance ─────────────────────────────────────────
+            # Runs on normal exit, exception, and CancelledError — env adapter
+            # server won't leak the episode's BaseEnv instance.
+            try:
+                await env_client.close(episode_id=episode_id)
+            except Exception:
+                log.warning("env_close_failed", episode_id=episode_id)
 
         terminal_info = result.info if result else {}
-
-        # ── clean up env instance ─────────────────────────────────────────────
-        try:
-            await env_client.close(episode_id=episode_id)
-        except Exception:
-            log.warning("env_close_failed", episode_id=episode_id)
 
         # ── technique on_episode_end ──────────────────────────────────────────
         for technique in self.techniques:
