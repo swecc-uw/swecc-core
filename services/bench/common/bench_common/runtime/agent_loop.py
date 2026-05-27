@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Any
+from typing import Any, Coroutine, TypeVar
 
 import structlog
 from bench_common.core.binding_vow import BindingVow
@@ -16,6 +16,23 @@ from bench_common.runtime.inference import InferenceRouter, normalize_model_id
 from bench_common.storage.trace_store import TraceStore
 
 log = structlog.get_logger()
+
+_T = TypeVar("_T")
+
+
+async def _with_deadline(coro: Coroutine[Any, Any, _T], deadline: float | None) -> _T:
+    """Await *coro*, raising asyncio.TimeoutError if *deadline* (UTC timestamp) has passed.
+
+    Unlike a polled deadline check at the top of the loop, this actually
+    interrupts a slow inference call or env step mid-flight.
+    """
+    if deadline is None:
+        return await coro
+    remaining = deadline - datetime.utcnow().timestamp()
+    if remaining <= 0:
+        coro.close()  # prevent ResourceWarning on the unawaited coroutine
+        raise asyncio.TimeoutError()
+    return await asyncio.wait_for(coro, timeout=remaining)
 
 
 class AgentLoop:
@@ -90,10 +107,11 @@ class AgentLoop:
             while True:
                 step += 1
 
-                # wall-time timeout
-                if deadline and datetime.utcnow().timestamp() > deadline:
-                    episode.status = "timeout"
-                    break
+                # ── pre-action technique pass ─────────────────────────────────────
+                augmented_context: dict[str, Any] = {}
+                for technique in self.techniques:
+                    ctx = await technique.before_action(obs, self.state)
+                    augmented_context.update(ctx)
 
                 await self.trace.append(
                     TraceEvent(
@@ -109,21 +127,25 @@ class AgentLoop:
                     )
                 )
 
-                # ── pre-action technique pass ─────────────────────────────────────
-                augmented_context: dict[str, Any] = {}
-                for technique in self.techniques:
-                    ctx = await technique.before_action(obs, self.state)
-                    augmented_context.update(ctx)
-
                 # ── model inference ───────────────────────────────────────────────
-                decision = await self.inference.decide(
-                    observation=obs,
-                    binding_vow=self.vow,
-                    agent_config=self.config,
-                    extra_context=augmented_context,
-                    step=step,
-                    env_system_prompt=env_system_prompt,
-                )
+                # _with_deadline interrupts mid-call if the wall-time budget is
+                # exhausted, rather than just checking between steps.
+                try:
+                    decision = await _with_deadline(
+                        self.inference.decide(
+                            observation=obs,
+                            binding_vow=self.vow,
+                            agent_config=self.config,
+                            extra_context=augmented_context,
+                            step=step,
+                            env_system_prompt=env_system_prompt,
+                        ),
+                        deadline,
+                    )
+                except asyncio.TimeoutError:
+                    episode.status = "timeout"
+                    break
+
                 if decision.reasoning_text:
                     await self.trace.append(
                         TraceEvent(
@@ -146,7 +168,15 @@ class AgentLoop:
                 )
 
                 # ── environment step ──────────────────────────────────────────────
-                result = await env_client.step(episode_id=episode_id, action=decision.action)
+                try:
+                    result = await _with_deadline(
+                        env_client.step(episode_id=episode_id, action=decision.action),
+                        deadline,
+                    )
+                except asyncio.TimeoutError:
+                    episode.status = "timeout"
+                    break
+
                 total_reward += result.reward
                 await self.trace.append(
                     TraceEvent(
@@ -187,8 +217,12 @@ class AgentLoop:
                 if result.terminated or result.truncated:
                     episode.status = "completed"
                     break
+
+                # Step budget exhausted — episode did not reach a natural terminal
+                # state.  Use "truncated" (not "completed") so scoring and callers
+                # can distinguish a budget cut-off from a genuine task completion.
                 if max_steps and step >= max_steps:
-                    episode.status = "completed"
+                    episode.status = "truncated"
                     break
 
                 obs = result.observation

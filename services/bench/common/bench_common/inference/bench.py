@@ -72,22 +72,30 @@ class BenchResult:
     elapsed_seconds: float
     scores: dict[str, float] = field(default_factory=dict)
 
+    # Episodes that produced a valid reward signal and are included in scoring.
+    _SCOREABLE = frozenset({"completed", "truncated", "timeout"})
+
     @property
     def completed(self) -> int:
         return sum(1 for e in self.episodes if e.status == "completed")
 
     @property
+    def truncated(self) -> int:
+        """Episodes cut short by the step or wall-time budget (still scoreable)."""
+        return sum(1 for e in self.episodes if e.status in ("truncated", "timeout"))
+
+    @property
     def failed(self) -> int:
-        return sum(1 for e in self.episodes if e.status == "failed")
+        return sum(1 for e in self.episodes if e.status in ("failed", "cancelled"))
 
     @property
     def avg_reward(self) -> float:
-        rewards = [e.total_reward for e in self.episodes if e.status == "completed"]
+        rewards = [e.total_reward for e in self.episodes if e.status in self._SCOREABLE]
         return statistics.mean(rewards) if rewards else 0.0
 
     @property
     def avg_steps(self) -> float:
-        steps = [e.steps for e in self.episodes if e.status == "completed"]
+        steps = [e.steps for e in self.episodes if e.status in self._SCOREABLE]
         return statistics.mean(steps) if steps else 0.0
 
     def __str__(self) -> str:
@@ -97,7 +105,8 @@ class BenchResult:
             v = value[:W] if len(value) > W else value
             return f"║{label}{v:<{W}}║"
 
-        ep_str = f"{self.completed}/{self.num_episodes} completed"
+        scoreable = self.completed + self.truncated
+        ep_str = f"{scoreable}/{self.num_episodes} scoreable"
         lines = [
             "",
             "╔══════════════════════════════════════╗",
@@ -249,8 +258,9 @@ async def bench(
     )
 
     elapsed = time.monotonic() - start
-    completed_eps = [e for e in episodes if e.status == "completed"]
-    scores = compute_scores(domain.scoring, completed_eps) if completed_eps else {}
+    _SCOREABLE = frozenset({"completed", "truncated", "timeout"})
+    scoreable_eps = [e for e in episodes if e.status in _SCOREABLE]
+    scores = compute_scores(domain.scoring, scoreable_eps) if scoreable_eps else {}
 
     return BenchResult(
         model=model,

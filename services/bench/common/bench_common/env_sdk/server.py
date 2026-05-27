@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Type
 
 import uvicorn
@@ -28,6 +29,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
+
+# Episode env instances that have not been touched for this many seconds are
+# reaped on the next incoming request.  This bounds memory growth when the
+# platform drops a connection without calling /close (crash, network loss, etc.).
+_EPISODE_TTL_SECONDS: float = 3600.0
 
 
 class _ResetRequest(BaseModel):
@@ -61,7 +67,9 @@ def serve(
     Start the HTTP adapter server for *env_class*.
 
     The server manages one env instance per episode_id.  When /close is
-    called (or the server shuts down) instances are cleaned up.
+    called (or the server shuts down) instances are cleaned up.  Episodes
+    that are abandoned without a /close call (e.g. due to network loss) are
+    automatically reaped after ``_EPISODE_TTL_SECONDS`` seconds of inactivity.
 
     Args:
         env_class:  Your BaseEnv subclass (the class, not an instance).
@@ -71,6 +79,25 @@ def serve(
     """
     # env instance registry: episode_id -> BaseEnv instance
     _episodes: dict[str, BaseEnv] = {}
+    # last-activity timestamps (monotonic) for TTL-based reaping
+    _last_seen: dict[str, float] = {}
+
+    def _touch(episode_id: str) -> None:
+        _last_seen[episode_id] = time.monotonic()
+
+    def _reap_stale() -> None:
+        """Close and evict episodes that have been idle beyond the TTL."""
+        cutoff = time.monotonic() - _EPISODE_TTL_SECONDS
+        stale = [eid for eid, ts in _last_seen.items() if ts < cutoff]
+        for eid in stale:
+            env = _episodes.pop(eid, None)
+            _last_seen.pop(eid, None)
+            if env is not None:
+                try:
+                    env.close()
+                except Exception:
+                    pass
+            log.warning("reaped_stale_episode", extra={"episode_id": eid})
 
     app = FastAPI(
         title=f"BenchAnything Env Adapter — {env_class.__name__}",
@@ -83,6 +110,8 @@ def serve(
 
     @app.post("/reset")
     def reset(req: _ResetRequest) -> dict:
+        _reap_stale()
+
         # Tear down any existing instance for this episode
         if req.episode_id in _episodes:
             try:
@@ -92,13 +121,20 @@ def serve(
 
         env = env_class()
         _episodes[req.episode_id] = env
+        _touch(req.episode_id)
 
         try:
             obs = env.reset(seed=req.seed, **req.scenario_params)
         except Exception as exc:
             _episodes.pop(req.episode_id, None)
+            _last_seen.pop(req.episode_id, None)
             raise HTTPException(status_code=500, detail=str(exc))
 
+        # Env authors can signal a non-JSON content-type and/or an episode-level
+        # system prompt by returning a dict with the shape:
+        #   {"data": <obs>, "content_type": "image/png", "system_prompt": "..."}
+        # This is the only place where reset() can override content_type; for
+        # step() observations use StepResult.content_type instead.
         data = obs
         content_type = "application/json"
         system_prompt = None
@@ -126,6 +162,7 @@ def serve(
                 status_code=404,
                 detail=f"No active episode '{req.episode_id}'. Call /reset first.",
             )
+        _touch(req.episode_id)
         try:
             action = env.parse_action(req.action)
             result = env.step(action)
@@ -135,7 +172,10 @@ def serve(
         return {
             "observation": {
                 "data": result.observation,
-                "content_type": "application/json",
+                # Use the content_type the env declared on StepResult so that
+                # image and multi-modal observations are typed correctly rather
+                # than being forced to "application/json".
+                "content_type": result.content_type,
             },
             "reward": float(result.reward),
             "terminated": bool(result.terminated),
@@ -147,6 +187,7 @@ def serve(
     @app.post("/close")
     def close(req: _CloseRequest) -> dict:
         env = _episodes.pop(req.episode_id, None)
+        _last_seen.pop(req.episode_id, None)
         if env is not None:
             try:
                 env.close()
@@ -159,6 +200,7 @@ def serve(
         env = _episodes.get(req.episode_id)
         if env is None:
             raise HTTPException(status_code=404, detail="Episode not found")
+        _touch(req.episode_id)
         data = env.render(mode=req.mode)
         content_type = "text/plain" if isinstance(data, str) else "application/json"
         return {"data": data, "content_type": content_type}
