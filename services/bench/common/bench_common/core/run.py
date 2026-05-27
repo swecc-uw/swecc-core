@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def _new_id() -> str:
@@ -38,6 +38,15 @@ class RunConfig(BaseModel):
     num_episodes: int = 1
     max_parallel: int = 1
     env_id: str | None = None
+
+    @model_validator(mode="after")
+    def _seed_set_matches_num_episodes(self) -> "RunConfig":
+        if self.seed_set is not None and len(self.seed_set) != self.num_episodes:
+            raise ValueError(
+                f"seed_set has {len(self.seed_set)} entries but num_episodes is "
+                f"{self.num_episodes}; they must match, or omit seed_set to auto-generate seeds"
+            )
+        return self
 
 
 class Run(BaseModel):

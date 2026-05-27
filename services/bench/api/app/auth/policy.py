@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
 from app.auth.principal import Anonymous, Guest, Member, Principal
 from app.auth.resolve import auth_disabled
@@ -40,12 +41,20 @@ async def assert_guest_rate_limit(guest_session_id: str) -> None:
     limit = settings.guest_runs_per_day
     if limit <= 0:
         return
+
+    # Count only runs created today (UTC).  RunRow has no native created_at
+    # column so we query the JSON data field.  ISO-8601 strings are
+    # lexicographically ordered identically to chronological order, so __gte
+    # on the ISO prefix of today's midnight is correct and index-friendly on
+    # Postgres jsonb.
+    today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00")
     count = await RunRow.objects.filter(
         actor_type=ActorType.GUEST,
         actor_id=guest_session_id,
+        data__created_at__gte=today_iso,
     ).acount()
     if count >= limit:
         raise HTTPException(
             status_code=429,
-            detail=f"Guest run limit reached ({limit} runs). Sign in to continue.",
+            detail=f"Guest run limit reached ({limit} runs per day). Sign in to continue.",
         )

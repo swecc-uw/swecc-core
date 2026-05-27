@@ -10,11 +10,17 @@ from typing import Any
 from bench_common.core.run import Episode
 from bench_common.core.scoring import MetricDef, ScoringConfig
 
+_SCOREABLE_STATUSES = frozenset({"completed", "timeout"})
+
 
 def compute_metric(metric: MetricDef, episodes: list[Episode]) -> float:
+    # Only include episodes that ran to a natural conclusion.  Failed and
+    # cancelled episodes have no valid reward signal and must not be mixed
+    # into aggregations — a crash is not the same as a score of 0.
+    scoreable = [ep for ep in episodes if ep.status in _SCOREABLE_STATUSES]
     values: list[float] = []
 
-    for ep in episodes:
+    for ep in scoreable:
         if metric.type == "episode_reward":
             values.append(ep.total_reward)
         elif metric.type == "terminal_field":

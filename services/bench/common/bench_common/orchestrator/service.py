@@ -83,10 +83,8 @@ async def _ensure_sandbox_env_running(env_url: str, github_url: str | None) -> N
 
 
 async def _github_url_for_domain(domain_id: str) -> str | None:
-    for env in await db.list_developer_environments():
-        if env.get("domain_id") == domain_id:
-            return env.get("github_url")
-    return None
+    envs = await db.list_developer_environments(domain_id=domain_id)
+    return envs[0].get("github_url") if envs else None
 
 
 async def _resolve_episode_env_url(
@@ -208,6 +206,15 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
 
     all_eps = await db.get_episodes(run_id)
     if await _run_is_cancelled(run_id):
+        return
+
+    # If every episode failed there is nothing meaningful to score — surface
+    # the run as failed so callers don't see a phantom 0.0 on the leaderboard.
+    if all_eps and all(ep.status == "failed" for ep in all_eps):
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        await db.save_run(run, env_id=run.env_id)
+        log.warning("run_all_episodes_failed", run_id=run_id, num_episodes=len(all_eps))
         return
 
     scores = compute_scores(domain.scoring, all_eps)
@@ -350,6 +357,18 @@ async def run_test_episode(
         episode.total_reward = result.total_reward
         episode.terminal_info = result.terminal_info
         episode.ended_at = result.ended_at
+
+    except asyncio.CancelledError:
+        # Task was cancelled externally — persist terminal state before re-raising
+        # so the episode and run don't stay stuck in "running" forever.
+        episode.status = "cancelled"
+        episode.terminal_info = {"cancelled": True, "reason": "task_cancelled"}
+        episode.ended_at = datetime.utcnow()
+        await db.save_episode(episode)
+        run.status = "cancelled"
+        run.completed_at = datetime.utcnow()
+        await db.save_run(run, env_id=env_id)
+        raise
 
     except Exception as exc:
         log.exception("test_episode_failed", episode_id=episode.id, error=str(exc))

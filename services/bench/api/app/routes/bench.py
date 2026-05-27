@@ -243,7 +243,7 @@ async def get_bench_job(job_id: str) -> dict[str, Any]:
     return job
 
 
-@router.patch("/jobs/{job_id}/claim")
+@router.patch("/jobs/{job_id}/claim", dependencies=[Depends(require_worker)])
 async def claim_bench_job(job_id: str) -> dict[str, Any]:
     job = await db.claim_bench_job(job_id)
     if job is None:

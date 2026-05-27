@@ -173,14 +173,17 @@ The Binding Vow is the machine-readable contract between your environment and ag
 
 ### Space types
 
-| `type`        | Use when…                                     |
-|---------------|-----------------------------------------------|
-| `"discrete"`  | Fixed set of named choices (A/B/C/D, move/shoot/wait) |
-| `"text"`      | Free-form string                              |
-| `"json"`      | Structured dict (describe schema in `description`) |
-| `"image"`     | Pixel array (`shape`, `dtype` required)       |
-| `"continuous"`| Float vector (`shape`, `bounds` required)     |
-| `"composite"` | Mix of the above (use `CompositeSpace`)        |
+| `type`        | Use when…                                     | Structured output? |
+|---------------|-----------------------------------------------|--------------------|
+| `"discrete"`  | Fixed set of named choices (A/B/C/D, move/shoot/wait) | ✅ yes |
+| `"continuous"`| Single float value (`bounds` sets min/max)    | ✅ yes |
+| `"json"`      | Structured dict — provide full JSON Schema in `schema_ref` | ✅ yes |
+| `"composite"` | Mix of the above (use `CompositeSpace`)       | ✅ yes |
+| `"text"`      | Free-form string                              | ❌ free-text path  |
+| `"image"`     | Pixel array (`shape`, `dtype` required)       | ❌ free-text path  |
+| `"multi_modal"` | Image + text combined                       | ❌ free-text path  |
+
+**Structured output** means the platform tells the model (GPT-4o, Claude, Gemini) to return exactly the shape described by your action schema — no regex parsing, no hallucinated formats. Use it whenever possible. Text and image spaces fall back to the free-text path where the platform parses the model's reply heuristically.
 
 ### Reward types
 
@@ -190,6 +193,81 @@ The Binding Vow is the machine-readable contract between your environment and ag
 | `"sparse"`  | Most steps 0, non-zero at key events |
 | `"scalar"`  | Any float, every step               |
 | `"vector"`  | Multiple objectives                 |
+
+---
+
+## Structured Outputs
+
+When your action space is `discrete`, `continuous`, `json`, or `composite`, the platform enforces model responses using each provider's native schema mechanism:
+
+| Provider | Mechanism |
+|----------|-----------|
+| OpenAI (GPT-4o, o3, …) | `response_format: json_schema` |
+| Anthropic (Claude 3/4) | Forced tool call (`submit_action`) |
+| Google (Gemini 1.5/2.x) | `response_format: json_schema` via LiteLLM |
+
+The model is **required** by the API to return a value that matches your schema — the platform does not need to parse or guess. Responses that violate the schema are rejected at the provider level before they reach your env.
+
+### Declaring your action schema
+
+For `discrete` actions, list values in `enum_values`:
+
+```json
+"action_space": {
+  "type": "discrete",
+  "enum_values": ["left", "right", "up", "down"],
+  "description": "Direction to move"
+}
+```
+
+For `json` actions, write the full JSON Schema in `schema_ref` as a string:
+
+```json
+"action_space": {
+  "type": "json",
+  "schema_ref": "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\"},\"y\":{\"type\":\"integer\"},\"click\":{\"type\":\"boolean\"}},\"required\":[\"x\",\"y\",\"click\"]}",
+  "description": "Screen coordinate click"
+}
+```
+
+For `continuous` actions, set bounds:
+
+```json
+"action_space": {
+  "type": "continuous",
+  "bounds": {"low": -1.0, "high": 1.0},
+  "description": "Steering value"
+}
+```
+
+For `composite` actions (multiple typed fields), use `CompositeSpace` in your domain config.
+
+### `parse_action()` — remapping structured values
+
+Your `step()` method receives the raw structured value from the model. If the shape the model fills in differs from what your `step()` logic needs, override `parse_action()` on your `BaseEnv` subclass:
+
+```python
+class MyEnv(BaseEnv):
+
+    def parse_action(self, action):
+        # Model returns one of {"left","right","up","down"} (string).
+        # step() wants an integer direction (0–3).
+        return {"left": 0, "right": 1, "up": 2, "down": 3}[action]
+
+    def step(self, action):
+        # action is now an int — no conversion needed here
+        ...
+```
+
+The default `parse_action()` is an identity (passes the value through unchanged). Override it only when you need the remapping — most envs don't need it.
+
+**When is `parse_action` useful?**
+
+- Your schema exposes a human-readable string enum, but `step()` works on integers or keys in a lookup table.
+- Your schema returns a dict, but `step()` expects a tuple or a flat list.
+- You want to validate or clamp the action before it reaches your game logic.
+
+`parse_action` is called by the adapter server before every `step()`. It is **not** called during local testing (`env.step(action)` directly) — only when the platform routes the action through the HTTP interface.
 
 ---
 
@@ -340,6 +418,10 @@ GET /v1/runs/{run_id}/traces   # raw trace map only
 - [ ] `binding_vow.episode.max_steps` is set to prevent runaway episodes
 - [ ] At least one `MetricDef` of type `terminal_field` or `episode_reward` is defined
 - [ ] Domain registered and `/v1/test/episode` returns `status: "completed"`
+- [ ] If `action_space.type` is `"json"`, `schema_ref` contains valid JSON Schema (the platform uses this to enforce model responses)
+- [ ] If `action_space.type` is `"discrete"`, `enum_values` is non-empty
+- [ ] If your `step()` needs a different representation than what the schema describes, `parse_action()` is overridden in your `BaseEnv` subclass
+- [ ] Tested with at least one cloud model (GPT-4o, Claude, or Gemini) to confirm structured output round-trip is correct
 
 Once the checklist passes, call `publish_domain()` (or `POST /v1/domains/{id}/publish`) to freeze the Binding Vow and enable leaderboard submissions.
 

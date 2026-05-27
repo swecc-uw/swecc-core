@@ -23,19 +23,27 @@ log = structlog.get_logger()
 ENVS_DIR = Path(os.getenv("ENVS_DIR", "/envs"))
 SANDBOX_HOST = os.getenv("SANDBOX_HOST", "localhost")
 
-# Sandbox's own FastAPI listens on 8001; env subprocesses start from 9000
-_port_counter = 9000
+# Sandbox's own FastAPI listens on 8001; env subprocesses use the pool below.
+# Ports are returned to the pool when stop_env() is called, so the counter
+# never wraps past 65535 no matter how many envs are cloned over time.
+_PORT_RANGE_START = int(os.getenv("SANDBOX_PORT_START", "9000"))
+_PORT_RANGE_END = int(os.getenv("SANDBOX_PORT_END", "9999"))
+_available_ports: set[int] = set(range(_PORT_RANGE_START, _PORT_RANGE_END + 1))
 _registry: dict[str, dict[str, Any]] = {}  # env_id → {process, port, manifest, status}
 _lock = asyncio.Lock()
 
 
 async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
     """Clone a repo, install its deps, start adapter server, return env URL."""
-    global _port_counter
-
     async with _lock:
-        port = _port_counter
-        _port_counter += 1
+        if not _available_ports:
+            raise RuntimeError(
+                f"No available subprocess ports "
+                f"(pool {_PORT_RANGE_START}–{_PORT_RANGE_END} is exhausted). "
+                "Stop unused environments first."
+            )
+        port = min(_available_ports)
+        _available_ports.discard(port)
 
     env_dir = ENVS_DIR / env_id
 
@@ -202,6 +210,10 @@ async def stop_env(env_id: str) -> None:
             await asyncio.wait_for(proc.wait(), timeout=5.0)
         except asyncio.TimeoutError:
             proc.kill()
+    # Return the port to the pool so it can be reused by future clones.
+    port = entry.get("port")
+    if port is not None:
+        _available_ports.add(port)
     env_dir = ENVS_DIR / env_id
     shutil.rmtree(env_dir, ignore_errors=True)
     log.info("env_stopped", env_id=env_id)

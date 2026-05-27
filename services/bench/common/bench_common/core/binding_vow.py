@@ -131,8 +131,8 @@ class BindingVow(BaseModel):
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
-_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+")
-_VERSION_REQ_RE = re.compile(r"^[\^~]?\d+\.\d+(\.\d+)?")
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+_VERSION_REQ_RE = re.compile(r"^[\^~]?\d+\.\d+(\.\d+)?$")
 
 
 def _is_valid_semver(version: str) -> bool:
