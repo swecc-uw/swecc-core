@@ -267,7 +267,10 @@ def cmd_doctor(
         }
         adapter_ok = adapter_err is None and adapter_code == 200
         if adapter_err:
-            issues.append(f"env adapter unreachable: {adapter_err} (run: python adapter.py)")
+            issues.append(
+                f"env adapter unreachable: {adapter_err} "
+                "(run: mesocosm run local, or python files/adapter.py)"
+            )
         elif adapter_code != 200:
             issues.append(f"env adapter GET /health returned {adapter_code}")
         elif adapter_code == 200:

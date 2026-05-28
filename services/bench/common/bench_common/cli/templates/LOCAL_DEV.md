@@ -1,11 +1,11 @@
 # Local development (Ollama)
 
-Iterate on `env.py` and `benchanything.json` on your machine before `mesocosm env submit`. No API keys — only [Ollama](https://ollama.com).
+Iterate on `files/env.py` and `files/benchanything.json` on your machine before `mesocosm env submit`. No API keys — only [Ollama](https://ollama.com).
 
 ## One-time setup
 
 1. Install the CLI: `pip install swecc-mesocosm`
-   This covers `mesocosm run local`, `bench_common` for `adapter.py`, and the HTTP stack (`fastapi`, `uvicorn`). You do **not** need `pip install -r requirements.txt` for the default scaffold — that file is only for extra packages your env imports (see comments in `requirements.txt`). The platform installs it when you `env submit`.
+   This covers `mesocosm run local`, `bench_common` for `files/adapter.py`, and the HTTP stack (`fastapi`, `uvicorn`). You do **not** need `pip install -r requirements.txt` for the default scaffold — that file is only for extra packages your env imports (see comments in `requirements.txt`). The platform installs it when you `env submit`.
 2. Install Ollama and pull a model:
    ```bash
    ollama pull llama3.2
@@ -19,10 +19,19 @@ export MESOCOSM_LOCAL=1   # optional: bench-api :8010, adapter :8765 defaults
 mesocosm doctor --local   # verify adapter (8765) before run local
 ```
 
+**Option A — automatic adapter**
+
+```bash
+mesocosm run local
+# reads files/benchanything.json; starts files/adapter.py if nothing listens on --env-url
+```
+
+**Option B — manual adapter**
+
 **Terminal 1 — env server**
 
 ```bash
-python adapter.py
+python files/adapter.py
 # → http://localhost:8765/health
 ```
 
@@ -33,7 +42,7 @@ mesocosm run local
 # same as: mesocosm run local --model ollama/llama3.2
 ```
 
-Uses `benchanything.json` for the binding vow and scoring. Does **not** register the domain or create platform runs.
+Uses `files/benchanything.json` for the binding vow and scoring. Does **not** register the domain or create platform runs.
 
 ## Flags
 
@@ -42,7 +51,7 @@ Uses `benchanything.json` for the binding vow and scoring. Does **not** register
 | `--model` | `ollama/llama3.2` | Must be `ollama/<name>` matching a pulled model |
 | `--episodes` | `5` | Number of episodes |
 | `--env-url` | `http://localhost:8765` | Adapter URL if you changed the port |
-| `--manifest` | `benchanything.json` | Alternate manifest path |
+| `--manifest` | `files/benchanything.json` | Alternate manifest path |
 | `--system-prompt` | — | Extra instruction for the agent |
 
 ## Structured outputs and local dev
@@ -73,3 +82,5 @@ Platform runs use cloud models on SWECC infrastructure; local Ollama is only for
 **Non-interactive auth:** `mesocosm auth login` prompts for credentials. In CI, set `SWECC_BENCH_TOKEN` or use `mesocosm auth guest`.
 
 **Legacy:** repos that use `domain.py` with `DOMAIN_CONFIG` (not created by `mesocosm init`) can still run `mesocosm register path/to/domain.py [--auto-id] [--publish]` to POST the domain manually.
+
+**Legacy layout:** older scaffolds kept `benchanything.json` at the repo root. `mesocosm run local --manifest benchanything.json` still works; `env submit` accepts either root or `files/benchanything.json`.

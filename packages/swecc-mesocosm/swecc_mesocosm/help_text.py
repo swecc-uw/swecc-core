@@ -67,8 +67,8 @@ def print_root_help(*, console: Console | None = None) -> None:
         (
             "Local env authoring",
             [
-                ("init", "Scaffold benchanything.json, adapter, env.py, showcase/"),
-                ("run local", "Bench with Ollama + benchanything.json (no API)"),
+                ("init", "Scaffold files/ (env + bench), showcase/, LOCAL_DEV.md"),
+                ("run local", "Ollama bench; starts files/adapter.py (no API)"),
             ],
         ),
         (

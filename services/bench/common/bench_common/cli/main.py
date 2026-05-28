@@ -6,8 +6,10 @@ import argparse
 import getpass
 import json
 import os
+import subprocess
 import sys
 import warnings
+from pathlib import Path
 
 import httpx
 from bench_common.auth.credentials import clear_credentials, load_credentials, save_credentials
@@ -21,6 +23,7 @@ from bench_common.cli.urls import (
     member_bench_api_url,
     whoami_bench_api_url,
 )
+from bench_common.env_sdk.manifest import DEFAULT_MANIFEST
 
 
 def _default_bench_url() -> str:
@@ -433,12 +436,84 @@ def _cmd_run_create(args: argparse.Namespace) -> None:
         print(json.dumps(r.json(), indent=2))
 
 
+_INIT_FILES_DIR_ARTIFACTS = (
+    "benchanything.json",
+    "adapter.py",
+    "env.py",
+)
+_INIT_ROOT_ARTIFACTS = (
+    "requirements.txt",
+    "LOCAL_DEV.md",
+)
+
+
+def _adapter_port_from_env_url(env_url: str) -> int:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(env_url)
+    if parsed.port is not None:
+        return parsed.port
+    if parsed.scheme == "https":
+        return 443
+    if parsed.scheme == "http":
+        return 80
+    return 8765
+
+
+async def _adapter_health_ok(env_url: str) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.get(f"{env_url.rstrip('/')}/health")
+            return r.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+async def _wait_for_adapter_health(env_url: str, timeout: int = 30) -> None:
+    import asyncio
+
+    async with httpx.AsyncClient(timeout=2.0) as client:
+        for _attempt in range(timeout):
+            await asyncio.sleep(1.0)
+            try:
+                r = await client.get(f"{env_url.rstrip('/')}/health")
+                if r.status_code == 200:
+                    return
+            except httpx.HTTPError:
+                pass
+    raise RuntimeError(
+        f"Adapter at {env_url} did not respond to GET /health within {timeout}s. "
+        "Check adapter.py and the port passed via --env-url."
+    )
+
+
+def _start_adapter_process(adapter_path: Path, *, port: int) -> subprocess.Popen[bytes]:
+    adapter_path = adapter_path.resolve()
+    return subprocess.Popen(
+        [sys.executable, str(adapter_path), "--port", str(port)],
+        cwd=str(adapter_path.parent),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+
+def _stop_adapter_process(proc: subprocess.Popen[bytes] | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2)
+
+
 def _cmd_run_local(args: argparse.Namespace) -> None:
     """Run episodes locally via Ollama + benchanything.json (no platform submit)."""
     import asyncio
     from pathlib import Path
 
-    from bench_common.env_sdk.manifest import domain_config_from_manifest
+    from bench_common.env_sdk.manifest import domain_config_from_manifest, resolve_adapter_path
     from bench_common.inference.bench import bench
 
     model = args.model or "ollama/llama3.2"
@@ -451,27 +526,67 @@ def _cmd_run_local(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     manifest_path = Path(args.manifest).resolve()
+    if not manifest_path.is_file():
+        print(f"Manifest not found: {manifest_path}", file=sys.stderr)
+        sys.exit(1)
+
     domain = domain_config_from_manifest(
         manifest_path,
         domain_id=args.domain_id,
         env_url=args.env_url,
     )
-    result = asyncio.run(
-        bench(
-            model=model,
-            domain_id=domain.id,
-            env_url=args.env_url,
-            num_episodes=args.episodes,
-            seed_set=args.seeds,
-            system_prompt=args.system_prompt,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-            max_parallel=args.parallel,
-            quiet=args.quiet,
-            domain=domain,
-            allow_any_model=True,
+
+    adapter_proc = None
+    started_adapter = False
+
+    async def _ensure_adapter() -> None:
+        if await _adapter_health_ok(args.env_url):
+            return
+        nonlocal adapter_proc, started_adapter
+        try:
+            adapter_path = resolve_adapter_path(manifest_path)
+        except (ValueError, FileNotFoundError) as exc:
+            print(str(exc), file=sys.stderr)
+            raise SystemExit(1) from exc
+        port = _adapter_port_from_env_url(args.env_url)
+        adapter_proc = _start_adapter_process(adapter_path, port=port)
+        started_adapter = True
+        if adapter_proc.poll() is not None:
+            err = (adapter_proc.stderr.read() if adapter_proc.stderr else b"").decode(
+                errors="replace"
+            ).strip()
+            print(
+                f"adapter.py exited immediately{(': ' + err) if err else ''}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        try:
+            await _wait_for_adapter_health(args.env_url)
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            raise SystemExit(1) from exc
+
+    try:
+        asyncio.run(_ensure_adapter())
+        result = asyncio.run(
+            bench(
+                model=model,
+                domain_id=domain.id,
+                env_url=args.env_url,
+                num_episodes=args.episodes,
+                seed_set=args.seeds,
+                system_prompt=args.system_prompt,
+                temperature=args.temperature,
+                max_tokens=args.max_tokens,
+                max_parallel=args.parallel,
+                quiet=args.quiet,
+                domain=domain,
+                allow_any_model=True,
+            )
         )
-    )
+    finally:
+        if started_adapter:
+            _stop_adapter_process(adapter_proc)
     print(result)
 
 
@@ -501,17 +616,23 @@ def _cmd_init(args: argparse.Namespace) -> None:
     from importlib import resources
     from pathlib import Path
 
+    from bench_common.env_sdk.manifest import INIT_FILES_DIR
+
     dest = Path(args.dir or ".").resolve()
     pkg = resources.files("bench_common.cli.templates")
-    files = {
-        "benchanything.json": "benchanything.json",
-        "adapter.py": "adapter.py",
-        "env.py": "env.py",
-        "requirements.txt": "requirements.txt",
-        "LOCAL_DEV.md": "LOCAL_DEV.md",
-    }
-    for src_name, out_name in files.items():
-        target = dest / out_name
+    files_dir = dest / INIT_FILES_DIR
+    files_dir.mkdir(parents=True, exist_ok=True)
+
+    for src_name in _INIT_FILES_DIR_ARTIFACTS:
+        target = files_dir / src_name
+        if target.exists() and not args.force:
+            print(f"skip (exists): {target}")
+            continue
+        target.write_text(pkg.joinpath(src_name).read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"wrote {target}")
+
+    for src_name in _INIT_ROOT_ARTIFACTS:
+        target = dest / src_name
         if target.exists() and not args.force:
             print(f"skip (exists): {target}")
             continue
@@ -534,10 +655,10 @@ def _cmd_init(args: argparse.Namespace) -> None:
     print(
         "\nNext:\n"
         "  1. pip install swecc-mesocosm  (CLI + adapter deps; not requirements.txt)\n"
-        "  2. Edit env.py + benchanything.json\n"
+        "  2. Edit files/env.py + files/benchanything.json\n"
         "  3. Local Ollama loop (see LOCAL_DEV.md):\n"
-        "       ollama pull llama3.2 && python adapter.py\n"
-        "       mesocosm run local\n"
+        "       ollama pull llama3.2\n"
+        "       mesocosm run local   # starts files/adapter.py automatically\n"
         "  4. When ready: mesocosm env submit --github-url ...\n"
         "  (requirements.txt: optional extras for your env — see file header)"
     )
@@ -699,8 +820,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument(
         "--manifest",
-        default="benchanything.json",
-        help="Path to benchanything.json (default: ./benchanything.json)",
+        default=DEFAULT_MANIFEST,
+        help=f"Path to benchanything.json (default: ./{DEFAULT_MANIFEST})",
     )
     p.add_argument(
         "--domain-id",
@@ -730,7 +851,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("-o", "--output", default=None, help="Write to file (default: stdout)")
     p.set_defaults(func=_cmd_run_export)
 
-    init_p = sub.add_parser("init", help="Scaffold benchanything.json, adapter, env, showcase/")
+    init_p = sub.add_parser(
+        "init",
+        help="Scaffold files/ (env + bench), showcase/, LOCAL_DEV.md",
+    )
     init_p.add_argument(
         "--dir",
         default=".",
