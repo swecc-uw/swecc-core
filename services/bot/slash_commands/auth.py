@@ -6,6 +6,27 @@ from APIs.SweccAPI import SweccAPI
 
 swecc = SweccAPI()
 
+WEBSITE_VERIFIED_ROLE_FAILED_MSG = (
+    "Your account was verified on the website, but I could not assign the verified role "
+    "in Discord. Please contact an officer. They should confirm the bot has **Manage Roles** "
+    "and that the bot's role is ranked above the verified role in Server Settings → Roles."
+)
+
+
+async def _assign_verified_role(
+    interaction: discord.Interaction, role: discord.Role, bot_context
+) -> bool:
+    """Assign the verified role. Returns False if Discord rejects the role change."""
+    try:
+        await interaction.user.add_roles(role)
+        return True
+    except (discord.Forbidden, discord.HTTPException) as error:
+        await bot_context.log(
+            interaction,
+            f"{interaction.user.display_name} verified on website but failed to assign Discord role: {error}",
+        )
+        return False
+
 
 class RegisterModal(discord.ui.Modal, title="Register Your Account"):
     def __init__(self, bot_context, verified_role):
@@ -73,9 +94,15 @@ class RegisterModal(discord.ui.Modal, title="Register Your Account"):
                 usr_msg = f"{detail} Your account has been verified, and you can now reset your password [here]({reset_password_url})."
                 sys_msg = f"{interaction.user.display_name} has registered and verified their account with username {username} and id {id}."
 
-                await interaction.response.send_message(usr_msg, ephemeral=True)
-                await self.bot_context.log(interaction, sys_msg)
-                await interaction.user.add_roles(self.verified_role)
+                if await _assign_verified_role(interaction, self.verified_role, self.bot_context):
+                    await interaction.response.send_message(usr_msg, ephemeral=True)
+                    await self.bot_context.log(interaction, sys_msg)
+                else:
+                    usr_msg = (
+                        f"{detail} {WEBSITE_VERIFIED_ROLE_FAILED_MSG} "
+                        f"You can still reset your password [here]({reset_password_url})."
+                    )
+                    await interaction.response.send_message(usr_msg, ephemeral=True)
 
             else:
                 usr_msg = f"Registration successful, but automatic verification failed. Please use /verify to link your account. Error: {auth_response}"
@@ -146,20 +173,26 @@ class VerifyModal(discord.ui.Modal, title="Verify Your Account"):
 
         response = await asyncio.to_thread(swecc.auth, username, user_id, auth_code)
         if response == 200:
-            await interaction.followup.send("Authentication successful!", ephemeral=True)
-            await self.bot_context.log(
-                interaction,
-                f"{interaction.user.display_name} has verified their account.",
-            )
-
             if (role := interaction.guild.get_role(self.bot_context.verified_role_id)) is None:
+                await interaction.followup.send(
+                    "Your account was verified on the website, but the verified role was not "
+                    "found in this server. Please contact an officer.",
+                    ephemeral=True,
+                )
                 await self.bot_context.log(
                     interaction,
                     f"ERROR: Role {self.bot_context.verified_role_id} not found for {interaction.user.display_name}",
                 )
                 return
 
-            await interaction.user.add_roles(role)
+            if await _assign_verified_role(interaction, role, self.bot_context):
+                await interaction.followup.send("Authentication successful!", ephemeral=True)
+                await self.bot_context.log(
+                    interaction,
+                    f"{interaction.user.display_name} has verified their account.",
+                )
+            else:
+                await interaction.followup.send(WEBSITE_VERIFIED_ROLE_FAILED_MSG, ephemeral=True)
             return
         await interaction.followup.send(
             f"Authentication failed. Please try again. Verify you signed up with the correct username: **{username}**.",
