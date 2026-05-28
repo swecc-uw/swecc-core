@@ -1,5 +1,5 @@
-import secrets
 import asyncio
+import secrets
 
 import discord
 from APIs.SweccAPI import SweccAPI

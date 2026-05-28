@@ -124,7 +124,9 @@ class SweccAPI:
             ) from exc
 
         if response.status_code != 200:
-            error_detail = response_data.get("detail") or response_data.get("error") or response_data
+            error_detail = (
+                response_data.get("detail") or response_data.get("error") or response_data
+            )
             raise RuntimeError(
                 f"Password reset backend request failed with status {response.status_code}: {error_detail}"
             )

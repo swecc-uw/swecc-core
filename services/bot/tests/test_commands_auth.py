@@ -7,7 +7,9 @@ from slash_commands import auth as auth_module
 
 
 @pytest.mark.asyncio
-async def test_verify_command_sends_modal_without_adding_role(bot_context, mock_interaction, mock_role):
+async def test_verify_command_sends_modal_without_adding_role(
+    bot_context, mock_interaction, mock_role
+):
     """Verify command should open modal before any role mutation."""
     bot_context.verified_role_id = mock_role.id
     bot_context.log = AsyncMock()
@@ -24,7 +26,9 @@ async def test_verify_command_sends_modal_without_adding_role(bot_context, mock_
 
 
 @pytest.mark.asyncio
-async def test_verify_modal_defers_then_follows_up_success(bot_context, mock_interaction, mock_role):
+async def test_verify_modal_defers_then_follows_up_success(
+    bot_context, mock_interaction, mock_role
+):
     """Verify modal should defer quickly and reply via followup on success."""
     bot_context.verified_role_id = mock_role.id
     bot_context.log = AsyncMock()
@@ -64,4 +68,3 @@ async def test_reset_password_logs_actionable_failure(bot_context, mock_interact
     logged_message = bot_context.log.await_args.args[1]
     assert "Password reset failed" in logged_message
     assert "discord_id=" in logged_message
-
