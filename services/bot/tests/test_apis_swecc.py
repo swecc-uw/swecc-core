@@ -228,6 +228,48 @@ class TestSweccAPI:
         assert "password-reset-confirm" in result
 
     @pytest.mark.asyncio
+    async def test_reset_password_accepts_uidb64(self, api):
+        """Test password reset with uidb64 fallback field."""
+        # Arrange
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"uidb64": "test-uidb64", "token": "test-token-456"}
+
+        # Act
+        with patch("requests.post", return_value=mock_response):
+            result = await api.reset_password("testuser#1234", "123456789")
+
+        # Assert
+        assert "test-uidb64" in result
+        assert "test-token-456" in result
+
+    @pytest.mark.asyncio
+    async def test_reset_password_missing_credentials_raises_runtime_error(self, api):
+        """Test password reset fails with actionable error when payload is malformed."""
+        # Arrange
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"detail": "ok but malformed"}
+
+        # Act & Assert
+        with patch("requests.post", return_value=mock_response):
+            with pytest.raises(RuntimeError, match="missing credentials"):
+                await api.reset_password("testuser#1234", "123456789")
+
+    @pytest.mark.asyncio
+    async def test_reset_password_non_200_raises_runtime_error(self, api):
+        """Test password reset raises readable error on backend failure."""
+        # Arrange
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.json.return_value = {"detail": "Not found."}
+
+        # Act & Assert
+        with patch("requests.post", return_value=mock_response):
+            with pytest.raises(RuntimeError, match="status 404"):
+                await api.reset_password("testuser#1234", "123456789")
+
+    @pytest.mark.asyncio
     async def test_process_reaction_event_add(self, api):
         """Test processing reaction add event."""
         # Arrange

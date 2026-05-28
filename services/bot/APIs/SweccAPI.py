@@ -115,10 +115,29 @@ class SweccAPI:
         response = requests.post(
             f"{self.url}/members/reset-password/", headers=self.headers, json=data
         )
-        data = response.json()
-        return (
-            f"https://interview.swecc.org/#/password-reset-confirm/{data['uid']}/{data['token']}/"
-        )
+
+        try:
+            response_data = response.json()
+        except requests.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Password reset backend returned non-JSON response (status {response.status_code})."
+            ) from exc
+
+        if response.status_code != 200:
+            error_detail = response_data.get("detail") or response_data.get("error") or response_data
+            raise RuntimeError(
+                f"Password reset backend request failed with status {response.status_code}: {error_detail}"
+            )
+
+        uid = response_data.get("uid") or response_data.get("uidb64")
+        token = response_data.get("token")
+
+        if not uid or not token:
+            raise RuntimeError(
+                f"Password reset backend response missing credentials. keys={sorted(response_data.keys())}"
+            )
+
+        return f"https://interview.swecc.org/#/password-reset-confirm/{uid}/{token}/"
 
     async def process_reaction_event(self, payload, type):
         session = self.get_session()
