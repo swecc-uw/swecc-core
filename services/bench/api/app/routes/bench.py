@@ -19,7 +19,7 @@ from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 log = structlog.get_logger()
 
@@ -35,7 +35,7 @@ _dev_bench_lock = asyncio.Lock()
 class TestBenchRequest(BaseModel):
     env_id: str
     model: str
-    num_episodes: int = 1
+    num_episodes: int = Field(default=1, ge=1, le=1)
     seed: int | None = None
 
 
@@ -192,18 +192,41 @@ async def _run_full_bench_local(job_id: str) -> None:
             if run and job_env_id:
                 await db.save_run(run, env_id=job_env_id)
             # Wait for the run to complete (it runs as background tasks)
+            timed_out = True
             for _ in range(120):
                 await asyncio.sleep(2.0)
                 run = await db.get_run(run.id)
-                if run and run.status in ("completed", "failed"):
+                if run and run.status in ("completed", "failed", "cancelled"):
+                    timed_out = False
                     break
+
+            if timed_out and run is not None:
+                # Polling gave up but the orchestrator task is still running —
+                # it will keep burning inference tokens and overwrite the row
+                # with stale "completed" status long after we've moved on.
+                # Cancel the underlying run to stop the bleeding.
+                log.warning(
+                    "full_bench_model_poll_timeout",
+                    job_id=job_id,
+                    model=model,
+                    run_id=run.id,
+                )
+                try:
+                    await orchestrator.cancel_run(run.id)
+                except Exception as exc:
+                    log.warning(
+                        "full_bench_cancel_failed",
+                        job_id=job_id,
+                        run_id=run.id,
+                        error=str(exc),
+                    )
 
             primary_score = (
                 run.scores.get(domain.scoring.primary_metric) if run and run.scores else None
             )
             model_results[model] = {
                 "run_id": run.id if run else None,
-                "status": run.status if run else "failed",
+                "status": "cancelled" if timed_out else (run.status if run else "failed"),
                 "primary_score": primary_score,
             }
             log.info("full_bench_model_done", job_id=job_id, model=model, score=primary_score)

@@ -146,6 +146,7 @@ class EpisodeStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     RUNNING = "running", "Running"
     COMPLETED = "completed", "Completed"
+    TRUNCATED = "truncated", "Truncated"
     FAILED = "failed", "Failed"
     TIMEOUT = "timeout", "Timeout"
 
@@ -247,6 +248,9 @@ class DeveloperEnvironment(models.Model):
     )
     env_url = models.URLField(max_length=512, null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)
+    submission_version = models.IntegerField(default=1)
+    domain_history = models.JSONField(default=list, blank=True)
+    resubmitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

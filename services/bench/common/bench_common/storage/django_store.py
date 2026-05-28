@@ -32,6 +32,7 @@ from bench.models import Visibility
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -49,6 +50,17 @@ def _iso_dt(value: datetime | str | None) -> str | None:
     if isinstance(value, str):
         return value
     return value.isoformat()
+
+
+def _dt_or_none(value: datetime | str | None) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    parsed = parse_datetime(value)
+    if parsed is None:
+        return None
+    return parsed
 
 
 from bench_common.storage.db_hints import init_db_hint
@@ -178,6 +190,89 @@ async def list_runs(
     return [_run_from_row(row) async for row in qs.order_by("-id")[:limit]]
 
 
+async def reap_orphan_work() -> dict[str, int]:
+    """Mark in-flight rows as failed after a bench-api restart.
+
+    `_active_run_tasks` lives in process memory, so a crash/redeploy strands
+    any `running`/`pending` run, episode, or `cloning` developer env. Without
+    this sweep, those rows stay non-terminal forever — `cancel_run` flips the
+    flag but no worker is left to react, and the UI shows "running" indefinitely.
+
+    UNSAFE for multi-replica deploys (would mark the OTHER replica's live work
+    as failed). Gated behind `settings.enable_orphan_reaper` at the call site.
+    """
+
+    def _patch_data(
+        payload: Any, *, status: str, reason: str, terminal_field: str
+    ) -> dict[str, Any]:
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        payload["status"] = status
+        # Run uses `completed_at`; Episode uses `ended_at`. Picking the wrong
+        # name silently drops on Pydantic round-trip and leaves UI/exports
+        # showing a terminal episode with no end time.
+        payload.setdefault(terminal_field, datetime.utcnow().isoformat())
+        terminal_info = payload.get("terminal_info") or {}
+        if isinstance(terminal_info, dict):
+            terminal_info.setdefault("reason", reason)
+            payload["terminal_info"] = terminal_info
+        return payload
+
+    orphan_run_qs = RunRow.objects.filter(status__in=["pending", "running"])
+    orphan_runs = [row async for row in orphan_run_qs]
+    run_count = 0
+    for row in orphan_runs:
+        row.status = "failed"
+        row.data = _patch_data(
+            row.data,
+            status="failed",
+            reason="bench_api_restart",
+            terminal_field="completed_at",
+        )
+        await row.asave(update_fields=["status", "data"])
+        run_count += 1
+
+    orphan_ep_qs = EpisodeRow.objects.filter(status__in=["pending", "running"])
+    orphan_eps = [row async for row in orphan_ep_qs]
+    ep_count = 0
+    for row in orphan_eps:
+        row.status = "failed"
+        row.data = _patch_data(
+            row.data,
+            status="failed",
+            reason="bench_api_restart",
+            terminal_field="ended_at",
+        )
+        await row.asave(update_fields=["status", "data"])
+        ep_count += 1
+
+    env_count = await DeveloperEnvironmentRow.objects.filter(status="cloning").aupdate(
+        status="failed",
+        error_message="bench-api restarted while cloning; resubmit to retry",
+    )
+
+    # BenchJob rows live in a separate table.  Once a worker claims a job and
+    # then dies, the row stays "running" forever — claim_bench_job filters on
+    # status="queued" so nothing can pick it up again, and there's no
+    # heartbeat to detect liveness.
+    bench_job_count = await BenchJobRow.objects.filter(status="running").aupdate(
+        status="failed",
+        completed_at=timezone.now(),
+    )
+
+    return {
+        "runs": run_count,
+        "episodes": ep_count,
+        "developer_envs": env_count,
+        "bench_jobs": bench_job_count,
+    }
+
+
 async def archive_domain_gallery(domain_id: str) -> None:
     """Remove a domain and its runs from public gallery surfaces."""
     domain = await get_domain(domain_id)
@@ -254,6 +349,9 @@ async def save_developer_environment(env: dict[str, Any]) -> None:
         "actor_id": env.get("actor_id"),
         "created_by_user_id": env.get("created_by_user_id"),
         "team_id": env.get("team_id"),
+        "submission_version": env.get("submission_version", 1),
+        "domain_history": env.get("domain_history") or [],
+        "resubmitted_at": _dt_or_none(env.get("resubmitted_at")),
     }
     await DeveloperEnvironmentRow.objects.aupdate_or_create(id=env["id"], defaults=defaults)
 
@@ -328,6 +426,9 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
         "team_id": str(row.team_id) if row.team_id else None,
         "actor_type": row.actor_type,
         "actor_id": row.actor_id,
+        "submission_version": row.submission_version,
+        "domain_history": row.domain_history or [],
+        "resubmitted_at": _iso_dt(row.resubmitted_at),
     }
 
 

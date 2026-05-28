@@ -48,6 +48,9 @@ class DeveloperEnvironment(BaseModel):
     created_at: str
     scope: str = EnvScope.SOLO
     team_id: str | None = None
+    submission_version: int = 1
+    domain_history: list[dict[str, Any]] = []
+    resubmitted_at: str | None = None
 
 
 class EnvironmentWithUsage(DeveloperEnvironment):
@@ -75,7 +78,7 @@ async def submit_environment(
         raise HTTPException(status_code=403, detail="Not a member of this team")
 
     scope = EnvScope.TEAM if team_uuid else EnvScope.SOLO
-    existing = await db.get_developer_environment_by_github_repo(owner_key, github_url)
+    existing = await _find_existing_submission(scope, owner_key, github_url, team_uuid)
     if existing is not None:
         return await _handle_duplicate_submission(existing, req, github_url, response, owner_key)
 
@@ -96,6 +99,9 @@ async def submit_environment(
         "actor_id": owner_key,
         "created_by_user_id": member.user_id,
         "team_id": str(team_uuid) if team_uuid else None,
+        "submission_version": 1,
+        "domain_history": [],
+        "resubmitted_at": None,
     }
     await db.save_developer_environment(env)
     response.status_code = 201
@@ -107,6 +113,25 @@ async def submit_environment(
     return env
 
 
+async def _find_existing_submission(
+    scope: str,
+    owner_key: str,
+    github_url: str,
+    team_id: uuid.UUID | None,
+) -> dict[str, Any] | None:
+    if scope == EnvScope.TEAM and team_id is not None:
+        target = normalize_github_url(github_url)
+        envs = await db.list_developer_environments(
+            scope=EnvScope.TEAM,
+            team_id=str(team_id),
+        )
+        for env in envs:
+            if normalize_github_url(env["github_url"]) == target:
+                return env
+        return None
+    return await db.get_developer_environment_by_github_repo(owner_key, github_url)
+
+
 async def _handle_duplicate_submission(
     env: dict[str, Any],
     req: SubmitEnvironmentRequest,
@@ -114,7 +139,7 @@ async def _handle_duplicate_submission(
     response: Response,
     owner_key: str,
 ) -> dict[str, Any]:
-    """Re-submitting the same repo for the same owner updates one row instead of creating another."""
+    """Update one existing env row for a duplicate repo submission."""
     if env["status"] == "cloning":
         raise HTTPException(
             status_code=409,
@@ -128,12 +153,18 @@ async def _handle_duplicate_submission(
     env["description"] = req.description
     env["github_url"] = github_url
 
-    if env["status"] == "ready":
-        await db.save_developer_environment(env)
-        response.status_code = 200
-        return env
-
-    # failed or pending — re-run onboarding on the existing row
+    history = list(env.get("domain_history") or [])
+    if env.get("domain_id"):
+        history.append(
+            {
+                "domain_id": env["domain_id"],
+                "submission_version": env.get("submission_version", 1),
+                "superseded_at": datetime.utcnow().isoformat(),
+            }
+        )
+    env["submission_version"] = int(env.get("submission_version") or 1) + 1
+    env["domain_history"] = history
+    env["resubmitted_at"] = datetime.utcnow().isoformat()
     env["status"] = "pending"
     env["error_message"] = None
     env["domain_id"] = None

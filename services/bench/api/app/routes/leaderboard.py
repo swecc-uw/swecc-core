@@ -25,7 +25,10 @@ async def get_leaderboard(domain_id: str, limit: int = 50) -> list[LeaderboardEn
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
 
-    runs = await db.list_runs(domain_id=domain_id)
+    # Leaderboards are public surfaces — only show gallery-public completed
+    # runs. Without this filter, private member runs (default visibility) and
+    # team-shared runs leak onto the public board.
+    runs = await db.list_runs(domain_id=domain_id, visibility="gallery_public")
     completed = [r for r in runs if r.status == "completed" and r.scores]
 
     primary = domain.scoring.primary_metric

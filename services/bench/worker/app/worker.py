@@ -24,12 +24,21 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from subprocess import PIPE
+from subprocess import PIPE, TimeoutExpired
 from subprocess import run as subprocess_run
 from typing import Any
 
 import requests
 from bench_common.config import settings as bench_settings
+
+try:
+    from bench_common.utils.github import validate_github_url
+except ImportError:  # pragma: no cover - compatibility with older bench_common builds
+    from bench_common.utils.github import normalize_github_url
+
+    def validate_github_url(url: str) -> str:
+        return normalize_github_url(url)
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +51,7 @@ API_URL = os.environ["WORKER_API_URL"].rstrip("/")
 SUPPORTED_MODELS = bench_settings.supported_models
 EPISODES_PER_MODEL = int(os.getenv("WORKER_EPISODES_PER_MODEL", "5"))
 RUN_POLL_TIMEOUT = int(os.getenv("WORKER_RUN_POLL_TIMEOUT", "300"))
+GIT_CLONE_TIMEOUT = int(os.getenv("WORKER_GIT_CLONE_TIMEOUT", "120"))
 
 _django_ready = False
 
@@ -140,18 +150,43 @@ async def run_full_bench(job: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _clone_repo(github_url: str, work_dir: Path) -> Path:
+    github_url = validate_github_url(github_url)
     repo_dir = work_dir / "repo"
     log.info(f"cloning {github_url}")
-    result = subprocess_run(
-        ["git", "clone", "--depth=1", github_url, str(repo_dir)],
-        stdout=PIPE,
-        stderr=PIPE,
-    )
+    try:
+        result = subprocess_run(
+            ["git", "clone", "--depth=1", github_url, str(repo_dir)],
+            stdout=PIPE,
+            stderr=PIPE,
+            timeout=GIT_CLONE_TIMEOUT,
+        )
+    except TimeoutExpired as exc:
+        log.warning("git clone timed out after %ss for %s", GIT_CLONE_TIMEOUT, github_url)
+        raise RuntimeError(f"git clone exceeded {GIT_CLONE_TIMEOUT}s timeout") from exc
     if result.returncode != 0:
+        log.warning("git clone failed for %s with code %s", github_url, result.returncode)
         raise RuntimeError(
             f"git clone failed for {github_url!r}:\n{result.stderr.decode().strip()}"
         )
     return repo_dir
+
+
+def _resolve_repo_file(repo_dir: Path, relative_path: str, label: str) -> Path:
+    candidate = Path(relative_path)
+    if candidate.is_absolute():
+        raise RuntimeError(f"{label} path must be relative to the repository root.")
+    root = repo_dir.resolve()
+    resolved = (repo_dir / candidate).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise RuntimeError(f"{label} path must stay inside the repository root.") from exc
+    if not resolved.is_file():
+        raise RuntimeError(
+            f"{label} {relative_path!r} not found in repository root. "
+            f"Check the '{label.lower()}' key in benchanything.json."
+        )
+    return resolved
 
 
 def _read_manifest(repo_dir: Path) -> dict[str, Any]:
@@ -197,12 +232,7 @@ async def _start_adapter(
     repo_dir: Path, manifest: dict[str, Any], port: int
 ) -> asyncio.subprocess.Process:
     adapter = manifest.get("adapter", "adapter.py")
-    adapter_path = repo_dir / adapter
-    if not adapter_path.exists():
-        raise RuntimeError(
-            f"Adapter {adapter!r} not found in repository root. "
-            f"Check the 'adapter' key in benchanything.json."
-        )
+    adapter_path = _resolve_repo_file(repo_dir, adapter, "Adapter")
     log.info(f"starting adapter on port {port}")
     return await asyncio.create_subprocess_exec(
         sys.executable,

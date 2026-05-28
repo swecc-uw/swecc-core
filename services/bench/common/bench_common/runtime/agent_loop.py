@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Coroutine, TypeVar
 
 import structlog
+from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.run import AgentConfig, Episode, TraceEvent
 from bench_common.runtime.env_client import HttpEnvClient, Observation
@@ -18,6 +19,26 @@ from bench_common.storage.trace_store import TraceStore
 log = structlog.get_logger()
 
 _T = TypeVar("_T")
+_DEFAULT_PLATFORM_MAX_STEPS = 35
+
+
+def _platform_max_steps() -> int:
+    platform_cap = settings.max_episode_steps
+    if platform_cap <= 0:
+        return _DEFAULT_PLATFORM_MAX_STEPS
+    return platform_cap
+
+
+def _effective_max_steps(declared_max_steps: int | None) -> int:
+    """Return the enforced episode step budget.
+
+    The platform owns the safety ceiling. Binding Vows can make an env shorter
+    for task semantics, but they cannot expand execution past the platform cap.
+    """
+    platform_cap = _platform_max_steps()
+    if declared_max_steps is None:
+        return platform_cap
+    return min(declared_max_steps, platform_cap)
 
 
 async def _with_deadline(coro: Coroutine[Any, Any, _T], deadline: float | None) -> _T:
@@ -97,9 +118,17 @@ class AgentLoop:
         step = 0
         total_reward = 0.0
         result = None
-        max_steps = self.vow.episode.max_steps
+        declared_max_steps = self.vow.episode.max_steps
+        max_steps = _effective_max_steps(declared_max_steps)
         max_wall = self.vow.episode.max_wall_seconds
         deadline = datetime.utcnow().timestamp() + max_wall if max_wall else None
+        terminal_info: dict[str, Any] | None = None
+        # Cost circuit breaker — hard cap on cumulative inference tokens.
+        # Without this, a buggy agent in a tool-call loop or one fed an
+        # ever-growing observation will keep paying $$ until the wall-time
+        # deadline fires (which may be minutes away or never set).
+        total_tokens = 0
+        token_budget = settings.max_tokens_per_episode
 
         try:
             # Wrap the entire episode loop so env_client.close() is always called
@@ -144,6 +173,42 @@ class AgentLoop:
                     )
                 except asyncio.TimeoutError:
                     episode.status = "timeout"
+                    terminal_info = {"reason": "wall_time_limit"}
+                    break
+
+                # Token accounting: surface per-step usage on the trace so cost
+                # is observable, then trip the breaker if the cumulative total
+                # crosses the per-episode budget.
+                total_tokens += decision.total_tokens
+                if decision.total_tokens > 0:
+                    await self.trace.append(
+                        TraceEvent(
+                            episode_id=episode_id,
+                            step=step,
+                            event_type="technique_event",
+                            payload={
+                                "kind": "token_usage",
+                                "step_tokens": decision.total_tokens,
+                                "prompt_tokens": decision.prompt_tokens,
+                                "completion_tokens": decision.completion_tokens,
+                                "cumulative_tokens": total_tokens,
+                            },
+                        )
+                    )
+                if token_budget > 0 and total_tokens > token_budget:
+                    log.warning(
+                        "episode_token_budget_exceeded",
+                        episode_id=episode_id,
+                        total_tokens=total_tokens,
+                        budget=token_budget,
+                        step=step,
+                    )
+                    episode.status = "failed"
+                    terminal_info = {
+                        "reason": "token_budget_exceeded",
+                        "total_tokens": total_tokens,
+                        "budget": token_budget,
+                    }
                     break
 
                 if decision.reasoning_text:
@@ -175,6 +240,7 @@ class AgentLoop:
                     )
                 except asyncio.TimeoutError:
                     episode.status = "timeout"
+                    terminal_info = {"reason": "wall_time_limit"}
                     break
 
                 total_reward += result.reward
@@ -221,8 +287,15 @@ class AgentLoop:
                 # Step budget exhausted — episode did not reach a natural terminal
                 # state.  Use "truncated" (not "completed") so scoring and callers
                 # can distinguish a budget cut-off from a genuine task completion.
-                if max_steps and step >= max_steps:
+                if step >= max_steps:
                     episode.status = "truncated"
+                    terminal_info = {
+                        **result.info,
+                        "reason": result.info.get("reason", "step_limit"),
+                        "max_steps": max_steps,
+                        "declared_max_steps": declared_max_steps,
+                        "platform_max_steps": _platform_max_steps(),
+                    }
                     break
 
                 obs = result.observation
@@ -236,7 +309,11 @@ class AgentLoop:
             except Exception:
                 log.warning("env_close_failed", episode_id=episode_id)
 
-        terminal_info = result.info if result else {}
+        if terminal_info is None:
+            terminal_info = result.info if result else {}
+        # Always surface the final cumulative token count so leaderboards and
+        # cost dashboards can attribute spend without re-summing trace events.
+        terminal_info = {**terminal_info, "total_tokens": total_tokens}
 
         # ── technique on_episode_end ──────────────────────────────────────────
         for technique in self.techniques:
@@ -252,6 +329,7 @@ class AgentLoop:
                     "steps": step,
                     "status": episode.status,
                     "terminal_info": terminal_info,
+                    "total_tokens": total_tokens,
                 },
             )
         )
