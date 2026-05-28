@@ -3,6 +3,7 @@ from typing import Any
 from app.auth.deps import require_member
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
+from app.services.url_safety import assert_public_http_url
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
@@ -41,6 +42,13 @@ def _ensure_binding_vow_matches_domain(domain_id: str, vow: BindingVow) -> None:
         )
 
 
+def _validate_user_endpoint(endpoint: EnvironmentEndpoint) -> None:
+    if auth_disabled():
+        return
+    if endpoint.mode == "remote":
+        assert_public_http_url(endpoint.url, field="endpoint.url")
+
+
 class UpdateDomainRequest(BaseModel):
     name: str | None = None
     binding_vow: BindingVow | None = None
@@ -64,6 +72,7 @@ async def create_domain(
     if existing is not None:
         raise HTTPException(status_code=409, detail=f"Domain '{req.id}' already exists")
     _ensure_binding_vow_matches_domain(req.id, req.binding_vow)
+    _validate_user_endpoint(req.endpoint)
     payload = req.model_dump()
     if auth_disabled():
         payload.setdefault("owner_id", req.owner_id or "local")
@@ -116,9 +125,11 @@ async def update_domain(
             status_code=409,
             detail="Only draft domains can be updated",
         )
+    if req.binding_vow is not None:
+        _ensure_binding_vow_matches_domain(domain_id, req.binding_vow)
+    if req.endpoint is not None:
+        _validate_user_endpoint(req.endpoint)
     updates = req.model_dump(exclude_none=True)
-    if "binding_vow" in updates:
-        _ensure_binding_vow_matches_domain(domain_id, updates["binding_vow"])
     updated = domain.model_copy(update=updates)
     await db.save_domain(updated)
     return await ensure_gallery_visible(updated)

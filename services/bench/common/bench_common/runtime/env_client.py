@@ -10,6 +10,7 @@ Expected server contract (Section 5.2 of design doc):
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import httpx
@@ -69,27 +70,22 @@ class HttpEnvClient:
         r = await self._client.post("/reset", json=payload)
         r.raise_for_status()
         body = r.json()
-        return Observation(
-            data=body.get("data", body),
-            content_type=body.get("content_type", "application/json"),
-            system_prompt=body.get("system_prompt"),
-        )
+        return _parse_observation_body(body)
 
     async def step(self, episode_id: str, action: Any) -> StepResult:
         r = await self._client.post("/step", json={"episode_id": episode_id, "action": action})
         r.raise_for_status()
         body = r.json()
+        if not isinstance(body, dict):
+            raise ValueError(f"/step response must be a JSON object, got {type(body).__name__}")
         obs_raw = body.get("observation", {})
         return StepResult(
-            observation=Observation(
-                data=obs_raw.get("data", obs_raw),
-                content_type=obs_raw.get("content_type", "application/json"),
-            ),
-            reward=float(body.get("reward", 0.0)),
-            terminated=bool(body.get("terminated", False)),
-            truncated=bool(body.get("truncated", False)),
-            info={str(k): str(v) for k, v in body.get("info", {}).items()},
-            system_prompt=body.get("system_prompt"),
+            observation=_parse_observation_body(obs_raw),
+            reward=_parse_reward(body.get("reward", 0.0)),
+            terminated=_parse_bool(body.get("terminated", False), "terminated"),
+            truncated=_parse_bool(body.get("truncated", False), "truncated"),
+            info=_parse_info(body.get("info", {})),
+            system_prompt=_parse_optional_str(body.get("system_prompt"), "system_prompt"),
         )
 
     async def close(self, episode_id: str) -> None:
@@ -104,3 +100,57 @@ class HttpEnvClient:
 
     async def __aexit__(self, *_: Any) -> None:
         await self.aclose()
+
+
+def _parse_optional_str(value: Any, field: str) -> str | None:
+    if value is None or isinstance(value, str):
+        return value
+    raise ValueError(f"{field} must be a string or null, got {type(value).__name__}")
+
+
+def _parse_observation_body(body: Any) -> Observation:
+    if isinstance(body, dict) and (
+        "data" in body or "content_type" in body or "system_prompt" in body
+    ):
+        return Observation(
+            data=body.get("data"),
+            content_type=_parse_optional_str(
+                body.get("content_type", "application/json"),
+                "content_type",
+            )
+            or "application/json",
+            system_prompt=_parse_optional_str(body.get("system_prompt"), "system_prompt"),
+        )
+    return Observation(data=body)
+
+
+def _parse_bool(value: Any, field: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes"}:
+            return True
+        if normalized in {"false", "0", "no", ""}:
+            return False
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    raise ValueError(f"{field} must be boolean-like, got {value!r}")
+
+
+def _parse_reward(value: Any) -> float:
+    try:
+        reward = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"reward must be numeric, got {value!r}") from exc
+    if not math.isfinite(reward):
+        raise ValueError(f"reward must be finite, got {value!r}")
+    return reward
+
+
+def _parse_info(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"info must be a JSON object, got {type(value).__name__}")
+    return {str(k): v for k, v in value.items()}

@@ -5,12 +5,33 @@ Scoring engine — computes metrics from completed episodes.
 from __future__ import annotations
 
 import logging
+import math
 import statistics
 
 from bench_common.core.run import Episode
 from bench_common.core.scoring import MetricDef, ScoringConfig
 
 log = logging.getLogger(__name__)
+
+
+def _safe_float(value: object, *, metric_name: str, episode_id: str) -> float | None:
+    """Cast to float and reject NaN/inf — they would poison aggregations and
+    break leaderboard sort order (NaN compares neither < nor > anything).
+    """
+    try:
+        out = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(out):
+        log.warning(
+            "metric %r: non-finite value %r from episode %s — excluded from aggregation",
+            metric_name,
+            out,
+            episode_id,
+        )
+        return None
+    return out
+
 
 # Episodes in these terminal states produced a valid reward signal and should
 # be included in scoring.  "truncated" means the step limit fired — the episode
@@ -25,7 +46,9 @@ def compute_metric(metric: MetricDef, episodes: list[Episode]) -> float:
 
     for ep in scoreable:
         if metric.type == "episode_reward":
-            values.append(ep.total_reward)
+            v = _safe_float(ep.total_reward, metric_name=metric.name, episode_id=ep.id)
+            if v is not None:
+                values.append(v)
 
         elif metric.type == "terminal_field":
             if not metric.field:
@@ -45,11 +68,14 @@ def compute_metric(metric: MetricDef, episodes: list[Episode]) -> float:
                     sorted(ep.terminal_info.keys()),
                 )
                 continue
-            try:
-                values.append(float(ep.terminal_info[metric.field]))
-            except (TypeError, ValueError):
+            v = _safe_float(
+                ep.terminal_info[metric.field], metric_name=metric.name, episode_id=ep.id
+            )
+            if v is not None:
+                values.append(v)
+            else:
                 log.warning(
-                    "terminal_field %r in episode %s cannot be cast to float "
+                    "terminal_field %r in episode %s cannot be cast to a finite float "
                     "(value=%r) — episode excluded from aggregation",
                     metric.field,
                     ep.id,

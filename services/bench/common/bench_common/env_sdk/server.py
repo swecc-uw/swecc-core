@@ -19,13 +19,16 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import logging
+import math
 import time
 from typing import Any, Type
 
 import uvicorn
 from bench_common.env_sdk.base import BaseEnv
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
@@ -54,6 +57,23 @@ class _CloseRequest(BaseModel):
 class _RenderRequest(BaseModel):
     episode_id: str
     mode: str = "text"
+
+
+def _jsonable_payload(data: Any) -> Any:
+    if isinstance(data, bytes):
+        return base64.b64encode(data).decode("ascii")
+    return jsonable_encoder(data)
+
+
+def _info_payload(info: dict[str, Any]) -> dict[str, Any]:
+    return {str(k): _jsonable_payload(v) for k, v in info.items()}
+
+
+def _reward_payload(reward: Any) -> float:
+    value = float(reward)
+    if not math.isfinite(value):
+        raise ValueError(f"reward must be finite, got {reward!r}")
+    return value
 
 
 def serve(
@@ -149,7 +169,7 @@ def serve(
             system_prompt = obs.get("system_prompt")
 
         return {
-            "data": data,
+            "data": _jsonable_payload(data),
             "content_type": content_type,
             "system_prompt": system_prompt,
         }
@@ -171,16 +191,16 @@ def serve(
 
         return {
             "observation": {
-                "data": result.observation,
+                "data": _jsonable_payload(result.observation),
                 # Use the content_type the env declared on StepResult so that
                 # image and multi-modal observations are typed correctly rather
                 # than being forced to "application/json".
                 "content_type": result.content_type,
             },
-            "reward": float(result.reward),
+            "reward": _reward_payload(result.reward),
             "terminated": bool(result.terminated),
             "truncated": bool(result.truncated),
-            "info": {str(k): str(v) for k, v in result.info.items()},
+            "info": _info_payload(result.info),
             "system_prompt": result.system_prompt,
         }
 
@@ -203,7 +223,7 @@ def serve(
         _touch(req.episode_id)
         data = env.render(mode=req.mode)
         content_type = "text/plain" if isinstance(data, str) else "application/json"
-        return {"data": data, "content_type": content_type}
+        return {"data": _jsonable_payload(data), "content_type": content_type}
 
     log.info(f"Starting {env_class.__name__} adapter on {host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level=log_level)

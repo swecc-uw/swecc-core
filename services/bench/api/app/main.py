@@ -29,6 +29,7 @@ import structlog  # noqa: E402
 from app.middleware.auth import PrincipalMiddleware  # noqa: E402
 from app.routes import domains  # noqa: E402
 from app.routes import (
+    admin,
     auth_routes,
     bench,
     developer,
@@ -41,7 +42,7 @@ from app.routes import (
     test,
 )
 from bench_common.config import settings as bench_settings  # noqa: E402
-from bench_common.storage.database import init_db  # noqa: E402
+from bench_common.storage.database import init_db, reap_orphan_work  # noqa: E402
 from bench_common.storage.trace_store import trace_store  # noqa: E402
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
@@ -76,6 +77,17 @@ def _public_path(path: str) -> str:
 async def lifespan(app: FastAPI):
     await init_db()
     log.info("database_ready")
+    # Reap rows stranded by the previous process so the UI doesn't show runs
+    # "running" forever after a crash/redeploy.  Off by default because a
+    # rolling restart with multiple replicas would otherwise mark the OTHER
+    # replica's live work as failed.  Enable per-deploy once single-replica
+    # is confirmed (or once leases are added).
+    if bench_settings.enable_orphan_reaper:
+        reaped = await reap_orphan_work()
+        if any(reaped.values()):
+            log.warning("orphan_work_reaped", **reaped)
+    else:
+        log.info("orphan_reaper_disabled", hint="set ORCH_ENABLE_ORPHAN_REAPER=true")
     yield
 
 
@@ -92,7 +104,10 @@ app = FastAPI(
 )
 
 # ProxyHeaders outermost, then CORS, then Principal — CORS must wrap error responses.
-app.add_middleware(PrincipalMiddleware)
+# Pass CORS_ORIGINS into PrincipalMiddleware so it can attach manual CORS headers
+# when it has to short-circuit on its own exceptions (CORSMiddleware doesn't get
+# a chance to wrap a response that was never produced).
+app.add_middleware(PrincipalMiddleware, cors_origins=CORS_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -136,6 +151,7 @@ app.include_router(leaderboard.router)
 app.include_router(techniques.router)
 app.include_router(developer.router)
 app.include_router(bench.router)
+app.include_router(admin.router)
 
 
 @app.get("/")
@@ -158,41 +174,80 @@ async def health() -> dict:
 # ── WebSocket trace streaming ─────────────────────────────────────────────────
 
 
+_TERMINAL_EPISODE_STATUSES = frozenset({"completed", "failed", "cancelled", "timeout", "truncated"})
+
+
 @app.websocket("/v1/ws/episodes/{episode_id}/trace")
 async def stream_trace(websocket: WebSocket, episode_id: str) -> None:
     """
     Stream trace events for an episode in real-time.
-    Sends all existing events first, then tails the file for new ones.
-    Client can send {"command": "cancel"} to disconnect cleanly.
+
+    Reads only the new bytes appended since the last tick (not the whole
+    file) — without that, a 1000-step episode triggers O(steps^2) Pydantic
+    validations per viewer per second.
+
+    Loop exit conditions, in priority order:
+      1. Client sent a {"command": "cancel"} message
+      2. We observed an ``episode_end`` event
+      3. The episode row in the DB is in a terminal status — covers failed
+         episodes that never emitted an ``episode_end`` event (e.g. crash
+         before the agent loop's finally block), which previously left the
+         socket spinning forever.
     """
+    from bench_common.storage import database as _db  # local import: avoid cycle
+
     await websocket.accept()
 
-    sent = 0
+    offset = 0
+    cancelled_by_client = False
+    ticks_since_status_check = 0
     try:
         while True:
-            events = await trace_store.read(episode_id)
-            for event in events[sent:]:
+            events, offset = await trace_store.read_since(episode_id, offset=offset)
+            saw_episode_end = False
+            for event in events:
                 await websocket.send_text(event.model_dump_json())
-                sent += 1
+                if event.event_type == "episode_end":
+                    saw_episode_end = True
 
-            # Check for client commands
+            # Check for client cancel command.
             try:
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
                 msg = json.loads(data)
                 if msg.get("command") == "cancel":
+                    cancelled_by_client = True
                     break
             except asyncio.TimeoutError:
                 pass
             except Exception:
                 break
 
-            # Check if episode is done
-            if events and events[-1].event_type == "episode_end":
+            if saw_episode_end:
                 break
 
-            await asyncio.sleep(0.5)
+            # DB status check is the safety net for episodes that died before
+            # writing episode_end. Only poll every ~5s (10 ticks of 0.5s) so
+            # we don't load the DB on every tick for healthy episodes.
+            ticks_since_status_check += 1
+            if ticks_since_status_check >= 10:
+                ticks_since_status_check = 0
+                try:
+                    ep = await _db.get_episode(episode_id)
+                except Exception:
+                    ep = None
+                if ep is not None and ep.status in _TERMINAL_EPISODE_STATUSES:
+                    break
 
+            await asyncio.sleep(0.5)
     except WebSocketDisconnect:
-        pass
+        # Client already gone — calling close() now raises 'Unexpected ASGI
+        # message websocket.close' on every disconnect. Return without trying.
+        return
     finally:
-        await websocket.close()
+        if not cancelled_by_client:
+            try:
+                await websocket.close()
+            except RuntimeError:
+                pass
+        else:
+            await websocket.close()

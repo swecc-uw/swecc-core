@@ -30,6 +30,28 @@ class Settings(BaseSettings):
     # Quotas
     max_parallel_episodes: int = 10
     max_episodes_per_run: int = 1000
+    # Hard platform cap for one episode. Env authors may declare a lower
+    # Binding Vow max_steps, but cloud execution never exceeds this value.
+    max_episode_steps: int = 35
+
+    # Minimum fraction of episodes that must produce a scoreable terminal state
+    # for the run to publish scores. Below this, the run is marked failed instead
+    # of letting a few lucky completions inflate the leaderboard.
+    min_scoreable_episode_ratio: float = 0.5
+
+    # Cost circuit breaker — hard cap on total prompt+completion tokens per
+    # episode. A buggy agent in a tool-call loop or an env that returns ever-
+    # growing observations can otherwise burn unbounded inference credits
+    # before the wall-clock deadline fires. Episode is marked failed with
+    # reason="token_budget_exceeded" when the cumulative usage crosses this.
+    max_tokens_per_episode: int = 100_000
+
+    # Mark stranded "running"/"pending"/"cloning" rows as failed on bench-api
+    # startup. SAFE ONLY FOR SINGLE-REPLICA DEPLOYS: with rolling restarts the
+    # new replica would otherwise mark the old replica's live work as failed.
+    # Default True is correct for the current single-replica deploy; flip to
+    # False (or override ORCH_ENABLE_ORPHAN_REAPER=false) before scaling out.
+    enable_orphan_reaper: bool = True
 
     # Sandbox — where cloned envs run (overridden to http://sandbox:8001 in Docker)
     sandbox_url: str = "http://localhost:8001"

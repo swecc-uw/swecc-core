@@ -202,10 +202,33 @@ async def export_run(
     for ep in episodes:
         traces_by_episode[ep.id] = await trace_store.read(ep.id)
 
+    # Redact author + model fields when the viewer is not the owner/teammate.
+    # Public-gallery surfaces are world-readable when status=completed, so any
+    # anonymous viewer hitting this endpoint must not see raw chain-of-thought,
+    # author system prompts, or internal user IDs.
+    redact_sensitive = not await _viewer_owns_run(row, principal)
+
     return build_run_export_dict(
         run=run,
         episodes=episodes,
         traces_by_episode=traces_by_episode,
         visibility=row.visibility,
         domain_name=domain.name if domain else None,
+        redact_sensitive=redact_sensitive,
     )
+
+
+async def _viewer_owns_run(row: RunRow, principal) -> bool:
+    """True when the viewer is the run's author or a teammate — i.e. allowed
+    to see raw prompts, raw chain-of-thought, and internal IDs.  Public-gallery
+    viewers get a redacted bundle."""
+    if auth_disabled():
+        return True
+    if isinstance(principal, Member):
+        if row.actor_type == ActorType.MEMBER and row.actor_id == str(principal.user_id):
+            return True
+        if row.team_id:
+            return await team_svc.is_member(row.team_id, principal.user_id)
+    if isinstance(principal, Guest):
+        return row.actor_type == ActorType.GUEST and row.actor_id == principal.session_id
+    return False

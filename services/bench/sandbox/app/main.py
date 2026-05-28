@@ -18,6 +18,19 @@ log = structlog.get_logger()
 
 app = FastAPI(title="BenchAnything Sandbox", version="0.1.0")
 
+_HOP_BY_HOP_OR_SENSITIVE_HEADERS = {
+    "authorization",
+    "cookie",
+    "host",
+    "content-length",
+    "proxy-authorization",
+    "x-api-key",
+}
+
+
+def _forward_headers(headers: dict[str, str]) -> dict[str, str]:
+    return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP_OR_SENSITIVE_HEADERS}
+
 
 # ── Internal management routes ─────────────────────────────────────────────────
 
@@ -30,6 +43,15 @@ class CloneRequest(BaseModel):
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/admin/ports")
+async def port_usage() -> dict[str, int]:
+    """Subprocess port-pool usage. Bench-api polls this to surface pool health
+    on its admin status endpoint — running out of ports stalls all new envs."""
+    in_use = len(manager._registry)
+    total = (manager._PORT_RANGE_END - manager._PORT_RANGE_START) + 1
+    return {"in_use": in_use, "total": total, "available": len(manager._available_ports)}
 
 
 @app.post("/clone")
@@ -75,9 +97,7 @@ async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
     target_url = f"http://localhost:{port}/{path}"
 
     body = await request.body()
-    headers = {
-        k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")
-    }
+    headers = _forward_headers(dict(request.headers))
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:

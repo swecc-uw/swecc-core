@@ -6,8 +6,10 @@ and parses the response into an action dict.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import random
 import re
 from typing import Any, NamedTuple
 
@@ -20,13 +22,84 @@ from bench_common.runtime.env_client import Observation
 
 log = structlog.get_logger()
 
-# Disable LiteLLM's default internal retries on rate-limit errors. The default
-# (3 retries with exponential backoff) burns through free-tier per-minute quotas
-# in seconds when a 429 surfaces, turning a single failed call into ~3-10 wasted
-# calls against the daily cap. We surface the 429 immediately instead, and let
-# the orchestrator / worker decide what to do (e.g. mark the episode failed,
-# back off the run, etc).
+
+def _safe_usage_field(usage: Any, name: str) -> int | None:
+    """Read a token count from a LiteLLM `Usage` object, dict, or None."""
+    if usage is None:
+        return None
+    if isinstance(usage, dict):
+        val = usage.get(name)
+    else:
+        val = getattr(usage, name, None)
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+class StructuredOutputError(RuntimeError):
+    """Raised when a provider's structured-output response can't be parsed.
+
+    Distinct from transient network/rate-limit errors: a malformed structured
+    response means the model gave us garbage, not that the call failed. The
+    agent loop should mark the episode failed with a clear reason instead of
+    feeding reasoning text into the env as if it were a real action.
+    """
+
+
+# Disable LiteLLM's default internal retries — we own retry policy below so
+# 429/5xx counts are predictable and bounded.
 litellm.num_retries = 0
+
+# Retry policy for transient provider errors. Kept short so a stuck provider
+# doesn't tie up an episode's wall-clock budget; the agent_loop deadline still
+# wraps the whole call.
+_MAX_INFERENCE_RETRIES = 2
+_BASE_BACKOFF_SECONDS = 1.0
+
+
+def _is_transient_error(exc: BaseException) -> bool:
+    """True for errors worth a bounded retry: rate-limit, 5xx, transport blips."""
+    # LiteLLM normalises provider exceptions to subclasses of these.
+    rate_limit = getattr(litellm, "RateLimitError", None)
+    api_conn = getattr(litellm, "APIConnectionError", None)
+    timeout_err = getattr(litellm, "Timeout", None)
+    internal = getattr(litellm, "InternalServerError", None)
+    service_unavail = getattr(litellm, "ServiceUnavailableError", None)
+    transient_types = tuple(
+        t for t in (rate_limit, api_conn, timeout_err, internal, service_unavail) if t is not None
+    )
+    if transient_types and isinstance(exc, transient_types):
+        return True
+    # Fallback: many providers expose `.status_code` on their error classes.
+    status = getattr(exc, "status_code", None)
+    return isinstance(status, int) and (status == 429 or 500 <= status < 600)
+
+
+async def _acompletion_with_retry(**kwargs: Any) -> Any:
+    """Wrap litellm.acompletion with bounded retry on transient errors."""
+    attempt = 0
+    while True:
+        try:
+            return await litellm.acompletion(**kwargs)
+        except Exception as exc:
+            if attempt >= _MAX_INFERENCE_RETRIES or not _is_transient_error(exc):
+                raise
+            # Exponential backoff with jitter; total worst-case ≈ 3s + 6s = 9s.
+            delay = _BASE_BACKOFF_SECONDS * (2**attempt) + random.uniform(0, 0.5)
+            log.warning(
+                "inference_transient_error_retry",
+                attempt=attempt + 1,
+                max_attempts=_MAX_INFERENCE_RETRIES,
+                delay_s=round(delay, 2),
+                error=type(exc).__name__,
+                detail=str(exc)[:200],
+            )
+            await asyncio.sleep(delay)
+            attempt += 1
+
 
 # Values that must not be sent to LiteLLM as real provider keys.
 _PLACEHOLDER_API_KEYS = frozenset(
@@ -134,6 +207,12 @@ class DecideResult(NamedTuple):
 
     action: Any
     reasoning_text: str
+    # Token usage from the provider response — used by the agent loop to
+    # enforce a per-episode budget and stop a runaway agent before it burns
+    # through inference credits. 0 when the provider doesn't surface usage.
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 class InferenceRouter:
@@ -230,7 +309,7 @@ class InferenceRouter:
                     },
                 }
 
-        response = await litellm.acompletion(**kwargs)
+        response = await _acompletion_with_retry(**kwargs)
 
         if use_structured:
             action, reasoning_text = self._extract_structured_action(response, provider)
@@ -240,14 +319,30 @@ class InferenceRouter:
             log.debug("inference_raw", step=step, model=model_name, raw=reasoning_text[:200])
             action = self._parse_action(reasoning_text, binding_vow)
 
+        usage = getattr(response, "usage", None) or {}
+        # LiteLLM normalises usage to an OpenAI-shaped object across providers,
+        # but on some custom endpoints it's a dict or None. Be defensive.
+        prompt_tokens = int(_safe_usage_field(usage, "prompt_tokens") or 0)
+        completion_tokens = int(_safe_usage_field(usage, "completion_tokens") or 0)
+        total_tokens = int(
+            _safe_usage_field(usage, "total_tokens") or (prompt_tokens + completion_tokens)
+        )
+
         log.debug(
             "inference_decision",
             step=step,
             model=model_name,
             structured=use_structured,
             action=str(action)[:120],
+            total_tokens=total_tokens,
         )
-        return DecideResult(action=action, reasoning_text=reasoning_text)
+        return DecideResult(
+            action=action,
+            reasoning_text=reasoning_text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
 
     # ── structured-output helpers ─────────────────────────────────────────────
 
@@ -293,24 +388,66 @@ class InferenceRouter:
                 ).strip()
 
             tool_calls = message.tool_calls or []
+            if len(tool_calls) > 1:
+                # tool_choice is forced to submit_action but Claude can still emit
+                # extra calls on prefill/streaming edges — surface the drop so we
+                # can debug if it ever happens, instead of silently picking [0].
+                log.warning(
+                    "structured_tool_call_multiple",
+                    provider=provider,
+                    count=len(tool_calls),
+                )
             if tool_calls:
                 args = tool_calls[0].function.arguments
-                parsed = json.loads(args) if isinstance(args, str) else args
-                return parsed.get("action", parsed), reasoning_text
+                try:
+                    parsed = json.loads(args) if isinstance(args, str) else args
+                except json.JSONDecodeError as exc:
+                    raise StructuredOutputError(
+                        f"Anthropic tool args were not valid JSON: {exc}. "
+                        f"Raw args: {str(args)[:200]}"
+                    ) from exc
+                if not isinstance(parsed, dict):
+                    raise StructuredOutputError(
+                        f"Anthropic tool args parsed to {type(parsed).__name__}, "
+                        f"expected an object with an 'action' field."
+                    )
+                if "action" not in parsed:
+                    raise StructuredOutputError(
+                        "Anthropic tool args did not contain required 'action' field."
+                    )
+                return parsed["action"], reasoning_text
 
             # Model did not call the tool (should not happen with tool_choice forced).
-            log.warning("structured_tool_call_missing", provider=provider)
-            return reasoning_text, reasoning_text
+            raise StructuredOutputError(
+                "Anthropic response contained no tool call despite forced "
+                "tool_choice — feeding reasoning text as action would corrupt "
+                "the episode. Provider may have refused or hit max_tokens."
+            )
 
         # OpenAI / Gemini — message.content is the JSON object string.
         raw = response.choices[0].message.content or ""
+        if not raw.strip():
+            raise StructuredOutputError(
+                f"{provider} returned empty content — likely a content-filter "
+                f"refusal or max_tokens too small."
+            )
         try:
             parsed = json.loads(raw)
-            action = parsed.get("action", parsed) if isinstance(parsed, dict) else parsed
-            return action, ""
-        except json.JSONDecodeError:
-            log.warning("structured_output_parse_failed", provider=provider, raw=raw[:200])
-            return raw, raw
+        except json.JSONDecodeError as exc:
+            raise StructuredOutputError(
+                f"{provider} returned non-JSON content despite response_format: "
+                f"{exc}. Raw: {raw[:200]}"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise StructuredOutputError(
+                f"{provider} structured content parsed to {type(parsed).__name__}, "
+                "expected an object with an 'action' field."
+            )
+        if "action" not in parsed:
+            raise StructuredOutputError(
+                f"{provider} structured content did not contain required 'action' field."
+            )
+        return parsed["action"], ""
 
     def _strip_thinking(self, text: str) -> str:
         """Remove <think>...</think> blocks that some reasoning models emit."""
@@ -457,6 +594,13 @@ class InferenceRouter:
         elif isinstance(data, dict) and "url" in data:
             b64 = None
             url = str(data["url"])
+        elif isinstance(data, str) and data.startswith("data:"):
+            header, _, encoded = data.partition(",")
+            b64 = encoded if ";base64" in header else data
+            url = data
+        elif isinstance(data, str) and data.startswith(("http://", "https://")):
+            b64 = None
+            url = data
         else:
             # Assume already base64-encoded string
             b64 = str(data)
@@ -499,6 +643,8 @@ class InferenceRouter:
 
     def _parse_action(self, raw: str, vow: BindingVow) -> Any:
         action_space = vow.action_space
+        if isinstance(action_space, CompositeSpace):
+            return self._extract_json(raw)
         if isinstance(action_space, SpaceSpec):
             if action_space.type == SpaceType.DISCRETE and action_space.enum_values:
                 stripped = raw.strip()
@@ -517,6 +663,8 @@ class InferenceRouter:
                 return stripped
             if action_space.type == SpaceType.JSON:
                 return self._extract_json(raw)
+            if action_space.type == SpaceType.CONTINUOUS:
+                return self._extract_number(raw)
         return raw.strip()
 
     def _extract_json(self, raw: str) -> Any:
@@ -532,4 +680,27 @@ class InferenceRouter:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            return text
+            pass
+
+        decoder = json.JSONDecoder()
+        candidates = [i for i, char in enumerate(text) if char in "[{"]
+        for start in reversed(candidates):
+            try:
+                parsed, end = decoder.raw_decode(text[start:])
+            except json.JSONDecodeError:
+                continue
+            if text[start + end :].strip():  # noqa: E203  # black-formatted slice
+                continue
+            return parsed
+        return text
+
+    def _extract_number(self, raw: str) -> float | str:
+        text = raw.strip()
+        try:
+            return float(text)
+        except ValueError:
+            pass
+        matches = re.findall(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", text)
+        if len(matches) == 1:
+            return float(matches[0])
+        return text

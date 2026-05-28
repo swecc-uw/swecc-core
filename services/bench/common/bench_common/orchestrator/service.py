@@ -17,7 +17,7 @@ import httpx
 import structlog
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode, Run, RunConfig, TechniqueConfig
-from bench_common.eval.metrics import compute_scores
+from bench_common.eval.metrics import _SCOREABLE_STATUSES, compute_scores
 from bench_common.runtime.agent_loop import AgentLoop
 from bench_common.runtime.env_client import HttpEnvClient
 from bench_common.runtime.inference import InferenceRouter
@@ -30,6 +30,11 @@ log = structlog.get_logger()
 
 _semaphore: asyncio.Semaphore | None = None
 _active_run_tasks: dict[str, asyncio.Task] = {}
+# Per-run set of in-flight episode tasks. cancel_run cancels them explicitly
+# because asyncio.gather(..., return_exceptions=True) does NOT propagate
+# cancellation to its children — without this, "cancelling" a run would just
+# flip the DB status while episodes kept running and billing tokens.
+_active_episode_tasks: dict[str, set[asyncio.Task]] = {}
 _TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 
@@ -165,6 +170,15 @@ async def cancel_run(run_id: str) -> Run:
     run.completed_at = datetime.utcnow()
     await db.save_run(run)
 
+    # Cancel each in-flight episode task first, then the parent. Otherwise
+    # gather()'s children survive parent cancellation and continue making
+    # inference + env calls until they reach a natural terminal state, at
+    # which point _run_episode would overwrite the cancelled episode row.
+    ep_tasks = _active_episode_tasks.get(run_id, set())
+    for ep_task in list(ep_tasks):
+        if not ep_task.done():
+            ep_task.cancel()
+
     bg = _active_run_tasks.pop(run_id, None)
     if bg is not None and not bg.done():
         bg.cancel()
@@ -182,23 +196,33 @@ async def cancel_run(run_id: str) -> Run:
 
 async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> None:
     run_id = run.id
+    ep_tasks: set[asyncio.Task] = set()
+    _active_episode_tasks[run_id] = ep_tasks
     try:
         sem = _get_semaphore()
-        tasks = [
-            asyncio.create_task(
+        for ep in episodes:
+            t = asyncio.create_task(
                 _run_episode(ep, run.config.agent_config, domain, sem, env_id=run.env_id)
             )
-            for ep in episodes
-        ]
-        await asyncio.gather(*tasks, return_exceptions=True)
-    except asyncio.CancelledError:
-        log.info("run_task_cancelled", run_id=run_id)
-        run = await db.get_run(run_id)
-        if run is not None and run.status == "running":
-            run.status = "cancelled"
-            run.completed_at = datetime.utcnow()
-            await db.save_run(run)
-        raise
+            ep_tasks.add(t)
+            t.add_done_callback(ep_tasks.discard)
+        try:
+            await asyncio.gather(*ep_tasks, return_exceptions=True)
+        except asyncio.CancelledError:
+            log.info("run_task_cancelled", run_id=run_id)
+            for t in list(ep_tasks):
+                if not t.done():
+                    t.cancel()
+            # Drain so episodes finish their cancellation cleanup before we proceed.
+            await asyncio.gather(*ep_tasks, return_exceptions=True)
+            run = await db.get_run(run_id)
+            if run is not None and run.status == "running":
+                run.status = "cancelled"
+                run.completed_at = datetime.utcnow()
+                await db.save_run(run)
+            raise
+    finally:
+        _active_episode_tasks.pop(run_id, None)
 
     run = await db.get_run(run_id)
     if run is None or run.status == "cancelled":
@@ -208,18 +232,31 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
     if await _run_is_cancelled(run_id):
         return
 
-    # If every episode failed or was cancelled there is nothing meaningful to
-    # score — surface the run as failed so callers don't see a phantom 0.0 on
-    # the leaderboard.  A mix of failures/cancellations also has no valid signal.
-    _non_scoreable = frozenset({"failed", "cancelled"})
-    if all_eps and all(ep.status in _non_scoreable for ep in all_eps):
+    # Guard the leaderboard against partial-credit phantoms: a run where only
+    # 1/10 episodes completed would otherwise post the lucky completion's
+    # reward as if it were the full N-episode average.  Require a configurable
+    # minimum scoreable fraction before publishing scores.
+    if not all_eps:
+        # Defence-in-depth: RunConfig.num_episodes >= 1 should prevent this,
+        # but if episode creation failed silently we'd otherwise score [] = 0.0.
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        await db.save_run(run, env_id=run.env_id)
+        log.warning("run_no_episodes_recorded", run_id=run_id)
+        return
+
+    scoreable_eps = [ep for ep in all_eps if ep.status in _SCOREABLE_STATUSES]
+    scoreable_ratio = len(scoreable_eps) / len(all_eps)
+    if scoreable_ratio < settings.min_scoreable_episode_ratio:
         run.status = "failed"
         run.completed_at = datetime.utcnow()
         await db.save_run(run, env_id=run.env_id)
         log.warning(
-            "run_all_episodes_failed_or_cancelled",
+            "run_insufficient_scoreable_episodes",
             run_id=run_id,
             num_episodes=len(all_eps),
+            scoreable=len(scoreable_eps),
+            required_ratio=settings.min_scoreable_episode_ratio,
             statuses={ep.status for ep in all_eps},
         )
         return

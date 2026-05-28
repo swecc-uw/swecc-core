@@ -30,13 +30,18 @@ class AgentConfig(BaseModel):
         return {}
 
 
+MAX_EPISODES_PER_RUN = 1000
+
+
 class RunConfig(BaseModel):
     domain_id: str
     binding_vow_version: str
     agent_config: AgentConfig
     seed_set: list[int] | None = None
-    num_episodes: int = 1
-    max_parallel: int = 1
+    # num_episodes constrained at the model level so a 0 or negative value can
+    # never reach the orchestrator and produce a phantom 0.0 leaderboard entry.
+    num_episodes: int = Field(default=1, ge=1, le=MAX_EPISODES_PER_RUN)
+    max_parallel: int = Field(default=1, ge=1)
     env_id: str | None = None
 
     @model_validator(mode="after")
