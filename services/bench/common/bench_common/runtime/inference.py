@@ -338,9 +338,9 @@ class InferenceRouter:
             use_structured=use_structured,
             provider=provider,
         )
-        user = self._serialize_observation(observation, vow, step)
+        user_content = self._build_user_content(observation, step, provider)
         messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
-        messages.append({"role": "user", "content": user})
+        messages.append({"role": "user", "content": user_content})
         return messages
 
     def _build_system_prompt(
@@ -402,13 +402,98 @@ class InferenceRouter:
             return space.description
         return space.type.value
 
-    def _serialize_observation(self, observation: Observation, vow: BindingVow, step: int) -> str:
+    def _build_user_content(
+        self,
+        observation: Observation,
+        step: int,
+        provider: str,
+    ) -> str | list[dict[str, Any]]:
+        """Build the user-turn content for the model message.
+
+        Returns a plain string for text/JSON observations and a multipart
+        content list (per each provider's vision API spec) for image
+        observations.  Unknown or ``application/*`` content types fall back
+        to text serialisation.
+
+        Image data in ``observation.data`` may be:
+        - ``bytes`` — raw binary, encoded to base64 here.
+        - ``str``   — assumed already base64-encoded.
+        - ``dict``  with key ``"url"`` — treated as a remote URL (OpenAI-style
+          only; Anthropic requires base64 for now).
+        """
+        ct = (observation.content_type or "application/json").lower()
+        step_prefix = f"[Step {step}]"
+
+        if ct.startswith("image/"):
+            return self._build_image_content(observation.data, ct, step_prefix, provider)
+
+        # Text / JSON path
         data = observation.data
         if isinstance(data, (dict, list)):
             data_str = json.dumps(data, ensure_ascii=False)
         else:
             data_str = str(data)
-        return f"[Step {step}]\n{data_str}"
+        return f"{step_prefix}\n{data_str}"
+
+    def _build_image_content(
+        self,
+        data: Any,
+        media_type: str,
+        step_prefix: str,
+        provider: str,
+    ) -> list[dict[str, Any]]:
+        """Build a provider-appropriate multipart content list for image observations.
+
+        Supports bytes (raw binary), str (base64), and dict{"url": ...} (remote URL).
+        Anthropic requires base64; OpenAI/Gemini accept either base64 data-URLs or
+        remote https:// URLs.
+        """
+        import base64
+
+        # Resolve data to either a base64 string or a URL string.
+        if isinstance(data, bytes):
+            b64 = base64.b64encode(data).decode("ascii")
+            url = None
+        elif isinstance(data, dict) and "url" in data:
+            b64 = None
+            url = str(data["url"])
+        else:
+            # Assume already base64-encoded string
+            b64 = str(data)
+            url = None
+
+        text_block: dict[str, Any] = {"type": "text", "text": step_prefix}
+
+        if provider == "anthropic":
+            # Anthropic requires base64; fall back gracefully if only a URL was given.
+            if b64 is None:
+                log.warning(
+                    "image_obs_url_not_supported_for_anthropic",
+                    hint="Return bytes or a base64 string from step(); URLs are not accepted.",
+                )
+                return [
+                    {
+                        "type": "text",
+                        "text": f"{step_prefix}\n[image — URL not supported for Anthropic provider]",
+                    }
+                ]
+            image_block: dict[str, Any] = {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": b64,
+                },
+            }
+        else:
+            # OpenAI / Gemini — data-URL for base64, plain URL otherwise.
+            img_url = url if url is not None else f"data:{media_type};base64,{b64}"
+            image_block = {
+                "type": "image_url",
+                "image_url": {"url": img_url, "detail": "auto"},
+            }
+
+        return [text_block, image_block]
 
     # ── response parsing ──────────────────────────────────────────────────────
 

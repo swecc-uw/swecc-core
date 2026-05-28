@@ -208,13 +208,20 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
     if await _run_is_cancelled(run_id):
         return
 
-    # If every episode failed there is nothing meaningful to score — surface
-    # the run as failed so callers don't see a phantom 0.0 on the leaderboard.
-    if all_eps and all(ep.status == "failed" for ep in all_eps):
+    # If every episode failed or was cancelled there is nothing meaningful to
+    # score — surface the run as failed so callers don't see a phantom 0.0 on
+    # the leaderboard.  A mix of failures/cancellations also has no valid signal.
+    _non_scoreable = frozenset({"failed", "cancelled"})
+    if all_eps and all(ep.status in _non_scoreable for ep in all_eps):
         run.status = "failed"
         run.completed_at = datetime.utcnow()
         await db.save_run(run, env_id=run.env_id)
-        log.warning("run_all_episodes_failed", run_id=run_id, num_episodes=len(all_eps))
+        log.warning(
+            "run_all_episodes_failed_or_cancelled",
+            run_id=run_id,
+            num_episodes=len(all_eps),
+            statuses={ep.status for ep in all_eps},
+        )
         return
 
     scores = compute_scores(domain.scoring, all_eps)

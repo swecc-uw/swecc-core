@@ -163,4 +163,16 @@ def _check_space(name: str, space: "SpaceSpec | CompositeSpace") -> list[str]:
                 problems.append(
                     f"{name}: continuous bounds.low ({lo}) must be < bounds.high ({hi})"
                 )
+        if space.type == SpaceType.IMAGE:
+            if not space.dtype and not space.description:
+                problems.append(
+                    f"{name}: image space should declare 'dtype' (e.g. 'image/png', "
+                    f"'image/jpeg') or a 'description' so agents know the expected format"
+                )
+        if space.type == SpaceType.MULTI_MODAL:
+            if not space.description:
+                problems.append(
+                    f"{name}: multi_modal space must include a 'description' explaining "
+                    f'the data structure (e.g. \'{{"text": str, "image_b64": str}}\')'
+                )
     return problems

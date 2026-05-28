@@ -65,7 +65,9 @@ class Episode(BaseModel):
     id: str = Field(default_factory=_new_id)
     run_id: str
     seed: int | None = None
-    status: Literal["pending", "running", "completed", "failed", "timeout", "cancelled"] = "pending"
+    status: Literal[
+        "pending", "running", "completed", "truncated", "failed", "timeout", "cancelled"
+    ] = "pending"
     started_at: datetime | None = None
     ended_at: datetime | None = None
     steps: int = 0

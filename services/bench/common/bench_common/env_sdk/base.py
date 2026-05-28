@@ -23,6 +23,11 @@ class StepResult:
     truncated: bool
     info: dict[str, Any] = field(default_factory=dict)
     system_prompt: str | None = None  # optional override for the next inference step
+    # MIME type of ``observation``.  Defaults to JSON.  Set to "image/png",
+    # "image/jpeg", etc. when returning raw image bytes or a base64 string so
+    # the inference layer can build a proper vision-API message instead of
+    # serialising the value as text.
+    content_type: str = "application/json"
 
 
 class BaseEnv(ABC):
