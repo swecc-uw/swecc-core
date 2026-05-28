@@ -255,7 +255,10 @@ def _cmd_auth_token(_args: argparse.Namespace) -> None:
 def _require_member_session(args: argparse.Namespace):
     creds = load_credentials()
     if creds and creds.get("mode") == "guest":
-        print("This command requires a member account. Run: mesocosm auth login", file=sys.stderr)
+        print(
+            "This command requires a member account. Run: mesocosm auth login",
+            file=sys.stderr,
+        )
         sys.exit(1)
     return _get_bench_session_or_exit(bench_url=_bench_url(args))
 
@@ -552,9 +555,11 @@ def _cmd_run_local(args: argparse.Namespace) -> None:
         adapter_proc = _start_adapter_process(adapter_path, port=port)
         started_adapter = True
         if adapter_proc.poll() is not None:
-            err = (adapter_proc.stderr.read() if adapter_proc.stderr else b"").decode(
-                errors="replace"
-            ).strip()
+            err = (
+                (adapter_proc.stderr.read() if adapter_proc.stderr else b"")
+                .decode(errors="replace")
+                .strip()
+            )
             print(
                 f"adapter.py exited immediately{(': ' + err) if err else ''}",
                 file=sys.stderr,
