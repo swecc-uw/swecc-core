@@ -47,8 +47,10 @@ from bench_common.storage.database import init_db  # noqa: E402
 try:  # noqa: E402
     from bench_common.storage.database import reap_orphan_work  # type: ignore[attr-defined]
 except ImportError:  # pragma: no cover - compatibility with older bench_common builds
+
     async def reap_orphan_work() -> dict[str, int]:
         return {}
+
 
 from bench_common.storage.trace_store import trace_store  # noqa: E402
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402

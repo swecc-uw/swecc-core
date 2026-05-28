@@ -30,7 +30,15 @@ from typing import Any
 
 import requests
 from bench_common.config import settings as bench_settings
-from bench_common.utils.github import validate_github_url
+
+try:
+    from bench_common.utils.github import validate_github_url
+except ImportError:  # pragma: no cover - compatibility with older bench_common builds
+    from bench_common.utils.github import normalize_github_url
+
+    def validate_github_url(url: str) -> str:
+        return normalize_github_url(url)
+
 
 logging.basicConfig(
     level=logging.INFO,

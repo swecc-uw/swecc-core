@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -18,7 +19,27 @@ from typing import Any
 import httpx
 import structlog
 from bench_common.core.errors import EnvironmentStartupError, ManifestError
-from bench_common.utils.github import InvalidGithubUrl, validate_github_url
+
+try:
+    from bench_common.utils.github import InvalidGithubUrl, validate_github_url
+except ImportError:  # pragma: no cover - compatibility with older bench_common builds
+    from bench_common.utils.github import normalize_github_url
+
+    _GITHUB_URL_RE = re.compile(
+        r"^https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
+    )
+
+    class InvalidGithubUrl(ValueError):
+        pass
+
+    def validate_github_url(url: str) -> str:
+        canonical = normalize_github_url(url)
+        if not _GITHUB_URL_RE.match(canonical):
+            raise InvalidGithubUrl(
+                f"Only https://github.com/<owner>/<repo> URLs are accepted; got {url!r}"
+            )
+        return canonical
+
 
 log = structlog.get_logger()
 
