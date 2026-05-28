@@ -24,7 +24,7 @@ EOF
 }
 
 get_rabbitmq_container() {
-  log INFO "Finding RabbitMQ container"
+  log INFO "Finding RabbitMQ container" >&2
 
   local container_id
   container_id=$(docker ps --filter "name=${RABBITMQ_SERVICE}" --format "{{.ID}}" | head -1)
