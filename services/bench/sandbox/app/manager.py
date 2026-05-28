@@ -57,19 +57,19 @@ _registry: dict[str, dict[str, Any]] = {}  # env_id → {process, port, manifest
 _lock = asyncio.Lock()
 
 
-def _resolve_repo_file(repo_dir: Path, relative_path: str, label: str) -> Path:
+def _resolve_repo_file(base_dir: Path, relative_path: str, label: str) -> Path:
     candidate = Path(relative_path)
     if candidate.is_absolute():
-        raise ManifestError(f"{label} path must be relative to the repository root.")
-    root = repo_dir.resolve()
-    resolved = (repo_dir / candidate).resolve()
+        raise ManifestError(f"{label} path must be relative to the manifest directory.")
+    root = base_dir.resolve()
+    resolved = (base_dir / candidate).resolve()
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ManifestError(f"{label} path must stay inside the repository root.") from exc
+        raise ManifestError(f"{label} path must stay inside the manifest directory.") from exc
     if not resolved.is_file():
         raise ManifestError(
-            f"{label} {relative_path!r} not found in repository root. "
+            f"{label} {relative_path!r} not found under {base_dir}. "
             f"Check the '{label.lower()}' key in benchanything.json."
         )
     return resolved
@@ -197,10 +197,12 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
             )
 
         # Validate manifest
-        manifest_path = env_dir / "benchanything.json"
-        if not manifest_path.exists():
+        from bench_common.env_sdk.manifest import find_manifest_path
+
+        manifest_path = find_manifest_path(env_dir)
+        if manifest_path is None:
             raise ManifestError(
-                "Repository must contain a benchanything.json at its root. "
+                "Repository must contain benchanything.json at its root or under files/. "
                 "Copy the template from services/bench/template/ and fill it in."
             )
 
@@ -270,7 +272,7 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
 
         # Start the adapter server
         adapter = manifest.get("adapter", "adapter.py")
-        adapter_path = _resolve_repo_file(env_dir, adapter, "Adapter")
+        adapter_path = _resolve_repo_file(manifest_path.parent, adapter, "Adapter")
 
         log.info("starting_env_server", env_id=env_id, port=port)
         proc = await asyncio.create_subprocess_exec(
@@ -278,7 +280,7 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
             str(adapter_path),
             "--port",
             str(port),
-            cwd=str(env_dir),
+            cwd=str(adapter_path.parent),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             # Put adapter + any children it spawns into their own process group

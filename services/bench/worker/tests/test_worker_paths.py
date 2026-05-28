@@ -16,7 +16,7 @@ def test_resolve_repo_file_rejects_worker_path_traversal(
     outside = tmp_path.parent / "worker_outside_adapter.py"
     outside.write_text("print('bad')", encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="inside the repository root"):
+    with pytest.raises(RuntimeError, match="inside the manifest directory"):
         _resolve_repo_file(tmp_path, "../worker_outside_adapter.py", "Adapter")
 
 

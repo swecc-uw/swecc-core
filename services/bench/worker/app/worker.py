@@ -130,11 +130,11 @@ async def run_full_bench(job: dict[str, Any]) -> dict[str, Any]:
     log.info(f"working in {work_dir}")
     try:
         repo_dir = await _clone_repo(github_url, work_dir)
-        manifest = _read_manifest(repo_dir)
+        manifest, manifest_path = _read_manifest(repo_dir)
         await _install_deps(repo_dir)
 
         port = _find_free_port()
-        proc = await _start_adapter(repo_dir, manifest, port)
+        proc = await _start_adapter(manifest_path, manifest, port)
         env_url = f"http://localhost:{port}"
         try:
             await _wait_for_health(env_url)
@@ -171,29 +171,31 @@ async def _clone_repo(github_url: str, work_dir: Path) -> Path:
     return repo_dir
 
 
-def _resolve_repo_file(repo_dir: Path, relative_path: str, label: str) -> Path:
+def _resolve_repo_file(base_dir: Path, relative_path: str, label: str) -> Path:
     candidate = Path(relative_path)
     if candidate.is_absolute():
-        raise RuntimeError(f"{label} path must be relative to the repository root.")
-    root = repo_dir.resolve()
-    resolved = (repo_dir / candidate).resolve()
+        raise RuntimeError(f"{label} path must be relative to the manifest directory.")
+    root = base_dir.resolve()
+    resolved = (base_dir / candidate).resolve()
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise RuntimeError(f"{label} path must stay inside the repository root.") from exc
+        raise RuntimeError(f"{label} path must stay inside the manifest directory.") from exc
     if not resolved.is_file():
         raise RuntimeError(
-            f"{label} {relative_path!r} not found in repository root. "
+            f"{label} {relative_path!r} not found under {base_dir}. "
             f"Check the '{label.lower()}' key in benchanything.json."
         )
     return resolved
 
 
-def _read_manifest(repo_dir: Path) -> dict[str, Any]:
-    manifest_path = repo_dir / "benchanything.json"
-    if not manifest_path.exists():
+def _read_manifest(repo_dir: Path) -> tuple[dict[str, Any], Path]:
+    from bench_common.env_sdk.manifest import find_manifest_path
+
+    manifest_path = find_manifest_path(repo_dir)
+    if manifest_path is None:
         raise RuntimeError(
-            "Repository has no benchanything.json at its root. "
+            "Repository has no benchanything.json at its root or under files/. "
             "See the environment authoring guide for the required format."
         )
     try:
@@ -204,7 +206,7 @@ def _read_manifest(repo_dir: Path) -> dict[str, Any]:
     for key in ("adapter", "name", "binding_vow", "scoring"):
         if key not in manifest:
             raise RuntimeError(f"benchanything.json is missing required key: {key!r}")
-    return manifest
+    return manifest, manifest_path
 
 
 async def _install_deps(repo_dir: Path) -> None:
@@ -229,17 +231,17 @@ async def _install_deps(repo_dir: Path) -> None:
 
 
 async def _start_adapter(
-    repo_dir: Path, manifest: dict[str, Any], port: int
+    manifest_path: Path, manifest: dict[str, Any], port: int
 ) -> asyncio.subprocess.Process:
     adapter = manifest.get("adapter", "adapter.py")
-    adapter_path = _resolve_repo_file(repo_dir, adapter, "Adapter")
+    adapter_path = _resolve_repo_file(manifest_path.parent, adapter, "Adapter")
     log.info(f"starting adapter on port {port}")
     return await asyncio.create_subprocess_exec(
         sys.executable,
         str(adapter_path),
         "--port",
         str(port),
-        cwd=str(repo_dir),
+        cwd=str(adapter_path.parent),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

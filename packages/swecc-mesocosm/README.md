@@ -17,11 +17,10 @@ mkdir my-env && cd my-env
 mesocosm init
 
 ollama pull llama3.2
-python adapter.py          # terminal 1
-mesocosm run local         # terminal 2 — Ollama + benchanything.json, no submit
+mesocosm run local         # Ollama + files/benchanything.json; starts files/adapter.py
 ```
 
-`requirements.txt` from `mesocosm init` is for **optional env libraries** (e.g. numpy), installed on the platform at submit time — not for installing the CLI.
+`requirements.txt` from `mesocosm init` lists **optional env libraries** your `files/env.py` imports, installed locally and on the platform at submit time — not for installing the CLI. The default trivia scaffold uses only the stdlib.
 
 When ready for the platform: `mesocosm auth login` → `mesocosm env submit` (creates the domain from `benchanything.json` in your repo) → `mesocosm run create` with the returned `domain_id`. See `LOCAL_DEV.md` in your repo after `mesocosm init`.
 

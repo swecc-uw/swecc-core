@@ -85,7 +85,7 @@ def test_cmd_run_local_rejects_non_ollama_before_bench_import(
         cli_main._cmd_run_local(
             argparse.Namespace(
                 model="openai/gpt-4o",
-                manifest="benchanything.json",
+                manifest="files/benchanything.json",
                 domain_id=None,
                 env_url="http://localhost:8765",
                 episodes=1,

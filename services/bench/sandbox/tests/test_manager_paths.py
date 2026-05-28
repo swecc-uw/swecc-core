@@ -19,7 +19,7 @@ def test_resolve_repo_file_rejects_path_traversal(tmp_path: Path) -> None:
     outside = tmp_path.parent / "outside_adapter.py"
     outside.write_text("print('bad')", encoding="utf-8")
 
-    with pytest.raises(ManifestError, match="inside the repository root"):
+    with pytest.raises(ManifestError, match="inside the manifest directory"):
         _resolve_repo_file(tmp_path, "../outside_adapter.py", "Adapter")
 
 

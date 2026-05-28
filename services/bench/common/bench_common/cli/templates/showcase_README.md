@@ -25,4 +25,4 @@ Public runs (`gallery_public` + completed) can also be viewed at:
 
 ## `replay.json` shape
 
-See `replay.example.json`. Use `replay[episode_id][i].reasoning` for showcase-style prose, similar to Mesocosm’s curated trading demo.
+See `replay.example.json`. Use `replay[episode_id][i].reasoning` for showcase-style prose alongside observations and actions.

@@ -15,6 +15,45 @@ from bench_common.env_sdk.registration import DomainConfig
 
 _REQUIRED_KEYS = ("adapter", "name", "binding_vow", "scoring")
 
+INIT_FILES_DIR = "files"
+DEFAULT_MANIFEST = f"{INIT_FILES_DIR}/benchanything.json"
+
+
+def find_manifest_path(repo_dir: Path) -> Path | None:
+    """Return benchanything.json under repo root or ``files/``, or None."""
+    for rel in (Path("benchanything.json"), Path(INIT_FILES_DIR) / "benchanything.json"):
+        path = (repo_dir / rel).resolve()
+        if path.is_file():
+            return path
+    return None
+
+
+def resolve_adapter_path(manifest_path: Path) -> Path:
+    """Resolve the adapter script relative to the manifest directory."""
+    manifest_path = manifest_path.resolve()
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"benchanything.json is not valid JSON: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise ValueError("benchanything.json must be a JSON object")
+    adapter_rel = manifest.get("adapter", "adapter.py")
+    candidate = Path(adapter_rel)
+    if candidate.is_absolute():
+        raise ValueError("adapter path must be relative to the manifest directory")
+    resolved = (manifest_path.parent / candidate).resolve()
+    root = manifest_path.parent.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("adapter path must stay inside the manifest directory") from exc
+    if not resolved.is_file():
+        raise FileNotFoundError(
+            f"Adapter {adapter_rel!r} not found next to {manifest_path.name} "
+            f"(expected {resolved})"
+        )
+    return resolved
+
 
 def load_manifest(path: str | Path) -> dict:
     """Parse and validate top-level keys in benchanything.json."""
