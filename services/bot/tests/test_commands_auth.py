@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import discord
 import pytest
 from slash_commands import auth as auth_module
 
@@ -46,6 +47,35 @@ async def test_verify_modal_defers_then_follows_up_success(
         "Authentication successful!", ephemeral=True
     )
     mock_interaction.user.add_roles.assert_called_once_with(mock_role)
+    bot_context.log.assert_called_once()
+    assert "has verified their account" in bot_context.log.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_verify_modal_api_success_role_forbidden(bot_context, mock_interaction, mock_role):
+    """Website verify can succeed while Discord role assignment fails with 403."""
+    bot_context.verified_role_id = mock_role.id
+    bot_context.log = AsyncMock()
+    mock_interaction.guild.get_role.return_value = mock_role
+    mock_interaction.user.add_roles = AsyncMock(
+        side_effect=discord.Forbidden(
+            MagicMock(),
+            "403 Forbidden (error code: 50013): Missing Permissions",
+        )
+    )
+
+    modal = auth_module.VerifyModal(bot_context)
+    modal.code._value = "website-user"
+
+    with patch.object(auth_module.swecc, "auth", return_value=200):
+        await modal.on_submit(mock_interaction)
+
+    mock_interaction.followup.send.assert_called_once_with(
+        auth_module.WEBSITE_VERIFIED_ROLE_FAILED_MSG, ephemeral=True
+    )
+    logged_message = bot_context.log.await_args.args[1]
+    assert "verified on website but failed to assign Discord role" in logged_message
+    assert "has verified their account" not in logged_message
 
 
 @pytest.mark.asyncio
