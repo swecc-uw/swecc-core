@@ -15,13 +15,14 @@ from app.auth.deps import require_member
 from app.auth.policy import assert_run_submission_cooldown
 from app.auth.resolve import auth_disabled
 from app.auth.worker import require_worker
-from bench.models import ActorType, Visibility
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from bench.models import ActorType, Visibility
 
 log = structlog.get_logger()
 
@@ -98,7 +99,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
             raise HTTPException(status_code=422, detail=str(exc))
 
         # run_test_episode saves the Run without actor metadata; attach member so
-        # GET /v1/runs?domain_id=… returns dev test bench runs in Recent activity.
+        # GET /v1/runs?env_id=… (shared env) or ?domain_id=… lists dev test bench runs.
         run = await db.get_run(episode.run_id)
         if run is not None:
             await db.save_run(

@@ -5,11 +5,12 @@ from app.auth.principal import Guest, Member
 from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MeWithContextResponse, RunListItem
 from app.services import teams as team_svc
 from app.services.run_list import parse_created_before, runs_to_list_items
-from bench.models import ActorType, EnvScope
-from bench.models import Run as RunRow
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+
+from bench.models import ActorType, EnvScope
+from bench.models import Run as RunRow
 
 router = APIRouter(prefix="/v1/me", tags=["me"])
 
@@ -79,6 +80,7 @@ async def me_context(member: Member = Depends(require_member)) -> MeContextRespo
 
 @router.get("/runs", response_model=list[RunListItem])
 async def my_runs(
+    domain_id: str | None = Query(None, description="Filter to a single domain"),
     team_id: str | None = Query(None),
     limit: int = Query(
         DEFAULT_LIST_LIMIT,
@@ -93,6 +95,7 @@ async def my_runs(
     created = parse_created_before(created_before)
     if isinstance(principal, Guest):
         runs = await db.list_runs(
+            domain_id=domain_id,
             actor_type=ActorType.GUEST,
             actor_id=principal.session_id,
             team_id=team_id,
@@ -102,6 +105,7 @@ async def my_runs(
         )
     else:
         runs = await db.list_runs(
+            domain_id=domain_id,
             actor_type=ActorType.MEMBER,
             actor_id=str(principal.user_id),
             team_id=team_id,

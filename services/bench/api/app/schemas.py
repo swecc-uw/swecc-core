@@ -18,6 +18,9 @@ class RunListItem(Run):
     completed_count: int = 0
     failed_count: int = 0
     avg_reward: float | None = None
+    actor_type: str | None = None
+    actor_id: str | None = None
+    actor_username: str | None = None
 
 
 class DomainListItem(BaseModel):
@@ -42,6 +45,19 @@ class MeWithContextResponse(BaseModel):
     username: str | None = None
     guest_session_id: str | None = None
     context: dict | None = None
+
+
+class RunStatusItem(BaseModel):
+    """Lightweight run row for batch status polling."""
+
+    id: str
+    status: str
+    scores: dict[str, float] = {}
+    completed_at: str | None = None
+
+
+class RunStatusBatchResponse(BaseModel):
+    runs: dict[str, RunStatusItem]
 
 
 # Pagination caps (documented on OpenAPI query params)

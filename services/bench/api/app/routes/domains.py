@@ -1,9 +1,11 @@
 from typing import Any, Union
 
-from app.auth.deps import require_member
-from app.auth.principal import Member
+from app.auth.deps import get_principal, require_member
+from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
-from app.schemas import DomainListItem
+from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, DomainListItem, RunListItem
+from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
+from app.services.run_list import parse_created_before, runs_to_list_items
 from app.services.url_safety import assert_public_http_url
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
@@ -104,6 +106,41 @@ async def list_domains(
         include_archived=include_archived,
     )
     return [DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image) for r in rows]
+
+
+@router.get("/{domain_id}/runs/mine", response_model=list[RunListItem])
+async def list_domain_mine_runs(
+    domain_id: str,
+    limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    cursor: str | None = Query(None, description="Id of the last run from the previous page"),
+    created_before: str | None = Query(None, description="ISO-8601 created_before filter"),
+    principal: Guest | Member = Depends(get_principal),
+) -> list[RunListItem]:
+    """Caller-owned runs for one domain (alternative to merged activity feed)."""
+    domain = await db.get_domain(domain_id)
+    if domain is None:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    runs = await list_mine_runs_for_domain(
+        domain_id,
+        principal,
+        limit=limit,
+        cursor=cursor,
+        created_before=parse_created_before(created_before),
+    )
+    return await runs_to_list_items(runs, include_episode_summary=True)
+
+
+@router.get("/{domain_id}/runs/gallery", response_model=list[RunListItem])
+async def list_domain_gallery_runs(
+    domain_id: str,
+    limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+) -> list[RunListItem]:
+    """Public gallery runs for one domain as RunListItem rows."""
+    domain = await db.get_domain(domain_id)
+    if domain is None:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    runs = await list_gallery_runs_for_domain(domain_id, limit=limit)
+    return await runs_to_list_items(runs, include_episode_summary=True)
 
 
 @router.get("/{domain_id}", response_model=Domain)

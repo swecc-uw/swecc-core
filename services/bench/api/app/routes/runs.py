@@ -1,7 +1,7 @@
 import hashlib
 from datetime import timedelta
 
-from app.auth.access import assert_run_read, parse_team_id
+from app.auth.access import assert_dev_env_access, assert_run_read, can_read_run, parse_team_id
 from app.auth.deps import get_optional_principal, get_principal
 from app.auth.policy import (
     assert_guest_can_create_run,
@@ -10,21 +10,29 @@ from app.auth.policy import (
 )
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
-from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, RunListItem
+from app.schemas import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    RunListItem,
+    RunStatusBatchResponse,
+    RunStatusItem,
+)
 from app.services import teams as team_svc
 from app.services.run_env import resolve_run_environment_id
 from app.services.run_list import parse_created_before, runs_to_list_items
-from bench.models import ActorType
-from bench.models import Run as RunRow
-from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
 from bench_common.export.replay import build_run_export_dict
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
+from bench_common.storage.django_store import _run_from_row
 from bench_common.storage.trace_store import trace_store
 from django.utils import timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
+
+from bench.models import ActorType
+from bench.models import Run as RunRow
+from bench.models import Visibility
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 
@@ -56,6 +64,15 @@ async def _fetch_runs_for_principal(
     created_before,
 ) -> list[Run]:
     if auth_disabled():
+        return await db.list_runs(
+            domain_id=domain_id,
+            env_id=env_id,
+            limit=limit,
+            cursor=cursor,
+            created_before=created_before,
+        )
+    if env_id and isinstance(principal, Member):
+        await assert_dev_env_access(env_id, principal)
         return await db.list_runs(
             domain_id=domain_id,
             env_id=env_id,
@@ -144,6 +161,33 @@ async def list_active_runs(
         limit=limit,
     )
     return await runs_to_list_items(runs, include_episode_summary=False)
+
+
+@router.get("/status", response_model=RunStatusBatchResponse)
+async def batch_run_status(
+    ids: str = Query(..., description="Comma-separated run ids (max 50)"),
+    principal=Depends(get_optional_principal),
+) -> RunStatusBatchResponse:
+    """Lightweight status for many runs — omits ids the caller cannot read."""
+    run_ids = [r.strip() for r in ids.split(",") if r.strip()]
+    if not run_ids:
+        raise HTTPException(status_code=422, detail="ids is required")
+    if len(run_ids) > 50:
+        raise HTTPException(status_code=422, detail="At most 50 run ids per request")
+
+    runs: dict[str, RunStatusItem] = {}
+    async for row in RunRow.objects.filter(id__in=run_ids):
+        if not await can_read_run(row, principal):
+            continue
+        run = _run_from_row(row)
+        completed = run.completed_at.isoformat() if run.completed_at else None
+        runs[row.id] = RunStatusItem(
+            id=row.id,
+            status=run.status,
+            scores=run.scores or {},
+            completed_at=completed,
+        )
+    return RunStatusBatchResponse(runs=runs)
 
 
 @router.post("", response_model=Run, status_code=202)
