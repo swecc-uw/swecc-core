@@ -65,9 +65,8 @@ def _sample_run(
 
 @pytest.mark.asyncio
 async def test_get_domain_usage_stats_breakdown(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain()
     await store.save_domain(domain)
@@ -101,9 +100,8 @@ async def test_get_domain_usage_stats_breakdown(django_db):
 
 @pytest.mark.asyncio
 async def test_get_domain_usage_stats_unpublished_domain_excludes_gallery(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain(status="draft")
     run = _sample_run(domain.id, "draft-public", scores={"score": 5.0})
@@ -126,9 +124,8 @@ async def test_get_domain_usage_stats_unpublished_domain_excludes_gallery(django
 
 @pytest.mark.asyncio
 async def test_get_domain_usage_stats_does_not_query_leaderboard_table(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain()
     run = _sample_run(domain.id, "scored-run", scores={"score": 7.0})
@@ -152,9 +149,8 @@ async def test_get_domain_usage_stats_does_not_query_leaderboard_table(django_db
 
 @pytest.mark.asyncio
 async def test_leaderboard_excludes_unpublished_domain(api_app, django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain("leaderboard-draft-domain", status="draft")
     run = _sample_run(domain.id, "leaderboard-draft-run", scores={"score": 9.0})
