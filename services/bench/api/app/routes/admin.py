@@ -13,14 +13,15 @@ from typing import Any
 import httpx
 import structlog
 from app.auth.deps import require_member
-from bench.models import BenchJob as BenchJobRow
-from bench.models import DeveloperEnvironment as DevEnvRow
-from bench.models import Episode as EpisodeRow
-from bench.models import Run as RunRow
 from bench_common.config import settings as bench_settings
 from bench_common.orchestrator import service as orchestrator
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from bench.models import BenchJob as BenchJobRow
+from bench.models import DeveloperEnvironment as DevEnvRow
+from bench.models import Episode as EpisodeRow
+from bench.models import Run as RunRow
 
 log = structlog.get_logger()
 
@@ -75,7 +76,9 @@ async def _sandbox_pool_usage() -> tuple[int | None, int | None, bool]:
 async def _recent_failures(limit: int = 10) -> list[dict[str, Any]]:
     """Most recent failed runs — useful for spotting fresh outages."""
     out: list[dict[str, Any]] = []
-    qs = RunRow.objects.filter(status__in=["failed", "cancelled"]).order_by("-id")[:limit]
+    qs = RunRow.objects.filter(status__in=["failed", "cancelled"]).order_by("-id")[
+        :limit
+    ]
     async for row in qs:
         out.append(
             {
@@ -111,7 +114,9 @@ async def platform_status(_: Any = Depends(require_member)) -> PlatformStatus:
         ),
         in_flight=InFlight(
             active_run_tasks=len(orchestrator._active_run_tasks),
-            active_episode_tasks=sum(len(s) for s in orchestrator._active_episode_tasks.values()),
+            active_episode_tasks=sum(
+                len(s) for s in orchestrator._active_episode_tasks.values()
+            ),
             sandbox_port_pool_in_use=sb_in_use,
             sandbox_port_pool_total=sb_total,
             sandbox_reachable=sb_reachable,

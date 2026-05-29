@@ -2,14 +2,20 @@ from __future__ import annotations
 
 from app.auth.deps import get_optional_principal, get_principal, require_member
 from app.auth.principal import Guest, Member
-from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MeWithContextResponse, RunListItem
+from app.schemas import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    MeWithContextResponse,
+    RunListItem,
+)
 from app.services import teams as team_svc
 from app.services.run_list import parse_created_before, runs_to_list_items
-from bench.models import ActorType, EnvScope
-from bench.models import Run as RunRow
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+
+from bench.models import ActorType, EnvScope
+from bench.models import Run as RunRow
 
 router = APIRouter(prefix="/v1/me", tags=["me"])
 
@@ -27,7 +33,9 @@ class MeContextResponse(BaseModel):
 
 
 async def _build_me_context(member: Member) -> MeContextResponse:
-    solo_envs = await db.count_dev_envs(actor_id=str(member.user_id), scope=EnvScope.SOLO)
+    solo_envs = await db.count_dev_envs(
+        actor_id=str(member.user_id), scope=EnvScope.SOLO
+    )
     solo_run_count = await RunRow.objects.filter(
         actor_type=ActorType.MEMBER,
         actor_id=str(member.user_id),
@@ -36,7 +44,9 @@ async def _build_me_context(member: Member) -> MeContextResponse:
     enriched = []
     for t in await team_svc.list_teams_for_user(member.user_id):
         team_id = t["team_id"]
-        envs = await db.list_developer_environments(scope=EnvScope.TEAM, team_id=team_id)
+        envs = await db.list_developer_environments(
+            scope=EnvScope.TEAM, team_id=team_id
+        )
         team_run_count = await RunRow.objects.filter(team_id=team_id).acount()
         enriched.append({**t, "env_count": len(envs), "run_count": team_run_count})
     return MeContextResponse(
@@ -86,8 +96,12 @@ async def my_runs(
         le=MAX_LIST_LIMIT,
         description=f"Max runs (default {DEFAULT_LIST_LIMIT}, max {MAX_LIST_LIMIT})",
     ),
-    cursor: str | None = Query(None, description="Id of the last run from the previous page"),
-    created_before: str | None = Query(None, description="ISO-8601 created_before filter"),
+    cursor: str | None = Query(
+        None, description="Id of the last run from the previous page"
+    ),
+    created_before: str | None = Query(
+        None, description="ISO-8601 created_before filter"
+    ),
     principal=Depends(get_principal),
 ) -> list[RunListItem]:
     created = parse_created_before(created_before)

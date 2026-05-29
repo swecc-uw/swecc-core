@@ -9,7 +9,10 @@ from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
-from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
+from bench_common.storage.dev_sync import (
+    ensure_gallery_visible,
+    mirror_developer_env_from_domain,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -103,7 +106,9 @@ async def list_domains(
         published_only=published is True,
         include_archived=include_archived,
     )
-    return [DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image) for r in rows]
+    return [
+        DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image) for r in rows
+    ]
 
 
 @router.get("/{domain_id}", response_model=Domain)

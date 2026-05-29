@@ -14,9 +14,6 @@ from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, RunListItem
 from app.services import teams as team_svc
 from app.services.run_env import resolve_run_environment_id
 from app.services.run_list import parse_created_before, runs_to_list_items
-from bench.models import ActorType
-from bench.models import Run as RunRow
-from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
 from bench_common.export.replay import build_run_export_dict
 from bench_common.orchestrator import service as orchestrator
@@ -25,6 +22,10 @@ from bench_common.storage.trace_store import trace_store
 from django.utils import timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
+
+from bench.models import ActorType
+from bench.models import Run as RunRow
+from bench.models import Visibility
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 
@@ -184,7 +185,11 @@ async def create_run(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     actor_type = ActorType.MEMBER if isinstance(principal, Member) else ActorType.GUEST
-    actor_id = str(principal.user_id) if isinstance(principal, Member) else principal.session_id
+    actor_id = (
+        str(principal.user_id)
+        if isinstance(principal, Member)
+        else principal.session_id
+    )
     if isinstance(principal, Guest):
         visibility = Visibility.GALLERY_PUBLIC
         expires = timezone.now() + timedelta(days=7)
@@ -309,10 +314,14 @@ async def _viewer_owns_run(row: RunRow, principal) -> bool:
     if auth_disabled():
         return True
     if isinstance(principal, Member):
-        if row.actor_type == ActorType.MEMBER and row.actor_id == str(principal.user_id):
+        if row.actor_type == ActorType.MEMBER and row.actor_id == str(
+            principal.user_id
+        ):
             return True
         if row.team_id:
             return await team_svc.is_member(row.team_id, principal.user_id)
     if isinstance(principal, Guest):
-        return row.actor_type == ActorType.GUEST and row.actor_id == principal.session_id
+        return (
+            row.actor_type == ActorType.GUEST and row.actor_id == principal.session_id
+        )
     return False

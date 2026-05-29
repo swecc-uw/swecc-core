@@ -88,7 +88,9 @@ async def get_leaderboard(
     return await _leaderboard_for_domain(domain_id, limit=limit)
 
 
-async def _leaderboard_for_domain(domain_id: str, *, limit: int) -> list[LeaderboardEntry]:
+async def _leaderboard_for_domain(
+    domain_id: str, *, limit: int
+) -> list[LeaderboardEntry]:
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")

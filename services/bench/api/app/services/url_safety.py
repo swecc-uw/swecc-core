@@ -20,7 +20,9 @@ def assert_public_http_url(url: str | None, *, field: str) -> None:
     if not host:
         raise HTTPException(status_code=422, detail=f"{field} must include a hostname")
     if host in _LOCAL_HOSTNAMES or host.endswith(_BLOCKED_SUFFIXES):
-        raise HTTPException(status_code=422, detail=f"{field} cannot target a local hostname")
+        raise HTTPException(
+            status_code=422, detail=f"{field} cannot target a local hostname"
+        )
     try:
         ip = ipaddress.ip_address(host.strip("[]"))
     except ValueError:
@@ -33,4 +35,6 @@ def assert_public_http_url(url: str | None, *, field: str) -> None:
         or ip.is_reserved
         or ip.is_unspecified
     ):
-        raise HTTPException(status_code=422, detail=f"{field} cannot target a private IP")
+        raise HTTPException(
+            status_code=422, detail=f"{field} cannot target a private IP"
+        )
