@@ -15,8 +15,8 @@ Services: ${SERVICES[*]}
 This script performs a zero-downtime deployment to Docker Swarm:
 1. (server only) Runs \`manage.py migrate\` once via \`docker run\` on prod_swecc-network
    before updating the service (bench-api depends on bench_* schema)
-2. (Existing service) Validates the new image on a staging task, then rolls
-   production forward with \`docker service update\` (start-first)
+2. (Existing service) Rolls production forward with \`docker service update\`
+   (stop-first; staging skipped on single-node swarm to avoid memory exhaustion)
 3. (New service) Creates the production service on prod_swecc-network with
    --network-alias swecc_stack_<service>
 
@@ -53,6 +53,8 @@ deploy_service() {
   log INFO "Gateway DNS alias: ${gateway_alias}"
   log INFO "Resources: CPU=$CPU_LIMIT/$CPU_RESERVE, Memory=$MEMORY_LIMIT/$MEMORY_RESERVE"
 
+  swarm_remove_orphan_staging_services
+
   log INFO "Pulling latest image"
   docker pull "$image"
 
@@ -70,39 +72,9 @@ deploy_service() {
   fi
 
   if [[ "$service_exists" == "true" ]]; then
-    local update_order="start-first"
-    if [[ "$svc" == "bench-sandbox" ]]; then
-      log INFO "Skipping staging for bench-sandbox (single-node swarm cannot reserve prod + staging memory)"
-      update_order="stop-first"
-    else
-      log INFO "Creating staging service: $staging_name"
-
-      if docker service inspect "$staging_name" &>/dev/null; then
-        log WARN "Removing leftover staging service: $staging_name"
-        docker service rm "$staging_name" || die "Failed to remove existing staging service"
-        local rm_wait=0
-        while docker service inspect "$staging_name" &>/dev/null && [[ $rm_wait -lt 30 ]]; do
-          sleep 1
-          rm_wait=$((rm_wait + 1))
-        done
-      fi
-
-      swarm_service_create_detached \
-        --name "$staging_name" \
-        --network "$SWARM_NETWORK" \
-        --env-file /tmp/${svc}_env.tmp \
-        --limit-cpu "$CPU_LIMIT" \
-        --limit-memory "$MEMORY_LIMIT" \
-        --reserve-cpu "$CPU_RESERVE" \
-        --reserve-memory "$MEMORY_RESERVE" \
-        --restart-condition any \
-        --with-registry-auth \
-        "$image" || die "Failed to create staging service"
-
-      wait_for_service "$staging_name"
-
-      log INFO "Removing staging service before production rollout (frees memory on single-node swarm)"
-      docker service rm "$staging_name" || die "Failed to remove staging service $staging_name"
+    if docker service inspect "$staging_name" &>/dev/null; then
+      log WARN "Removing leftover staging service: $staging_name"
+      docker service rm "$staging_name" || die "Failed to remove existing staging service"
       local rm_wait=0
       while docker service inspect "$staging_name" &>/dev/null && [[ $rm_wait -lt 30 ]]; do
         sleep 1
@@ -110,14 +82,14 @@ deploy_service() {
       done
     fi
 
-    log INFO "Rolling update $svc (${update_order})"
+    log INFO "Rolling update $svc (stop-first; staging skipped on single-node swarm)"
     local -a update_args=(
       --image "$image"
       --limit-cpu "$CPU_LIMIT"
       --limit-memory "$MEMORY_LIMIT"
       --reserve-cpu "$CPU_RESERVE"
       --reserve-memory "$MEMORY_RESERVE"
-      --update-order "$update_order"
+      --update-order stop-first
       --update-delay 30s
       --update-failure-action rollback
       --with-registry-auth

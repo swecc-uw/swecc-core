@@ -198,7 +198,9 @@ get_resource_limits() {
   local svc="$1"
   case "$svc" in
     bench-sandbox)
-      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
+      # Reserve low so the task schedules on a ~16GB single-node swarm alongside
+      # other services; limit still allows eval workloads to burst when RAM is free.
+      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=4G CPU_RESERVE=0.2 MEMORY_RESERVE=512M"
       ;;
     server)
       echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
@@ -233,6 +235,21 @@ is_main_branch() {
   local branch
   branch="$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD)"
   [[ "$branch" == "main" || "$branch" == "master" ]]
+}
+
+# Remove leftover *-staging services from failed deploys (frees Swarm memory reservations).
+swarm_remove_orphan_staging_services() {
+  local name rm_wait
+  while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    log WARN "Removing orphaned staging service: $name"
+    docker service rm "$name" 2>/dev/null || true
+    rm_wait=0
+    while docker service inspect "$name" &>/dev/null && [[ $rm_wait -lt 30 ]]; do
+      sleep 1
+      rm_wait=$((rm_wait + 1))
+    done
+  done < <(docker service ls --format '{{.Name}}' 2>/dev/null | grep -E '-staging$' || true)
 }
 
 # Print task states when a swarm service fails to converge (scheduling, OOM, etc.).
