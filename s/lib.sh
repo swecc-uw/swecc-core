@@ -285,6 +285,13 @@ wait_for_service_rollout() {
 
     # Use service inspect (not `docker service ls --filter name=^svc$` — anchors are
     # literal substrings in Swarm filters, so replica checks never matched).
+    local update_state running_ps want_replicas
+    update_state="$(docker service inspect "$svc" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}' 2>/dev/null)" || update_state=""
+    if [[ "$update_state" == "completed" ]]; then
+      log INFO "Service $svc rollout complete (update status: completed)"
+      return 0
+    fi
+
     running="$(docker service inspect "$svc" --format '{{.ServiceStatus.RunningTasks}}' 2>/dev/null)" || running=""
     desired="$(docker service inspect "$svc" --format '{{.ServiceStatus.DesiredTasks}}' 2>/dev/null)" || desired=""
 
@@ -294,6 +301,13 @@ wait_for_service_rollout() {
         log INFO "Service $svc rollout complete (${running}/${desired} tasks running)"
         return 0
       fi
+    fi
+
+    running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}'       | grep -c '^Running' || true)"
+    want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
+    if [[ "$running_ps" -ge "$want_replicas" && "$running_ps" -gt 0 ]]; then
+      log INFO "Service $svc rollout complete (${running_ps}/${want_replicas} tasks running via service ps)"
+      return 0
     fi
 
     sleep 5
