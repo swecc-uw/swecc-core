@@ -82,14 +82,18 @@ deploy_service() {
       done
     fi
 
-    log INFO "Rolling update $svc (stop-first; staging skipped on single-node swarm)"
+    local update_order="start-first"
+    if [[ "$svc" == "bench-sandbox" || "$svc" == "server" ]]; then
+      update_order="stop-first"
+    fi
+    log INFO "Rolling update $svc (${update_order}; staging skipped on single-node swarm)"
     local -a update_args=(
       --image "$image"
       --limit-cpu "$CPU_LIMIT"
       --limit-memory "$MEMORY_LIMIT"
       --reserve-cpu "$CPU_RESERVE"
       --reserve-memory "$MEMORY_RESERVE"
-      --update-order stop-first
+      --update-order "$update_order"
       --update-delay 30s
       --update-failure-action rollback
       --with-registry-auth

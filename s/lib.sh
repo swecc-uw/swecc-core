@@ -266,6 +266,10 @@ swarm_check_service_scheduling_failure() {
 
   err="$(docker service ps "$svc" --no-trunc --format '{{.Error}}' 2>/dev/null \
     | grep -iE 'insufficient resources|no suitable node' | head -1 || true)"
+  if [[ -z "$err" ]]; then
+    err="$(docker service ps "$svc" --no-trunc --format '{{.CurrentState}} {{.Error}}' 2>/dev/null \
+      | grep -iE 'insufficient resources|no suitable node' | head -1 || true)"
+  fi
   if [[ -n "$err" ]]; then
     swarm_dump_service_tasks "$svc"
     die "Service $svc cannot be scheduled: $err"
