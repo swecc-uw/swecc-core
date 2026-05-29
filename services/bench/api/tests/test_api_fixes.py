@@ -1,4 +1,4 @@
-"""API fixes: pagination, slim domains, leaderboard limit, activity feed."""
+"""API fixes: pagination, domain list shape, leaderboard limit, activity feed."""
 
 from __future__ import annotations
 
@@ -81,19 +81,25 @@ async def test_list_runs_honors_limit_in_db(django_db, api_app, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_domains_slim_by_default(django_db, api_app):
+async def test_list_domains_matches_get_domain_shape(django_db, api_app):
     from bench_common.storage import django_store as store
 
-    domain = _sample_domain("slim-domain")
+    domain = _sample_domain("full-domain")
     await store.save_domain(domain)
 
     transport = ASGITransport(app=api_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/v1/domains")
-    assert resp.status_code == 200
-    row = next(d for d in resp.json() if d["id"] == domain.id)
-    assert set(row.keys()) == {"id", "name", "tags", "image"}
-    assert row["image"] == domain.image_url
+        list_resp = await client.get("/v1/domains")
+        detail_resp = await client.get(f"/v1/domains/{domain.id}")
+    assert list_resp.status_code == 200
+    assert detail_resp.status_code == 200
+    row = next(d for d in list_resp.json() if d["id"] == domain.id)
+    detail = detail_resp.json()
+    assert row.keys() == detail.keys()
+    assert row["binding_vow"] == detail["binding_vow"]
+    assert row["endpoint"] == detail["endpoint"]
+    assert row["scoring"] == detail["scoring"]
+    assert row["image_url"] == domain.image_url
 
 
 @pytest.mark.asyncio

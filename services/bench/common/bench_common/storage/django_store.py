@@ -527,11 +527,17 @@ async def list_developer_environments(
     if owner_id:
         qs = qs.filter(owner_id=owner_id)
     if scope:
-        qs = qs.filter(scope=scope)
+        if scope == EnvScope.SOLO:
+            qs = qs.filter(Q(scope=scope) | Q(scope="") | Q(scope__isnull=True))
+        else:
+            qs = qs.filter(scope=scope)
     if team_id:
         qs = qs.filter(team_id=team_id)
     if actor_id:
-        qs = qs.filter(actor_id=actor_id)
+        if scope == EnvScope.SOLO:
+            qs = qs.filter(Q(actor_id=actor_id) | Q(actor_id__isnull=True, owner_id=actor_id))
+        else:
+            qs = qs.filter(actor_id=actor_id)
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
     return [_dev_env_to_dict(row) async for row in qs]

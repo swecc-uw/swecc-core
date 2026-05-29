@@ -1,15 +1,7 @@
-from typing import Any, Union
-
 from app.auth.deps import get_principal, require_member
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
-from app.schemas import (
-    DEFAULT_LIST_LIMIT,
-    MAX_LIST_LIMIT,
-    DomainEnvironmentListItem,
-    DomainListItem,
-    RunListItem,
-)
+from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, DomainEnvironmentListItem, RunListItem
 from app.services.domain_environments import list_environments_for_domain_member
 from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import parse_created_before, runs_to_list_items
@@ -94,25 +86,15 @@ async def create_domain(
     return domain
 
 
-@router.get("")
+@router.get("", response_model=list[Domain])
 async def list_domains(
     published: bool | None = None,
     include_archived: bool = False,
-    slim: bool = Query(
-        True,
-        description="When true (default), return id/name/tags/image only for gallery surfaces",
-    ),
-) -> Union[list[DomainListItem], list[Domain]]:
-    if not slim:
-        return await db.list_domains(
-            published_only=published is True,
-            include_archived=include_archived,
-        )
-    rows = await db.list_domains_summary(
+) -> list[Domain]:
+    return await db.list_domains(
         published_only=published is True,
         include_archived=include_archived,
     )
-    return [DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image) for r in rows]
 
 
 @router.get("/{domain_id}/runs/mine", response_model=list[RunListItem])
@@ -157,8 +139,8 @@ async def list_domain_environments(
 ) -> list[DomainEnvironmentListItem]:
     """Developer environments for a domain (member auth).
 
-    The slim ``GET /v1/domains`` gallery list does not include environments; load
-    this endpoint on domain detail instead of ``GET /v1/developer/environments``.
+    ``GET /v1/domains`` does not include environments; load this endpoint on domain
+    detail instead of ``GET /v1/developer/environments``.
     """
     domain = await db.get_domain(domain_id)
     if domain is None:
