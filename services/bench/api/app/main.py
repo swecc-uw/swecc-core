@@ -86,18 +86,33 @@ def _public_path(path: str) -> str:
 async def lifespan(app: FastAPI):
     await init_db()
     log.info("database_ready")
-    # Reap rows stranded by the previous process so the UI doesn't show runs
-    # "running" forever after a crash/redeploy.  Off by default because a
-    # rolling restart with multiple replicas would otherwise mark the OTHER
-    # replica's live work as failed.  Enable per-deploy once single-replica
-    # is confirmed (or once leases are added).
-    if bench_settings.enable_orphan_reaper:
+    if bench_settings.mq_enabled:
+        from bench_common.mq_dispatch import register_run_publisher
+
+        from app.mq import initialize_rabbitmq, producers, shutdown_rabbitmq
+
+        register_run_publisher(producers.publish_run_execute)
+        if bench_settings.mq_consume_runs:
+            import app.mq.consumers  # noqa: F401 — register run consumer
+
+        loop = asyncio.get_running_loop()
+        await initialize_rabbitmq(loop)
+        log.info(
+            "rabbitmq_ready",
+            consume_runs=bench_settings.mq_consume_runs,
+            prefetch=bench_settings.mq_prefetch,
+        )
+    elif bench_settings.enable_orphan_reaper:
         reaped = await reap_orphan_work()
         if any(reaped.values()):
             log.warning("orphan_work_reaped", **reaped)
     else:
         log.info("orphan_reaper_disabled", hint="set ORCH_ENABLE_ORPHAN_REAPER=true")
     yield
+    if bench_settings.mq_enabled:
+        from app.mq import shutdown_rabbitmq
+
+        await shutdown_rabbitmq()
 
 
 app = FastAPI(

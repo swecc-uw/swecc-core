@@ -206,6 +206,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
       bench-sandbox:
         condition: service_healthy
       # swecc-server runs migrate on startup; bench-api needs the
@@ -215,6 +217,15 @@ services:
     env_file:
       - .env
     environment:
+      - RABBIT_HOST=swecc-rabbitmq-instance
+      - BENCH_RABBIT_USER=${BENCH_RABBIT_USER:-guest}
+      - BENCH_RABBIT_PASS=${BENCH_RABBIT_PASS:-guest}
+      - DB_HOST=swecc-db-instance
+      - DB_NAME=${DB_NAME:-swecc}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-swecc}
+      - DB_PASSWORD=${DB_PASSWORD:-swecc_dev_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_in_production}
       # Local dev without member/guest auth (open API). Do not use in production.
       # - BENCH_AUTH_DISABLED=1
       # Comma-separated domain IDs guests may run when allowlist is set; empty = all domains.
@@ -231,6 +242,8 @@ services:
       # both services.
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
       - REDIS_HOST=swecc-redis-instance
+      - ORCH_MQ_ENABLED=${ORCH_MQ_ENABLED:-0}
+      - ORCH_MQ_CONSUME_RUNS=${ORCH_MQ_CONSUME_RUNS:-1}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -248,11 +261,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
       bench-api:
         condition: service_healthy
     env_file:
       - .env
     environment:
+      - RABBIT_HOST=swecc-rabbitmq-instance
+      - BENCH_RABBIT_USER=${BENCH_RABBIT_USER:-guest}
+      - BENCH_RABBIT_PASS=${BENCH_RABBIT_PASS:-guest}
+      - ORCH_MQ_ENABLED=${ORCH_MQ_ENABLED:-0}
+      - DB_HOST=swecc-db-instance
+      - DB_NAME=${DB_NAME:-swecc}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-swecc}
+      - DB_PASSWORD=${DB_PASSWORD:-swecc_dev_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_in_production}
       - WORKER_API_URL=http://swecc-bench-api:8000
       - WORKER_POLL_INTERVAL=${WORKER_POLL_INTERVAL:-10}
       # Must match BENCH_WORKER_TOKEN on bench-api when auth is enabled.
