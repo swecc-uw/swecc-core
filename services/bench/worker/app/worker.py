@@ -376,7 +376,6 @@ def _wait_for_api(max_attempts: int = 60, delay: float = 5.0) -> None:
 
 async def _mq_main() -> None:
     import app.mq.consumers  # noqa: F401 — register job consumer
-
     from app.mq import initialize_rabbitmq, shutdown_rabbitmq
 
     loop = asyncio.get_running_loop()

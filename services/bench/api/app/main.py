@@ -87,9 +87,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     log.info("database_ready")
     if bench_settings.mq_enabled:
-        from bench_common.mq_dispatch import register_run_publisher
-
         from app.mq import initialize_rabbitmq, producers, shutdown_rabbitmq
+        from bench_common.mq_dispatch import register_run_publisher
 
         register_run_publisher(producers.publish_run_execute)
         if bench_settings.mq_consume_runs:
@@ -110,8 +109,6 @@ async def lifespan(app: FastAPI):
         log.info("orphan_reaper_disabled", hint="set ORCH_ENABLE_ORPHAN_REAPER=true")
     yield
     if bench_settings.mq_enabled:
-        from app.mq import shutdown_rabbitmq
-
         await shutdown_rabbitmq()
 
 

@@ -16,9 +16,9 @@ from urllib.parse import urlparse
 import httpx
 import structlog
 from bench_common.config import settings
-from bench_common.mq_dispatch import publish_run_if_mq
 from bench_common.core.run import AgentConfig, Episode, Run, RunConfig, TechniqueConfig
 from bench_common.eval.metrics import _SCOREABLE_STATUSES, compute_scores
+from bench_common.mq_dispatch import publish_run_if_mq
 from bench_common.runtime.agent_loop import AgentLoop
 from bench_common.runtime.env_client import HttpEnvClient
 from bench_common.runtime.inference import InferenceRouter

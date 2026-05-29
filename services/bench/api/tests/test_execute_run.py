@@ -46,9 +46,7 @@ async def test_execute_run_skips_when_no_pending_episodes() -> None:
     with (
         patch.object(orchestrator.db, "get_run", new_callable=AsyncMock) as get_run,
         patch.object(orchestrator.db, "get_episodes", new_callable=AsyncMock) as get_episodes,
-        patch.object(
-            orchestrator, "_run_all_episodes", new_callable=AsyncMock
-        ) as run_all,
+        patch.object(orchestrator, "_run_all_episodes", new_callable=AsyncMock) as run_all,
     ):
         get_run.return_value = run
         get_episodes.return_value = episodes
