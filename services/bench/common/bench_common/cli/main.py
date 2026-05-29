@@ -409,6 +409,16 @@ def _cmd_env_delete(args: argparse.Namespace) -> None:
 
 
 def _cmd_run_create(args: argparse.Namespace) -> None:
+    from bench_common.config import settings
+
+    cap = settings.max_episodes_per_run
+    if args.episodes > cap:
+        print(
+            f"Error: --episodes ({args.episodes}) exceeds the platform maximum ({cap}).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     team_id = _active_team_id(args)
     payload: dict = {
         "domain_id": args.domain,
@@ -660,10 +670,10 @@ def _cmd_init(args: argparse.Namespace) -> None:
     print(
         "\nNext:\n"
         "  1. pip install swecc-mesocosm  (CLI + adapter deps; not requirements.txt)\n"
-        "  2. Edit files/env.py + files/benchanything.json\n"
+        f"  2. Edit auxiliary/env.py + auxiliary/benchanything.json\n"
         "  3. Local Ollama loop (see LOCAL_DEV.md):\n"
         "       ollama pull llama3.2\n"
-        "       mesocosm run local   # starts files/adapter.py automatically\n"
+        f"       mesocosm run local   # starts auxiliary/adapter.py automatically\n"
         "  4. When ready: mesocosm env submit --github-url ...\n"
         "  (requirements.txt: optional extras for your env — see file header)"
     )
@@ -858,7 +868,7 @@ def main(argv: list[str] | None = None) -> None:
 
     init_p = sub.add_parser(
         "init",
-        help="Scaffold files/ (env + bench), showcase/, LOCAL_DEV.md",
+        help="Scaffold auxiliary/ (env + bench), showcase/, LOCAL_DEV.md",
     )
     init_p.add_argument(
         "--dir",

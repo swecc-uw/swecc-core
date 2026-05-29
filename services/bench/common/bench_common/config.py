@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # Quotas
     max_parallel_episodes: int = 10
-    max_episodes_per_run: int = 1000
+    max_episodes_per_run: int = 20
     # Hard platform cap for one episode. Env authors may declare a lower
     # Binding Vow max_steps, but cloud execution never exceeds this value.
     max_episode_steps: int = 35
@@ -74,10 +74,21 @@ class Settings(BaseSettings):
     guest_runs_per_day: int = 5
     demo_domain_ids: list[str] = []
 
+    # Minimum seconds between run submissions per authenticated identity (member user_id
+    # or guest session). Uses Redis SET NX + TTL; 0 disables. Skipped when BENCH_AUTH_DISABLED.
+    run_submission_cooldown_seconds: int = 120
+
     model_config = SettingsConfigDict(
         env_prefix="ORCH_",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _parse_bench_max_episodes(self) -> "Settings":
+        raw = os.environ.get("BENCH_MAX_EPISODES", "").strip()
+        if raw:
+            object.__setattr__(self, "max_episodes_per_run", int(raw))
+        return self
 
     @model_validator(mode="after")
     def _parse_demo_domains(self) -> "Settings":

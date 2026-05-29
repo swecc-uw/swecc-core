@@ -2,7 +2,11 @@ from datetime import timedelta
 
 from app.auth.access import assert_run_read, parse_team_id
 from app.auth.deps import get_optional_principal, get_principal
-from app.auth.policy import assert_guest_can_create_run, assert_guest_rate_limit
+from app.auth.policy import (
+    assert_guest_can_create_run,
+    assert_guest_rate_limit,
+    assert_run_submission_cooldown,
+)
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
 from app.services import teams as team_svc
@@ -72,6 +76,9 @@ async def create_run(
     if isinstance(principal, Guest):
         await assert_guest_rate_limit(principal.session_id)
         assert_guest_can_create_run(config.domain_id)
+
+    if not auth_disabled():
+        await assert_run_submission_cooldown(_requester_id(principal))
 
     team_uuid = None
     if config.team_id:

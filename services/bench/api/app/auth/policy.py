@@ -5,10 +5,13 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
+import structlog
 from app.auth.principal import Anonymous, Guest, Member, Principal
 from app.auth.resolve import auth_disabled
 from bench_common.config import settings
 from fastapi import HTTPException
+
+log = structlog.get_logger()
 
 
 def assert_can_manage_teams(principal: Principal) -> Member:
@@ -32,6 +35,43 @@ def assert_guest_can_create_run(domain_id: str) -> None:
             status_code=403,
             detail=f"Guests may only run demo domains: {', '.join(allowlist)}",
         )
+
+
+def _run_submission_cooldown_key(actor_key: str) -> str:
+    return f"bench:run_submit_cooldown:{actor_key}"
+
+
+async def assert_run_submission_cooldown(actor_key: str) -> None:
+    """Enforce a minimum gap between run submissions for one caller identity."""
+    if auth_disabled():
+        return
+
+    seconds = settings.run_submission_cooldown_seconds
+    if seconds <= 0:
+        return
+
+    key = _run_submission_cooldown_key(actor_key)
+    try:
+        from app.redis_client import get_redis
+
+        client = get_redis()
+        acquired = await client.set(key, "1", nx=True, ex=seconds)
+        if acquired:
+            return
+        ttl = await client.ttl(key)
+    except Exception as exc:
+        log.warning("run_submission_cooldown_redis_unavailable", error=str(exc))
+        return
+
+    retry_after = max(1, int(ttl)) if ttl and ttl > 0 else seconds
+    raise HTTPException(
+        status_code=429,
+        detail=(
+            f"Please wait {retry_after} seconds before starting another bench run. "
+            "This cooldown protects shared inference capacity."
+        ),
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 async def assert_guest_rate_limit(guest_session_id: str) -> None:

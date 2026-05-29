@@ -4,7 +4,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from bench_common.config import settings
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _new_id() -> str:
@@ -30,7 +31,7 @@ class AgentConfig(BaseModel):
         return {}
 
 
-MAX_EPISODES_PER_RUN = 1000
+MAX_EPISODES_PER_RUN = settings.max_episodes_per_run
 
 
 class RunConfig(BaseModel):
@@ -40,9 +41,17 @@ class RunConfig(BaseModel):
     seed_set: list[int] | None = None
     # num_episodes constrained at the model level so a 0 or negative value can
     # never reach the orchestrator and produce a phantom 0.0 leaderboard entry.
-    num_episodes: int = Field(default=1, ge=1, le=MAX_EPISODES_PER_RUN)
+    num_episodes: int = Field(default=1, ge=1)
     max_parallel: int = Field(default=1, ge=1)
     env_id: str | None = None
+
+    @field_validator("num_episodes")
+    @classmethod
+    def _num_episodes_within_platform_cap(cls, v: int) -> int:
+        cap = settings.max_episodes_per_run
+        if v > cap:
+            raise ValueError(f"num_episodes ({v}) exceeds the platform maximum ({cap})")
+        return v
 
     @model_validator(mode="after")
     def _seed_set_matches_num_episodes(self) -> "RunConfig":

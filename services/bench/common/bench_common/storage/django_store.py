@@ -471,15 +471,39 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
     run_rows = [row async for row in RunRow.objects.filter(domain_id=domain_id)]
     total_runs = len(run_rows)
 
+    domain = await get_domain(domain_id)
+    try:
+        domain_row = await DomainRow.objects.aget(id=domain_id)
+        domain_published = domain_row.published
+    except DomainRow.DoesNotExist:
+        domain_published = False
+    primary = domain.scoring.primary_metric if domain else None
+
+    by_status: dict[str, int] = {}
     total_episodes = 0
+    gallery_eligible = 0
+    leaderboard_eligible = 0
+    primary_scores: list[float] = []
+
     for r in run_rows:
+        by_status[r.status] = by_status.get(r.status, 0) + 1
         run = _model_from_row_data(Run, r.data)
         total_episodes += run.config.num_episodes if run.config else 0
 
-    lb_rows = [row async for row in LeaderboardRow.objects.filter(domain_id=domain_id)]
-    scores = [row.primary_score for row in lb_rows]
-    avg_score = sum(scores) / len(scores) if scores else None
-    best_score = max(scores) if scores else None
+        is_gallery = (
+            r.visibility == Visibility.GALLERY_PUBLIC
+            and r.status == "completed"
+            and domain_published
+        )
+        if is_gallery:
+            gallery_eligible += 1
+            if run.scores:
+                leaderboard_eligible += 1
+                if primary is not None:
+                    primary_scores.append(run.scores.get(primary, 0.0))
+
+    avg_score = sum(primary_scores) / len(primary_scores) if primary_scores else None
+    best_score = max(primary_scores) if primary_scores else None
 
     return {
         "domain_id": domain_id,
@@ -487,7 +511,10 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
         "total_episodes": total_episodes,
         "avg_score": avg_score,
         "best_score": best_score,
-        "leaderboard_entries": len(lb_rows),
+        "leaderboard_entries": leaderboard_eligible,
+        "by_status": by_status,
+        "gallery_eligible": gallery_eligible,
+        "leaderboard_eligible": leaderboard_eligible,
     }
 
 
