@@ -202,7 +202,7 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
         manifest_path = find_manifest_path(env_dir)
         if manifest_path is None:
             raise ManifestError(
-                "Repository must contain benchanything.json at its root or under files/. "
+                "Repository must contain benchanything.json at its root or under auxiliary/. "
                 "Copy the template from services/bench/template/ and fill it in."
             )
 
