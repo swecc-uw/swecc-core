@@ -1,5 +1,10 @@
 name: Reusable Deploy Workflow
 
+# One deploy per service at a time on the shared self-hosted runner; cancel superseded runs.
+concurrency:
+  group: deploy-${{ inputs.service }}
+  cancel-in-progress: true
+
 on:
   workflow_call:
     inputs:
@@ -88,6 +93,7 @@ jobs:
   deploy_to_swarm:
     name: Deploy to Swarm
     needs: push_to_dockerhub
+    timeout-minutes: 20
     runs-on:
       group: EC2
       labels: [self-hosted, deploy]
@@ -102,6 +108,9 @@ jobs:
         run: docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE }}:latest
 
       - name: Deploy service
+        timeout-minutes: 15
+        env:
+          DEPLOY_ROLLOUT_TIMEOUT_SEC: 600
         run: |
           chmod +x ./s/ops/deploy.sh ./s/lib.sh
           export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"

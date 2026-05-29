@@ -73,7 +73,7 @@ swarm_service_update_with_env() {
     die "no env entries in $env_file"
   fi
 
-  docker service update "${update_args[@]}" "${env_add[@]}" "$svc"
+  swarm_service_update_detached "$svc" "${update_args[@]}" "${env_add[@]}"
 }
 
 # Apply Django migrations before rolling the server service. Uses the same
@@ -235,14 +235,28 @@ is_main_branch() {
   [[ "$branch" == "main" || "$branch" == "master" ]]
 }
 
+# Print task states when a swarm service fails to converge (scheduling, OOM, etc.).
+swarm_dump_service_tasks() {
+  local svc="$1"
+  log WARN "Task status for $svc:"
+  docker service ps "$svc" --no-trunc 2>/dev/null || true
+}
+
 wait_for_service() {
   local svc="$1"
   local max_attempts="${2:-30}"
   local attempt=0
+  local state
 
   log INFO "Waiting for service $svc to be healthy..."
   while [[ $attempt -lt $max_attempts ]]; do
-    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" | grep -q "Running"; then
+    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
+      | grep -qE 'Rejected|Failed'; then
+      swarm_dump_service_tasks "$svc"
+      die "Service $svc has failed or rejected tasks"
+    fi
+    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
+      | grep -q "Running"; then
       log INFO "Service $svc is healthy"
       return 0
     fi
@@ -250,5 +264,45 @@ wait_for_service() {
     sleep 2
   done
 
+  swarm_dump_service_tasks "$svc"
   die "Service $svc failed to become healthy after $max_attempts attempts"
+}
+
+# Wait for a detached service update to reach a stable running replica set.
+wait_for_service_rollout() {
+  local svc="$1"
+  local timeout_sec="${2:-${DEPLOY_ROLLOUT_TIMEOUT_SEC:-600}}"
+  local elapsed=0
+  local replicas
+
+  log INFO "Waiting for rollout of $svc (timeout ${timeout_sec}s)..."
+  while [[ $elapsed -lt $timeout_sec ]]; do
+    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
+      | grep -qE 'Rejected|Failed'; then
+      swarm_dump_service_tasks "$svc"
+      die "Service $svc rollout has failed or rejected tasks"
+    fi
+
+    replicas="$(docker service ls --filter "name=^${svc}$" --format '{{.Replicas}}' | head -1)"
+    if [[ "$replicas" =~ ^([0-9]+)/\1$ ]] && [[ "${BASH_REMATCH[1]}" -gt 0 ]]; then
+      if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
+        | grep -q "Running"; then
+        log INFO "Service $svc rollout complete ($replicas)"
+        return 0
+      fi
+    fi
+
+    sleep 5
+    elapsed=$((elapsed + 5))
+  done
+
+  swarm_dump_service_tasks "$svc"
+  die "Service $svc rollout timed out after ${timeout_sec}s"
+}
+
+# Apply a service update without blocking indefinitely on swarm convergence.
+swarm_service_update_detached() {
+  local svc="$1"
+  shift
+  docker service update --detach "$@" "$svc"
 }
