@@ -109,10 +109,8 @@ class MultiAgentLoop:
             )
         )
 
-        for role, state in self.roles.items():
-            await state.memory.on_episode_start(
-                episode_id, {"window_size": state.window_size}
-            )
+        for _role, state in self.roles.items():
+            await state.memory.on_episode_start(episode_id, {"window_size": state.window_size})
 
         obs = await env_client.reset(episode_id=episode_id, seed=seed)
         if obs.system_prompt is not None:
@@ -127,7 +125,11 @@ class MultiAgentLoop:
         total_reward = 0.0
         result = None
         declared_max = self.vow.episode.max_steps
-        platform_cap = settings.max_episode_steps if settings.max_episode_steps > 0 else _DEFAULT_PLATFORM_MAX_STEPS
+        platform_cap = (
+            settings.max_episode_steps
+            if settings.max_episode_steps > 0
+            else _DEFAULT_PLATFORM_MAX_STEPS
+        )
         max_steps = min(declared_max, platform_cap) if declared_max is not None else platform_cap
         token_budget = settings.max_tokens_per_episode
         terminal_info: dict[str, Any] | None = None
