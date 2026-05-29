@@ -249,7 +249,7 @@ swarm_remove_orphan_staging_services() {
       sleep 1
       rm_wait=$((rm_wait + 1))
     done
-  done < <(docker service ls --format '{{.Name}}' 2>/dev/null | grep -E '-staging$' || true)
+  done < <(docker service ls --format '{{.Name}}' 2>/dev/null | grep -E -- '-staging$' || true)
 }
 
 # Print task states when a swarm service fails to converge (scheduling, OOM, etc.).
