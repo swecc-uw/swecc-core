@@ -97,6 +97,10 @@ jobs:
               CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c ". + [\"$svc\"]")
             fi
           done
+          # Shared deploy helpers affect sockets image rollout on merge; rebuild in CI.
+          if git diff --name-only "$BASE" "$HEAD" 2>/dev/null | grep -qE '^s/lib\.sh$|^s/ops/deploy\.sh$'; then
+            CHANGED_SERVICES=$(echo "$CHANGED_SERVICES" | jq -c '. + ["sockets"] | unique')
+          fi
 
           # Bench is a multi-image product folder. Common changes invalidate api+sandbox.
           # bench-api also embeds the Django bench app from services/server/server/bench/
