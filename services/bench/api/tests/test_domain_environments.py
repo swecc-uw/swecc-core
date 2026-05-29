@@ -53,8 +53,9 @@ def _sample_domain(domain_id: str = "domain-env-list"):
 
 @pytest.mark.asyncio
 async def test_domain_environments_matches_developer_list(api_app, monkeypatch):
-    from bench.models import ActorType, EnvScope
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, EnvScope
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain()
@@ -116,10 +117,50 @@ async def test_domain_environments_404_unknown_domain(api_app, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_domain_environments_includes_legacy_null_actor_row(api_app, monkeypatch):
+    from bench_common.storage import django_store as store
+
+    from bench.models import DeveloperEnvironment
+
+    monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
+    domain = _sample_domain("legacy-list-domain")
+    await store.save_domain(domain)
+    env_id = domain.id
+    await DeveloperEnvironment.objects.acreate(
+        id=env_id,
+        owner_id=domain.owner_id,
+        name=domain.name,
+        github_url="",
+        status="ready",
+        domain_id=domain.id,
+        env_url="http://sandbox/envs/legacy",
+        actor_id=None,
+        scope="",
+    )
+
+    headers = {"Authorization": f"Bearer {_member_token(user_id=1)}"}
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        domain_resp = await client.get(f"/v1/domains/{domain.id}/environments", headers=headers)
+        dev_resp = await client.get(
+            "/v1/developer/environments",
+            params={"domain_id": domain.id},
+            headers=headers,
+        )
+
+    assert domain_resp.status_code == 200
+    assert dev_resp.status_code == 200
+    assert len(domain_resp.json()) == 1
+    assert len(dev_resp.json()) == 1
+    assert domain_resp.json()[0]["id"] == env_id
+
+
+@pytest.mark.asyncio
 async def test_mirror_developer_env_sets_actor_for_legacy_row(api_app):
-    from bench.models import DeveloperEnvironment, EnvScope
     from bench_common.storage import django_store as store
     from bench_common.storage.dev_sync import mirror_developer_env_from_domain
+
+    from bench.models import DeveloperEnvironment, EnvScope
 
     domain = _sample_domain("legacy-mirror-domain")
     await store.save_domain(domain)
