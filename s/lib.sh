@@ -248,6 +248,12 @@ swarm_recover_if_no_running_tasks() {
   want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
   running_status="$(docker service inspect "$svc" --format '{{.ServiceStatus.RunningTasks}}' 2>/dev/null)" || running_status=""
 
+  if [[ "${want_replicas:-0}" -lt 1 ]]; then
+    log WARN "Service $svc has replica count 0; scaling to 1"
+    docker service scale "$svc=1" || die "Failed to scale service $svc to 1"
+    want_replicas=1
+  fi
+
   if [[ "${task_rows:-0}" -eq 0 ]] \
     || [[ -n "$running_status" && "$running_status" -lt "${want_replicas:-1}" ]] \
     || [[ "$running_ps" -lt "${want_replicas:-1}" ]]; then
