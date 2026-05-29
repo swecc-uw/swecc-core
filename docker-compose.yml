@@ -175,6 +175,12 @@ services:
       - .env
     environment:
       - SANDBOX_HOST=swecc-bench-sandbox
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 4G
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 10s
@@ -197,6 +203,8 @@ services:
       - bench_data:/data
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       bench-sandbox:
         condition: service_healthy
@@ -222,6 +230,7 @@ services:
       # Google AI Studio key — fall back to it so a single key in .env covers
       # both services.
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
+      - REDIS_HOST=swecc-redis-instance
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
