@@ -30,14 +30,25 @@ mesocosm run create \
   --domain DOMAIN_UUID \
   --vow-version 1.0.0 \
   --model gemini/gemini-3.1-flash-lite \
-  --episodes 1 \
-  --visibility gallery_public
+  --episodes 1
+# Member runs default to gallery_public; use --visibility private to opt out.
 
 # When status is completed:
 mesocosm run export RUN_ID -o showcase/data/replay.json
 ```
 
 Commit `showcase/data/replay.json` (or fetch live from the API) and wire your frontend to `replay[episodeId][turn].reasoning`.
+
+## Run visibility
+
+| Surface | Default | Notes |
+| --- | --- | --- |
+| `POST /v1/runs` (member) | `gallery_public` | Pass `"visibility": "private"` in the body to keep off the gallery. |
+| `POST /v1/runs` (guest) | `gallery_public` | Guest runs expire after 7 days. |
+| `POST /v1/test/episode` (dev smoke) | `private` | Internal dev harness only; not promoted to the gallery. |
+| `mesocosm run create` | `gallery_public` | CLI `--visibility private` opts out. |
+
+Public completed runs appear on `GET /v1/gallery/runs` and domain gallery endpoints; private runs show only in the caller's mine lists (`GET /v1/runs`, `GET /v1/domains/{id}/runs/mine`).
 
 ## Export API
 

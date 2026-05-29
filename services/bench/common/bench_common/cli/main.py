@@ -826,7 +826,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--max-tokens", type=int, default=512)
     p.add_argument("--team", default=None)
     p.add_argument("--solo", action="store_true")
-    p.add_argument("--visibility", choices=["private", "gallery_public"], default=None)
+    p.add_argument(
+        "--visibility",
+        choices=["private", "gallery_public"],
+        default="gallery_public",
+        help="Run visibility (default: gallery_public)",
+    )
     p.add_argument("--env-id", default=None, dest="env_id", help="Developer environment id")
     p.set_defaults(func=_cmd_run_create)
     p = run_sub.add_parser(

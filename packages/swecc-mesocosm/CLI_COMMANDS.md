@@ -394,7 +394,7 @@ Many platform commands attach `team_id` from credentials `active_team_id`, unles
 | `--max-tokens` | No | Agent max tokens per step (default: `512`). |
 | `--team` | No | Explicit team id on the run. |
 | `--solo` | No | Do not attach active team to the run. |
-| `--visibility` | No | `private` or `gallery_public` (optional). |
+| `--visibility` | No | `private` or `gallery_public` (default: `gallery_public`). Pass `--visibility private` to keep a run off the gallery. |
 | `--env-id` | No | Developer environment id to pin env URL/runtime. |
 | `--bench-url` | No | Global parent flag. |
 

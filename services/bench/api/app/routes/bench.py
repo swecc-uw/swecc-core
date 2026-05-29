@@ -15,13 +15,14 @@ from app.auth.deps import require_member
 from app.auth.policy import assert_run_submission_cooldown
 from app.auth.resolve import auth_disabled
 from app.auth.worker import require_worker
-from bench.models import ActorType, Visibility
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from bench.models import ActorType, Visibility
 
 log = structlog.get_logger()
 
@@ -99,6 +100,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
 
         # run_test_episode saves the Run without actor metadata; attach member so
         # GET /v1/runs?env_id=… (shared env) or ?domain_id=… lists dev test bench runs.
+        # Dev smoke episodes stay private — unlike POST /v1/runs, which defaults to gallery_public.
         run = await db.get_run(episode.run_id)
         if run is not None:
             await db.save_run(
