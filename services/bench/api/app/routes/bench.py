@@ -12,6 +12,8 @@ from typing import Any
 import structlog
 from app.auth.access import assert_dev_env_access
 from app.auth.deps import require_member
+from app.auth.policy import assert_run_submission_cooldown
+from app.auth.resolve import auth_disabled
 from app.auth.worker import require_worker
 from bench.models import ActorType, Visibility
 from bench_common.config import settings
@@ -60,6 +62,9 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
             status_code=429,
             detail="A dev test bench is already running. Only one at a time is supported.",
         )
+
+    if not auth_disabled():
+        await assert_run_submission_cooldown(str(member.user_id))
 
     await assert_dev_env_access(req.env_id, member)
     env = await db.get_developer_environment(req.env_id)
@@ -124,6 +129,9 @@ async def full_bench(
     member=Depends(require_member),
 ) -> dict[str, Any]:
     """Initiate a full bench: all 5 supported models against the env."""
+    if not auth_disabled():
+        await assert_run_submission_cooldown(str(member.user_id))
+
     await assert_dev_env_access(env_id, member)
     env = await db.get_developer_environment(env_id)
     if env is None:

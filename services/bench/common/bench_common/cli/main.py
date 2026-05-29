@@ -409,6 +409,16 @@ def _cmd_env_delete(args: argparse.Namespace) -> None:
 
 
 def _cmd_run_create(args: argparse.Namespace) -> None:
+    from bench_common.config import settings
+
+    cap = settings.max_episodes_per_run
+    if args.episodes > cap:
+        print(
+            f"Error: --episodes ({args.episodes}) exceeds the platform maximum ({cap}).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     team_id = _active_team_id(args)
     payload: dict = {
         "domain_id": args.domain,
