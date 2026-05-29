@@ -99,6 +99,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
 
         # run_test_episode saves the Run without actor metadata; attach member so
         # GET /v1/runs?env_id=… (shared env) or ?domain_id=… lists dev test bench runs.
+        # Dev smoke episodes stay private — unlike POST /v1/runs, which defaults to gallery_public.
         run = await db.get_run(episode.run_id)
         if run is not None:
             await db.save_run(

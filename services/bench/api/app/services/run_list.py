@@ -27,16 +27,16 @@ def parse_created_before(value: str | None) -> datetime | None:
     return parsed
 
 
-async def _actor_fields_by_run_id(
+async def _run_row_meta_by_id(
     run_ids: list[str],
-) -> dict[str, tuple[str | None, str | None]]:
+) -> dict[str, tuple[str | None, str | None, str | None]]:
     if not run_ids:
         return {}
-    out: dict[str, tuple[str | None, str | None]] = {}
-    async for rid, actor_type, actor_id in RunRow.objects.filter(id__in=run_ids).values_list(
-        "id", "actor_type", "actor_id"
-    ):
-        out[rid] = (actor_type, actor_id)
+    out: dict[str, tuple[str | None, str | None, str | None]] = {}
+    async for rid, actor_type, actor_id, visibility in RunRow.objects.filter(
+        id__in=run_ids
+    ).values_list("id", "actor_type", "actor_id", "visibility"):
+        out[rid] = (actor_type, actor_id, visibility)
     return out
 
 
@@ -64,9 +64,9 @@ async def runs_to_list_items(
     summaries = {}
     if include_episode_summary:
         summaries = await db.episode_summaries_for_runs(run_ids)
-    actors = await _actor_fields_by_run_id(run_ids)
+    row_meta = await _run_row_meta_by_id(run_ids)
     member_ids: list[int] = []
-    for actor_type, actor_id in actors.values():
+    for actor_type, actor_id, _visibility in row_meta.values():
         if actor_type == ActorType.MEMBER and actor_id:
             try:
                 member_ids.append(int(actor_id))
@@ -76,7 +76,7 @@ async def runs_to_list_items(
     out: list[RunListItem] = []
     for run in runs:
         summary = summaries.get(run.id)
-        actor_type, actor_id = actors.get(run.id, (None, None))
+        actor_type, actor_id, visibility = row_meta.get(run.id, (None, None, None))
         out.append(
             RunListItem(
                 **run.model_dump(),
@@ -90,6 +90,7 @@ async def runs_to_list_items(
                     actor_id=actor_id,
                     member_names=member_names,
                 ),
+                visibility=visibility,
             )
         )
     return out

@@ -39,6 +39,28 @@ async def assert_run_read(run_id: str, principal: Principal) -> RunRow:
     return row
 
 
+async def viewer_owns_run(row: RunRow, principal: Principal) -> bool:
+    if auth_disabled():
+        return True
+    if isinstance(principal, Member):
+        if row.actor_type == ActorType.MEMBER and row.actor_id == str(principal.user_id):
+            return True
+        if row.team_id:
+            return await team_svc.is_member(row.team_id, principal.user_id)
+    if isinstance(principal, Guest):
+        return row.actor_type == ActorType.GUEST and row.actor_id == principal.session_id
+    return False
+
+
+async def assert_run_manage(run_id: str, principal: Principal) -> RunRow:
+    row = await assert_run_read(run_id, principal)
+    if isinstance(principal, Guest):
+        raise HTTPException(status_code=403, detail="Guest runs cannot change visibility")
+    if not await viewer_owns_run(row, principal):
+        raise HTTPException(status_code=403, detail="Not allowed to modify this run")
+    return row
+
+
 async def can_access_dev_env(row: DevEnvRow, principal: Principal) -> bool:
     if auth_disabled():
         return True
