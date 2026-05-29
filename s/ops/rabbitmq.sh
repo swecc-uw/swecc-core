@@ -45,7 +45,7 @@ create_user() {
   container_id=$(get_rabbitmq_container)
 
   log INFO "Loading credentials from Docker config: $config_name"
-  docker config inspect "$config_name" --format pretty | grep '=' > /tmp/${svc}_env.tmp || true
+  docker config inspect "$config_name" --format pretty | grep -e '=' > /tmp/${svc}_env.tmp || true
 
   local rabbit_user rabbit_pass rabbit_vhost
 

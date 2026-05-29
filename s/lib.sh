@@ -198,7 +198,9 @@ get_resource_limits() {
   local svc="$1"
   case "$svc" in
     bench-sandbox)
-      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=8G CPU_RESERVE=0.2 MEMORY_RESERVE=2G"
+      # Reserve low so the task schedules on a ~16GB single-node swarm alongside
+      # other services; limit still allows eval workloads to burst when RAM is free.
+      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=4G CPU_RESERVE=0.2 MEMORY_RESERVE=512M"
       ;;
     server)
       echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
@@ -235,11 +237,75 @@ is_main_branch() {
   [[ "$branch" == "main" || "$branch" == "master" ]]
 }
 
+# Recover services left with no running tasks (e.g. after a failed stop-first rollout).
+swarm_recover_if_no_running_tasks() {
+  local svc="$1"
+  local running_ps want_replicas running_status task_rows
+
+  running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}' \
+    | grep -c '^Running' || true)"
+  task_rows="$(docker service ps "$svc" --format '{{.ID}}' 2>/dev/null | wc -l | tr -d ' ')"
+  want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
+  running_status="$(docker service inspect "$svc" --format '{{.ServiceStatus.RunningTasks}}' 2>/dev/null)" || running_status=""
+
+  if [[ "${want_replicas:-0}" -lt 1 ]]; then
+    log WARN "Service $svc has replica count 0; scaling to 1"
+    docker service scale "$svc=1" || die "Failed to scale service $svc to 1"
+    want_replicas=1
+  fi
+
+  if [[ "${task_rows:-0}" -eq 0 ]] \
+    || [[ -n "$running_status" && "$running_status" -lt "${want_replicas:-1}" ]] \
+    || [[ "$running_ps" -lt "${want_replicas:-1}" ]]; then
+    log WARN "Service $svc has ${running_ps}/${want_replicas} running tasks; forcing reschedule"
+    docker service update --force --detach "$svc" || die "Failed to force-recover service $svc"
+    wait_for_service "$svc" 90
+  fi
+}
+
+# Remove leftover *-staging services from failed deploys (frees Swarm memory reservations).
+swarm_remove_orphan_staging_services() {
+  local name rm_wait
+  while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    log WARN "Removing orphaned staging service: $name"
+    docker service rm "$name" 2>/dev/null || true
+    rm_wait=0
+    while docker service inspect "$name" &>/dev/null && [[ $rm_wait -lt 30 ]]; do
+      sleep 1
+      rm_wait=$((rm_wait + 1))
+    done
+  done < <(docker service ls --format '{{.Name}}' 2>/dev/null | grep -E -- '-staging$' || true)
+}
+
 # Print task states when a swarm service fails to converge (scheduling, OOM, etc.).
 swarm_dump_service_tasks() {
   local svc="$1"
   log WARN "Task status for $svc:"
   docker service ps "$svc" --no-trunc 2>/dev/null || true
+}
+
+# Fail fast when Swarm cannot place tasks (common on single-node bench-sandbox deploys).
+swarm_check_service_scheduling_failure() {
+  local svc="$1"
+  local err
+
+  err="$(docker service ps "$svc" --no-trunc --format '{{.Error}}' 2>/dev/null \
+    | grep -iE 'insufficient resources|no suitable node' | head -1 || true)"
+  if [[ -z "$err" ]]; then
+    err="$(docker service ps "$svc" --no-trunc --format '{{.CurrentState}} {{.Error}}' 2>/dev/null \
+      | grep -iE 'insufficient resources|no suitable node' | head -1 || true)"
+  fi
+  if [[ -n "$err" ]]; then
+    swarm_dump_service_tasks "$svc"
+    die "Service $svc cannot be scheduled: $err"
+  fi
+
+  if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
+    2>/dev/null | grep -qE 'Rejected|Failed'; then
+    swarm_dump_service_tasks "$svc"
+    die "Service $svc has failed or rejected tasks"
+  fi
 }
 
 wait_for_service() {
@@ -250,11 +316,7 @@ wait_for_service() {
 
   log INFO "Waiting for service $svc to be healthy..."
   while [[ $attempt -lt $max_attempts ]]; do
-    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
-      | grep -qE 'Rejected|Failed'; then
-      swarm_dump_service_tasks "$svc"
-      die "Service $svc has failed or rejected tasks"
-    fi
+    swarm_check_service_scheduling_failure "$svc"
     if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
       | grep -q "Running"; then
       log INFO "Service $svc is healthy"
@@ -277,11 +339,7 @@ wait_for_service_rollout() {
 
   log INFO "Waiting for rollout of $svc (timeout ${timeout_sec}s)..."
   while [[ $elapsed -lt $timeout_sec ]]; do
-    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
-      | grep -qE 'Rejected|Failed'; then
-      swarm_dump_service_tasks "$svc"
-      die "Service $svc rollout has failed or rejected tasks"
-    fi
+    swarm_check_service_scheduling_failure "$svc"
 
     # Use service inspect (not `docker service ls --filter name=^svc$` — anchors are
     # literal substrings in Swarm filters, so replica checks never matched).
@@ -317,6 +375,11 @@ wait_for_service_rollout() {
 
   swarm_dump_service_tasks "$svc"
   die "Service $svc rollout timed out after ${timeout_sec}s"
+}
+
+# Create a service without blocking on the first task (CLI can spin for 15+ min otherwise).
+swarm_service_create_detached() {
+  docker service create --detach "$@"
 }
 
 # Apply a service update without blocking indefinitely on swarm convergence.
