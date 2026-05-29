@@ -1,4 +1,4 @@
-"""API fixes: pagination, slim domains, leaderboard limit, activity feed."""
+"""API fixes: pagination, domain list shape, leaderboard limit, activity feed."""
 
 from __future__ import annotations
 
@@ -58,8 +58,9 @@ def _sample_run(domain_id: str, run_id: str, *, status: str = "completed"):
 
 @pytest.mark.asyncio
 async def test_list_runs_honors_limit_in_db(django_db, api_app, monkeypatch):
-    from bench.models import ActorType
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain()
@@ -81,25 +82,32 @@ async def test_list_runs_honors_limit_in_db(django_db, api_app, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_domains_slim_by_default(django_db, api_app):
+async def test_list_domains_matches_get_domain_shape(django_db, api_app):
     from bench_common.storage import django_store as store
 
-    domain = _sample_domain("slim-domain")
+    domain = _sample_domain("full-domain")
     await store.save_domain(domain)
 
     transport = ASGITransport(app=api_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/v1/domains")
-    assert resp.status_code == 200
-    row = next(d for d in resp.json() if d["id"] == domain.id)
-    assert set(row.keys()) == {"id", "name", "tags", "image"}
-    assert row["image"] == domain.image_url
+        list_resp = await client.get("/v1/domains")
+        detail_resp = await client.get(f"/v1/domains/{domain.id}")
+    assert list_resp.status_code == 200
+    assert detail_resp.status_code == 200
+    row = next(d for d in list_resp.json() if d["id"] == domain.id)
+    detail = detail_resp.json()
+    assert row.keys() == detail.keys()
+    assert row["binding_vow"] == detail["binding_vow"]
+    assert row["endpoint"] == detail["endpoint"]
+    assert row["scoring"] == detail["scoring"]
+    assert row["image_url"] == domain.image_url
 
 
 @pytest.mark.asyncio
 async def test_leaderboard_respects_limit(django_db, api_app):
-    from bench.models import ActorType, Visibility
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, Visibility
 
     domain = _sample_domain("lb-limit-domain")
     await store.save_domain(domain)
@@ -122,8 +130,9 @@ async def test_leaderboard_respects_limit(django_db, api_app):
 
 @pytest.mark.asyncio
 async def test_leaderboard_batch(django_db, api_app):
-    from bench.models import ActorType, Visibility
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, Visibility
 
     d1 = _sample_domain("batch-d1")
     d2 = _sample_domain("batch-d2")
@@ -151,8 +160,9 @@ async def test_leaderboard_batch(django_db, api_app):
 
 @pytest.mark.asyncio
 async def test_gallery_activity_feed_merges(django_db, api_app, monkeypatch):
-    from bench.models import ActorType, Visibility
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, Visibility
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain("activity-domain")
@@ -182,8 +192,9 @@ async def test_gallery_activity_feed_merges(django_db, api_app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_domain_runs_mine_and_gallery(django_db, api_app, monkeypatch):
-    from bench.models import ActorType, Visibility
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, Visibility
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain("split-runs-domain")
@@ -216,8 +227,9 @@ async def test_domain_runs_mine_and_gallery(django_db, api_app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_batch_run_status_respects_access(django_db, api_app, monkeypatch):
-    from bench.models import ActorType, Visibility
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, Visibility
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain("status-batch-domain")
