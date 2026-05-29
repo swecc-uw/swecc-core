@@ -53,8 +53,9 @@ def _sample_domain(domain_id: str = "domain-env-list"):
 
 @pytest.mark.asyncio
 async def test_domain_environments_matches_developer_list(api_app, monkeypatch):
-    from bench.models import ActorType, EnvScope
     from bench_common.storage import django_store as store
+
+    from bench.models import ActorType, EnvScope
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain()
@@ -117,8 +118,9 @@ async def test_domain_environments_404_unknown_domain(api_app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_domain_environments_includes_legacy_null_actor_row(api_app, monkeypatch):
-    from bench.models import DeveloperEnvironment
     from bench_common.storage import django_store as store
+
+    from bench.models import DeveloperEnvironment
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain("legacy-list-domain")
@@ -154,10 +156,51 @@ async def test_domain_environments_includes_legacy_null_actor_row(api_app, monke
 
 
 @pytest.mark.asyncio
+async def test_developer_list_includes_legacy_empty_actor_id(api_app, monkeypatch):
+    from bench_common.storage import django_store as store
+
+    from bench.models import DeveloperEnvironment
+
+    monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
+    domain = _sample_domain("legacy-empty-actor-domain")
+    await store.save_domain(domain)
+    env_id = "legacy-empty-actor-env"
+    await DeveloperEnvironment.objects.acreate(
+        id=env_id,
+        owner_id=domain.owner_id,
+        name="Legacy Empty Actor",
+        github_url="https://github.com/org/legacy",
+        status="ready",
+        domain_id=domain.id,
+        env_url="http://sandbox/envs/legacy",
+        actor_id="",
+        scope="",
+    )
+
+    headers = {"Authorization": f"Bearer {_member_token(user_id=1)}"}
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        dev_resp = await client.get("/v1/developer/environments", headers=headers)
+        domain_resp = await client.get(
+            f"/v1/domains/{domain.id}/environments",
+            headers=headers,
+        )
+
+    assert dev_resp.status_code == 200
+    assert domain_resp.status_code == 200
+    assert any(e["id"] == env_id for e in dev_resp.json())
+    assert any(e["id"] == env_id for e in domain_resp.json())
+    row = await DeveloperEnvironment.objects.aget(id=env_id)
+    assert row.actor_id == domain.owner_id
+    assert row.scope == "solo"
+
+
+@pytest.mark.asyncio
 async def test_mirror_developer_env_sets_actor_for_legacy_row(api_app):
-    from bench.models import DeveloperEnvironment, EnvScope
     from bench_common.storage import django_store as store
     from bench_common.storage.dev_sync import mirror_developer_env_from_domain
+
+    from bench.models import DeveloperEnvironment, EnvScope
 
     domain = _sample_domain("legacy-mirror-domain")
     await store.save_domain(domain)

@@ -17,6 +17,14 @@ from datetime import datetime
 from typing import Any, NamedTuple, TypeVar
 
 from asgiref.sync import sync_to_async
+from bench_common.core.domain import Domain
+from bench_common.core.run import Episode, Run
+from django.db.models import Avg, Count, FloatField, Q
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from pydantic import BaseModel
 
 # These imports require django.setup() to have been called already.
 from bench.models import ActorType
@@ -29,14 +37,6 @@ from bench.models import Episode as EpisodeRow
 from bench.models import Leaderboard as LeaderboardRow
 from bench.models import Run as RunRow
 from bench.models import Visibility
-from bench_common.core.domain import Domain
-from bench_common.core.run import Episode, Run
-from django.db.models import Avg, Count, FloatField, Q
-from django.db.models.fields.json import KeyTextTransform
-from django.db.models.functions import Cast
-from django.utils import timezone
-from django.utils.dateparse import parse_datetime
-from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -515,6 +515,32 @@ async def delete_developer_environment(env_id: str) -> bool:
     return deleted > 0
 
 
+def _solo_scope_q() -> Q:
+    return Q(scope=EnvScope.SOLO) | Q(scope="") | Q(scope__isnull=True)
+
+
+def _solo_actor_q(actor_id: str) -> Q:
+    """Match solo rows by actor_id, falling back to legacy owner_id."""
+    legacy_owner = Q(actor_id__isnull=True) | Q(actor_id="")
+    return Q(actor_id=actor_id) | (legacy_owner & Q(owner_id=actor_id))
+
+
+async def _backfill_legacy_dev_env_row(row: DeveloperEnvironmentRow) -> None:
+    """Persist actor/scope defaults for pre-auth rows so counts and filters stay aligned."""
+    update_fields: list[str] = []
+    if not row.actor_id and row.owner_id:
+        row.actor_id = row.owner_id
+        update_fields.append("actor_id")
+    if not row.scope:
+        row.scope = EnvScope.SOLO
+        update_fields.append("scope")
+    if not row.actor_type:
+        row.actor_type = ActorType.MEMBER
+        update_fields.append("actor_type")
+    if update_fields:
+        await row.asave(update_fields=update_fields)
+
+
 async def list_developer_environments(
     *,
     owner_id: str | None = None,
@@ -528,22 +554,32 @@ async def list_developer_environments(
         qs = qs.filter(owner_id=owner_id)
     if scope:
         if scope == EnvScope.SOLO:
-            qs = qs.filter(Q(scope=scope) | Q(scope="") | Q(scope__isnull=True))
+            qs = qs.filter(_solo_scope_q())
         else:
             qs = qs.filter(scope=scope)
     if team_id:
         qs = qs.filter(team_id=team_id)
     if actor_id:
         if scope == EnvScope.SOLO:
-            qs = qs.filter(Q(actor_id=actor_id) | Q(actor_id__isnull=True, owner_id=actor_id))
+            qs = qs.filter(_solo_actor_q(actor_id))
         else:
             qs = qs.filter(actor_id=actor_id)
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
-    return [_dev_env_to_dict(row) async for row in qs]
+    out: list[dict[str, Any]] = []
+    async for row in qs:
+        if scope == EnvScope.SOLO or (not row.scope and not row.team_id):
+            await _backfill_legacy_dev_env_row(row)
+        out.append(_dev_env_to_dict(row))
+    return out
 
 
 async def count_dev_envs(*, actor_id: str, scope: str) -> int:
+    if scope == EnvScope.SOLO:
+        return await DeveloperEnvironmentRow.objects.filter(
+            _solo_scope_q(),
+            _solo_actor_q(actor_id),
+        ).acount()
     return await DeveloperEnvironmentRow.objects.filter(actor_id=actor_id, scope=scope).acount()
 
 
