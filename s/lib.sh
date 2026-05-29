@@ -198,7 +198,7 @@ get_resource_limits() {
   local svc="$1"
   case "$svc" in
     bench-sandbox)
-      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=32G CPU_RESERVE=0.2 MEMORY_RESERVE=4G"
+      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=8G CPU_RESERVE=0.2 MEMORY_RESERVE=2G"
       ;;
     server)
       echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
@@ -273,7 +273,7 @@ wait_for_service_rollout() {
   local svc="$1"
   local timeout_sec="${2:-${DEPLOY_ROLLOUT_TIMEOUT_SEC:-600}}"
   local elapsed=0
-  local replicas
+  local running desired
 
   log INFO "Waiting for rollout of $svc (timeout ${timeout_sec}s)..."
   while [[ $elapsed -lt $timeout_sec ]]; do
@@ -283,13 +283,32 @@ wait_for_service_rollout() {
       die "Service $svc rollout has failed or rejected tasks"
     fi
 
-    replicas="$(docker service ls --filter "name=^${svc}$" --format '{{.Replicas}}' | head -1)"
-    if [[ "$replicas" =~ ^([0-9]+)/\1$ ]] && [[ "${BASH_REMATCH[1]}" -gt 0 ]]; then
+    # Use service inspect (not `docker service ls --filter name=^svc$` — anchors are
+    # literal substrings in Swarm filters, so replica checks never matched).
+    local update_state running_ps want_replicas
+    update_state="$(docker service inspect "$svc" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}' 2>/dev/null)" || update_state=""
+    if [[ "$update_state" == "completed" ]]; then
+      log INFO "Service $svc rollout complete (update status: completed)"
+      return 0
+    fi
+
+    running="$(docker service inspect "$svc" --format '{{.ServiceStatus.RunningTasks}}' 2>/dev/null)" || running=""
+    desired="$(docker service inspect "$svc" --format '{{.ServiceStatus.DesiredTasks}}' 2>/dev/null)" || desired=""
+
+    if [[ -n "$running" && -n "$desired" && "$desired" -gt 0 && "$running" == "$desired" ]]; then
       if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
         | grep -q "Running"; then
-        log INFO "Service $svc rollout complete ($replicas)"
+        log INFO "Service $svc rollout complete (${running}/${desired} tasks running)"
         return 0
       fi
+    fi
+
+    running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}' \
+      | grep -c '^Running' || true)"
+    want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
+    if [[ "$running_ps" -ge "$want_replicas" && "$running_ps" -gt 0 ]]; then
+      log INFO "Service $svc rollout complete (${running_ps}/${want_replicas} tasks running via service ps)"
+      return 0
     fi
 
     sleep 5
