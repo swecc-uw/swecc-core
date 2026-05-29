@@ -53,9 +53,8 @@ def _sample_domain(domain_id: str = "domain-env-list"):
 
 @pytest.mark.asyncio
 async def test_domain_environments_matches_developer_list(api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, EnvScope
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain()
@@ -118,9 +117,8 @@ async def test_domain_environments_404_unknown_domain(api_app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_domain_environments_includes_legacy_null_actor_row(api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import DeveloperEnvironment
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain("legacy-list-domain")
@@ -157,10 +155,9 @@ async def test_domain_environments_includes_legacy_null_actor_row(api_app, monke
 
 @pytest.mark.asyncio
 async def test_mirror_developer_env_sets_actor_for_legacy_row(api_app):
+    from bench.models import DeveloperEnvironment, EnvScope
     from bench_common.storage import django_store as store
     from bench_common.storage.dev_sync import mirror_developer_env_from_domain
-
-    from bench.models import DeveloperEnvironment, EnvScope
 
     domain = _sample_domain("legacy-mirror-domain")
     await store.save_domain(domain)
