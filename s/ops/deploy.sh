@@ -59,7 +59,7 @@ deploy_service() {
   docker pull "$image"
 
   log INFO "Preparing environment from Docker config"
-  docker config inspect "$config_name" --format pretty | grep '=' > /tmp/${svc}_env.tmp || true
+  docker config inspect "$config_name" --format pretty | grep -e '=' > /tmp/${svc}_env.tmp || true
 
   if [[ "$svc" == "server" ]]; then
     swarm_run_django_migrate "$image" "/tmp/${svc}_env.tmp"
