@@ -76,11 +76,10 @@ def _create_body(*, visibility: str | None = None) -> dict:
 async def test_create_run_member_visibility(
     api_app, monkeypatch, visibility: str | None, expected: str
 ):
-    from bench_common.core.run import AgentConfig, Run, RunConfig
-    from bench_common.storage import django_store as store
-
     from bench.models import Run as RunRow
     from bench.models import Visibility
+    from bench_common.core.run import AgentConfig, Run, RunConfig
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
 

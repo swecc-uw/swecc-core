@@ -21,6 +21,7 @@ class RunListItem(Run):
     actor_type: str | None = None
     actor_id: str | None = None
     actor_username: str | None = None
+    visibility: str | None = None
 
 
 class DomainListItem(BaseModel):

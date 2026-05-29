@@ -15,14 +15,13 @@ from app.auth.deps import require_member
 from app.auth.policy import assert_run_submission_cooldown
 from app.auth.resolve import auth_disabled
 from app.auth.worker import require_worker
+from bench.models import ActorType, Visibility
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-
-from bench.models import ActorType, Visibility
 
 log = structlog.get_logger()
 

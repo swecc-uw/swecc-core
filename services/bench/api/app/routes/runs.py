@@ -1,7 +1,14 @@
 import hashlib
 from datetime import timedelta
 
-from app.auth.access import assert_dev_env_access, assert_run_read, can_read_run, parse_team_id
+from app.auth.access import (
+    assert_dev_env_access,
+    assert_run_manage,
+    assert_run_read,
+    can_read_run,
+    parse_team_id,
+    viewer_owns_run,
+)
 from app.auth.deps import get_optional_principal, get_principal
 from app.auth.policy import (
     assert_guest_can_create_run,
@@ -20,6 +27,9 @@ from app.schemas import (
 from app.services import teams as team_svc
 from app.services.run_env import resolve_run_environment_id
 from app.services.run_list import parse_created_before, runs_to_list_items
+from bench.models import ActorType
+from bench.models import Run as RunRow
+from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
 from bench_common.export.replay import build_run_export_dict
 from bench_common.orchestrator import service as orchestrator
@@ -30,10 +40,6 @@ from django.utils import timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from bench.models import ActorType
-from bench.models import Run as RunRow
-from bench.models import Visibility
-
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 
 
@@ -41,6 +47,10 @@ class CreateRunBody(RunConfig):
     team_id: str | None = None
     visibility: str | None = None
     env_id: str | None = None
+
+
+class UpdateRunVisibilityBody(BaseModel):
+    visibility: str = Field(..., description="private or gallery_public")
 
 
 def _requester_id(principal: Guest | Member) -> str:
@@ -270,6 +280,27 @@ async def cancel_run(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.patch("/{run_id}/visibility", response_model=RunListItem)
+async def update_run_visibility(
+    run_id: str,
+    body: UpdateRunVisibilityBody,
+    principal=Depends(get_principal),
+) -> RunListItem:
+    row = await assert_run_manage(run_id, principal)
+    visibility = body.visibility
+    if visibility not in (Visibility.PRIVATE, Visibility.GALLERY_PUBLIC):
+        raise HTTPException(
+            status_code=422,
+            detail="visibility must be 'private' or 'gallery_public'",
+        )
+    await RunRow.objects.filter(id=row.id).aupdate(visibility=visibility)
+    run = await db.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    items = await runs_to_list_items([run], include_episode_summary=False)
+    return items[0]
+
+
 @router.get("/{run_id}", response_model=Run)
 async def get_run(
     run_id: str,
@@ -337,7 +368,7 @@ async def export_run(
     for ep in episodes:
         traces_by_episode[ep.id] = await trace_store.read(ep.id)
 
-    redact_sensitive = not await _viewer_owns_run(row, principal)
+    redact_sensitive = not await viewer_owns_run(row, principal)
 
     return build_run_export_dict(
         run=run,
@@ -347,16 +378,3 @@ async def export_run(
         domain_name=domain.name if domain else None,
         redact_sensitive=redact_sensitive,
     )
-
-
-async def _viewer_owns_run(row: RunRow, principal) -> bool:
-    if auth_disabled():
-        return True
-    if isinstance(principal, Member):
-        if row.actor_type == ActorType.MEMBER and row.actor_id == str(principal.user_id):
-            return True
-        if row.team_id:
-            return await team_svc.is_member(row.team_id, principal.user_id)
-    if isinstance(principal, Guest):
-        return row.actor_type == ActorType.GUEST and row.actor_id == principal.session_id
-    return False
