@@ -1,5 +1,9 @@
 name: Deploy All Services
 
+concurrency:
+  group: deploy-all
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
     inputs:

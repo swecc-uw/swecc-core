@@ -96,6 +96,14 @@ deploy_service() {
 
     wait_for_service "$staging_name"
 
+    log INFO "Removing staging service before production rollout (frees memory on single-node swarm)"
+    docker service rm "$staging_name" || die "Failed to remove staging service $staging_name"
+    local rm_wait=0
+    while docker service inspect "$staging_name" &>/dev/null && [[ $rm_wait -lt 30 ]]; do
+      sleep 1
+      rm_wait=$((rm_wait + 1))
+    done
+
     log INFO "Rolling update $svc (start-first)"
     local -a update_args=(
       --image "$image"
@@ -105,17 +113,19 @@ deploy_service() {
       --reserve-memory "$MEMORY_RESERVE"
       --update-order start-first
       --update-delay 30s
+      --update-failure-action rollback
       --with-registry-auth
     )
     if docker service update --help 2>&1 | grep -q -- '--env-file'; then
       update_args+=(--env-file /tmp/${svc}_env.tmp)
-      docker service update "${update_args[@]}" "$svc" || die "Failed to update service $svc"
+      swarm_service_update_detached "$svc" "${update_args[@]}" \
+        || die "Failed to update service $svc"
     else
       swarm_service_update_with_env "$svc" /tmp/${svc}_env.tmp "${update_args[@]}" \
         || die "Failed to update service $svc"
     fi
 
-    docker service rm "$staging_name" 2>/dev/null || true
+    wait_for_service_rollout "$svc"
   else
     log INFO "Creating production service: $svc"
 
