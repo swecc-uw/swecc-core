@@ -72,6 +72,8 @@ deploy_service() {
   fi
 
   if [[ "$service_exists" == "true" ]]; then
+    swarm_recover_if_no_running_tasks "$svc"
+
     if docker service inspect "$staging_name" &>/dev/null; then
       log WARN "Removing leftover staging service: $staging_name"
       docker service rm "$staging_name" || die "Failed to remove existing staging service"
