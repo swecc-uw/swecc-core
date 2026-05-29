@@ -18,6 +18,7 @@ import structlog
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode, Run, RunConfig, TechniqueConfig
 from bench_common.eval.metrics import _SCOREABLE_STATUSES, compute_scores
+from bench_common.mq_dispatch import publish_run_if_mq
 from bench_common.runtime.agent_loop import AgentLoop
 from bench_common.runtime.env_client import HttpEnvClient
 from bench_common.runtime.inference import InferenceRouter
@@ -144,13 +145,56 @@ async def create_run(config: RunConfig, requester_id: str) -> Run:
     for ep in episodes:
         await db.save_episode(ep)
 
-    # Schedule episodes as background tasks
+    if settings.mq_enabled:
+        await publish_run_if_mq(run.id)
+    else:
+        _schedule_run_execution(run, episodes, domain)
+
+    log.info("run_created", run_id=run.id, num_episodes=len(episodes), mq=settings.mq_enabled)
+    return run
+
+
+def _schedule_run_execution(run: Run, episodes: list[Episode], domain: Any) -> None:
     task = asyncio.create_task(_run_all_episodes(run, episodes, domain))
     _active_run_tasks[run.id] = task
     task.add_done_callback(lambda _t, rid=run.id: _active_run_tasks.pop(rid, None))
 
-    log.info("run_created", run_id=run.id, num_episodes=len(episodes))
-    return run
+
+async def execute_run(run_id: str) -> None:
+    """MQ consumer entry: load run/episodes/domain and execute pending work."""
+    run = await db.get_run(run_id)
+    if run is None:
+        log.warning("execute_run_missing", run_id=run_id)
+        return
+    if run.status in _TERMINAL_RUN_STATUSES:
+        log.info("execute_run_skip_terminal", run_id=run_id, status=run.status)
+        return
+
+    episodes = await db.get_episodes(run_id)
+    work_eps = [ep for ep in episodes if ep.status in ("pending", "running")]
+    if not work_eps:
+        log.info("execute_run_skip_no_work", run_id=run_id, run_status=run.status)
+        return
+
+    domain = await db.get_domain(run.config.domain_id)
+    if domain is None:
+        log.error("execute_run_domain_missing", run_id=run_id, domain_id=run.config.domain_id)
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        await db.save_run(run, env_id=run.env_id)
+        return
+
+    if run_id in _active_run_tasks and not _active_run_tasks[run_id].done():
+        log.info("execute_run_skip_inflight", run_id=run_id)
+        return
+
+    log.info("execute_run_start", run_id=run_id, num_episodes=len(work_eps))
+    task = asyncio.create_task(_run_all_episodes(run, work_eps, domain))
+    _active_run_tasks[run_id] = task
+    try:
+        await task
+    finally:
+        _active_run_tasks.pop(run_id, None)
 
 
 async def _run_is_cancelled(run_id: str) -> bool:

@@ -49,9 +49,13 @@ class Settings(BaseSettings):
     # Mark stranded "running"/"pending"/"cloning" rows as failed on bench-api
     # startup. SAFE ONLY FOR SINGLE-REPLICA DEPLOYS: with rolling restarts the
     # new replica would otherwise mark the old replica's live work as failed.
-    # Default True is correct for the current single-replica deploy; flip to
-    # False (or override ORCH_ENABLE_ORPHAN_REAPER=false) before scaling out.
+    # Disabled automatically when mq_enabled (multi-replica safe dispatch).
     enable_orphan_reaper: bool = True
+
+    # RabbitMQ — enqueue runs/jobs for horizontal workers (see services/bench/README.md).
+    mq_enabled: bool = False
+    mq_consume_runs: bool = True
+    mq_prefetch: int = 2
 
     # Sandbox — where cloned envs run (overridden to http://sandbox:8001 in Docker)
     sandbox_url: str = "http://localhost:8001"
@@ -82,6 +86,15 @@ class Settings(BaseSettings):
         env_prefix="ORCH_",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _apply_mq_settings(self) -> "Settings":
+        prefetch_raw = os.environ.get("BENCH_MQ_PREFETCH", "").strip()
+        if prefetch_raw:
+            object.__setattr__(self, "mq_prefetch", max(1, int(prefetch_raw)))
+        if self.mq_enabled:
+            object.__setattr__(self, "enable_orphan_reaper", False)
+        return self
 
     @model_validator(mode="after")
     def _parse_bench_max_episodes(self) -> "Settings":

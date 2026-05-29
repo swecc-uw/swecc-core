@@ -374,7 +374,26 @@ def _wait_for_api(max_attempts: int = 60, delay: float = 5.0) -> None:
     raise RuntimeError(f"API at {API_URL} never became reachable after {max_attempts} attempts")
 
 
+async def _mq_main() -> None:
+    import app.mq.consumers  # noqa: F401 — register job consumer
+    from app.mq import initialize_rabbitmq, shutdown_rabbitmq
+
+    loop = asyncio.get_running_loop()
+    log.info("bench worker MQ mode (prefetch=%s)", bench_settings.mq_prefetch)
+    await initialize_rabbitmq(loop)
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        await shutdown_rabbitmq()
+
+
 def main() -> None:
+    _ensure_django()
+    if bench_settings.mq_enabled:
+        asyncio.run(_mq_main())
+        return
+
     _wait_for_api()
     log.info(f"polling {API_URL} every {POLL_INTERVAL}s")
     while True:

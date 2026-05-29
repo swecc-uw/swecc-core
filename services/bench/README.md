@@ -6,7 +6,7 @@ The `bench` product folder hosts the BenchAnything backend inside swecc-core. It
 |---|---|---|---|
 | `api/`     | `bench-api`     | 8000 | FastAPI HTTP server (main control plane, websocket trace stream) |
 | `sandbox/` | `bench-sandbox` | 8001 | Clones submitted env repos and proxies HTTP traffic to them |
-| `worker/`  | `bench-worker`  | —    | Standalone HTTP poller; pulls queued bench jobs from the API and runs models against them |
+| `worker/`  | `bench-worker`  | —    | Consumes full-bench jobs from RabbitMQ (or HTTP-polls the API when `ORCH_MQ_ENABLED` is off) |
 
 Plus two non-container directories:
 
@@ -33,10 +33,24 @@ bench-api:
 From the swecc-core repo root:
 
 ```bash
-docker compose up bench-api bench-sandbox bench-worker
+docker compose up bench-api bench-sandbox
+docker compose --profile bench-worker up   # optional worker
 ```
 
 Add API keys to root `.env` (see `.env.example` — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`).
+
+### RabbitMQ (production / scaled local)
+
+Set `ORCH_MQ_ENABLED=1` on **bench-api** and **bench-worker** (and `BENCH_RABBIT_USER` / `BENCH_RABBIT_PASS` in `.env`, same pattern as other services).
+
+| Routing key | Queue | Producer | Consumer |
+|---|---|---|---|
+| `bench.run.execute` | `bench.run-queue` | bench-api (`POST /v1/runs`) | bench-api (when `ORCH_MQ_CONSUME_RUNS=1`) |
+| `bench.job.execute` | `bench.job-queue` | bench-api (`POST /v1/bench/full`) | bench-worker |
+
+Exchange: `swecc-bench-exchange` (topic). Scale throughput by running multiple **bench-worker** replicas (jobs) and/or **bench-api** replicas (runs). With multiple API replicas, use a **shared** `ORCH_TRACE_DIR` volume so WebSocket trace streaming can read episode logs written by any replica.
+
+Provision prod RabbitMQ user: `s/ops/rabbitmq.sh create-user bench-api`.
 
 ## Tests
 

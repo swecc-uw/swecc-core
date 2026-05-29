@@ -7,3 +7,4 @@ gunicorn>=22.0
 python-jose[cryptography]>=3.3
 swecc-jwt>=0.1.0
 redis>=5.0
+pika>=1.3

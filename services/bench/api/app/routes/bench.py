@@ -149,8 +149,13 @@ async def full_bench(
         github_url=env["github_url"],
     )
 
-    # Run locally in background (EC2 worker will claim queued jobs in production)
-    asyncio.create_task(_run_full_bench_local(job["id"]))
+    if settings.mq_enabled:
+        from app.mq.producers import publish_job_execute
+
+        await publish_job_execute({"job_id": job["id"]})
+        log.info("full_bench_enqueued", job_id=job["id"])
+    else:
+        asyncio.create_task(_run_full_bench_local(job["id"]))
 
     return job
 
