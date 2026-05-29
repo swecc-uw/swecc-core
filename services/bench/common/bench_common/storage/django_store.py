@@ -17,6 +17,14 @@ from datetime import datetime
 from typing import Any, NamedTuple, TypeVar
 
 from asgiref.sync import sync_to_async
+from bench_common.core.domain import Domain
+from bench_common.core.run import Episode, Run
+from django.db.models import Avg, Count, FloatField, Q
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from pydantic import BaseModel
 
 # These imports require django.setup() to have been called already.
 from bench.models import ActorType
@@ -29,14 +37,6 @@ from bench.models import Episode as EpisodeRow
 from bench.models import Leaderboard as LeaderboardRow
 from bench.models import Run as RunRow
 from bench.models import Visibility
-from bench_common.core.domain import Domain
-from bench_common.core.run import Episode, Run
-from django.db.models import Avg, Count, FloatField, Q
-from django.db.models.fields.json import KeyTextTransform
-from django.db.models.functions import Cast
-from django.utils import timezone
-from django.utils.dateparse import parse_datetime
-from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -527,11 +527,17 @@ async def list_developer_environments(
     if owner_id:
         qs = qs.filter(owner_id=owner_id)
     if scope:
-        qs = qs.filter(scope=scope)
+        if scope == EnvScope.SOLO:
+            qs = qs.filter(Q(scope=scope) | Q(scope="") | Q(scope__isnull=True))
+        else:
+            qs = qs.filter(scope=scope)
     if team_id:
         qs = qs.filter(team_id=team_id)
     if actor_id:
-        qs = qs.filter(actor_id=actor_id)
+        if scope == EnvScope.SOLO:
+            qs = qs.filter(Q(actor_id=actor_id) | Q(actor_id__isnull=True, owner_id=actor_id))
+        else:
+            qs = qs.filter(actor_id=actor_id)
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
     return [_dev_env_to_dict(row) async for row in qs]
