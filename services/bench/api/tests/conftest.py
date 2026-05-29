@@ -37,19 +37,17 @@ POSTGRES_AVAILABLE = _postgres_reachable()
 
 def _ensure_django_ready() -> None:
     import django
-    from django.conf import settings
+    from django.apps import apps as django_apps
 
-    if not settings.configured:
-        import app.django_settings  # noqa: F401
-
-    if not django.apps.apps.ready:
+    if not django_apps.ready:
         django.setup()
 
 
 def _reset_bench_tables() -> None:
-    from bench.models import BenchTeam, BenchTeamMembership, Domain, Run
+    from bench.models import BenchTeam, BenchTeamMembership, DeveloperEnvironment, Domain, Run
 
     Run.objects.all().delete()
+    DeveloperEnvironment.objects.all().delete()
     Domain.objects.all().delete()
     BenchTeamMembership.objects.all().delete()
     BenchTeam.objects.all().delete()

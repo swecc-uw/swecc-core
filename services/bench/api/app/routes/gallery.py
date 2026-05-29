@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 from app.auth.deps import get_optional_principal
-from app.auth.principal import Guest, Member
-from app.auth.resolve import auth_disabled
 from app.schemas import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
     DomainActivityItem,
     DomainActivityResponse,
 )
+from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import runs_to_list_items
 from bench.models import ActorType
-from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -112,31 +110,8 @@ async def domain_activity_feed(
     m_cap = mine_limit if mine_limit is not None else max(1, limit // 2)
     g_cap = gallery_limit if gallery_limit is not None else max(1, limit - m_cap)
 
-    mine_runs: list[Run] = []
-    if auth_disabled() and isinstance(principal, Member):
-        mine_runs = await db.list_runs(
-            domain_id=domain_id,
-            actor_type=ActorType.MEMBER,
-            actor_id=str(principal.user_id),
-            limit=m_cap,
-        )
-    elif isinstance(principal, Guest):
-        mine_runs = await db.list_runs(
-            domain_id=domain_id,
-            actor_type=ActorType.GUEST,
-            actor_id=principal.session_id,
-            limit=m_cap,
-        )
-    elif isinstance(principal, Member):
-        mine_runs = await db.list_runs(
-            domain_id=domain_id,
-            actor_type=ActorType.MEMBER,
-            actor_id=str(principal.user_id),
-            limit=m_cap,
-        )
-
-    gallery_pairs = await db.list_gallery_runs(domain_id=domain_id, limit=g_cap)
-    gallery_runs = [r for r, _ in gallery_pairs]
+    mine_runs = await list_mine_runs_for_domain(domain_id, principal, limit=m_cap)
+    gallery_runs = await list_gallery_runs_for_domain(domain_id, limit=g_cap)
 
     mine_items = [
         DomainActivityItem(**item.model_dump(), source="mine")

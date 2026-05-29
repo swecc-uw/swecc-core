@@ -178,3 +178,62 @@ async def test_gallery_activity_feed_merges(django_db, api_app, monkeypatch):
     sources = {i["source"] for i in items}
     assert "mine" in sources
     assert "gallery" in sources
+
+
+@pytest.mark.asyncio
+async def test_domain_runs_mine_and_gallery(django_db, api_app, monkeypatch):
+    from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
+
+    monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
+    domain = _sample_domain("split-runs-domain")
+    await store.save_domain(domain)
+    await store.save_run(
+        _sample_run(domain.id, "mine-only"),
+        actor_type=ActorType.MEMBER,
+        actor_id="0",
+        visibility="private",
+    )
+    await store.save_run(
+        _sample_run(domain.id, "gallery-only"),
+        actor_type=ActorType.GUEST,
+        actor_id="g1",
+        visibility=Visibility.GALLERY_PUBLIC,
+    )
+
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        mine = await client.get(f"/v1/domains/{domain.id}/runs/mine")
+        gallery = await client.get(f"/v1/domains/{domain.id}/runs/gallery")
+    assert mine.status_code == 200
+    assert gallery.status_code == 200
+    mine_ids = {r["id"] for r in mine.json()}
+    gallery_ids = {r["id"] for r in gallery.json()}
+    assert "mine-only" in mine_ids
+    assert "gallery-only" in gallery_ids
+    assert "gallery-only" not in mine_ids
+
+
+@pytest.mark.asyncio
+async def test_batch_run_status_respects_access(django_db, api_app, monkeypatch):
+    from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
+
+    monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
+    domain = _sample_domain("status-batch-domain")
+    await store.save_domain(domain)
+    await store.save_run(
+        _sample_run(domain.id, "readable-run", status="running"),
+        actor_type=ActorType.MEMBER,
+        actor_id="0",
+        visibility="private",
+    )
+
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/v1/runs/status", params={"ids": "readable-run,unknown"})
+    assert resp.status_code == 200
+    runs = resp.json()["runs"]
+    assert "readable-run" in runs
+    assert runs["readable-run"]["status"] == "running"
+    assert "unknown" not in runs

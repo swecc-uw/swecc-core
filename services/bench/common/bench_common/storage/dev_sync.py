@@ -11,7 +11,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from bench.models import ActorType
 from bench.models import DeveloperEnvironment as DeveloperEnvironmentRow
+from bench.models import EnvScope
 from bench_common.core.domain import Domain
 from bench_common.storage import django_store as store
 from django.db.models import Q
@@ -45,14 +47,29 @@ async def mirror_developer_env_from_domain(
     if github_url is not None:
         defaults["github_url"] = github_url
 
+    def _apply_actor_defaults(row: DeveloperEnvironmentRow) -> None:
+        if not row.actor_id:
+            row.actor_id = domain.owner_id
+        if not row.scope:
+            row.scope = EnvScope.SOLO
+        if not row.actor_type:
+            row.actor_type = ActorType.MEMBER
+
     if env_row_id:
         row = await DeveloperEnvironmentRow.objects.filter(id=env_row_id).afirst()
         if row is None:
             defaults["github_url"] = github_url if github_url is not None else ""
-            await DeveloperEnvironmentRow.objects.acreate(id=env_row_id, **defaults)
+            await DeveloperEnvironmentRow.objects.acreate(
+                id=env_row_id,
+                scope=EnvScope.SOLO,
+                actor_type=ActorType.MEMBER,
+                actor_id=domain.owner_id,
+                **defaults,
+            )
             return
         for key, value in defaults.items():
             setattr(row, key, value)
+        _apply_actor_defaults(row)
         await row.asave()
         return
 
@@ -64,6 +81,7 @@ async def mirror_developer_env_from_domain(
             setattr(row, key, value)
         if github_url is not None:
             row.github_url = github_url
+        _apply_actor_defaults(row)
         await row.asave()
         return
 
@@ -71,6 +89,9 @@ async def mirror_developer_env_from_domain(
         id=domain.id,
         github_url=github_url if github_url is not None else "",
         created_at=datetime.utcnow(),
+        scope=EnvScope.SOLO,
+        actor_type=ActorType.MEMBER,
+        actor_id=domain.owner_id,
         **defaults,
     )
 

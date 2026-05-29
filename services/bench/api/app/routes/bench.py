@@ -98,7 +98,7 @@ async def test_bench(req: TestBenchRequest, member=Depends(require_member)) -> E
             raise HTTPException(status_code=422, detail=str(exc))
 
         # run_test_episode saves the Run without actor metadata; attach member so
-        # GET /v1/runs?domain_id=… returns dev test bench runs in Recent activity.
+        # GET /v1/runs?env_id=… (shared env) or ?domain_id=… lists dev test bench runs.
         run = await db.get_run(episode.run_id)
         if run is not None:
             await db.save_run(

@@ -198,7 +198,7 @@ get_resource_limits() {
   local svc="$1"
   case "$svc" in
     bench-sandbox)
-      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=32G CPU_RESERVE=0.2 MEMORY_RESERVE=4G"
+      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=8G CPU_RESERVE=0.2 MEMORY_RESERVE=2G"
       ;;
     server)
       echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
@@ -303,7 +303,8 @@ wait_for_service_rollout() {
       fi
     fi
 
-    running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}'       | grep -c '^Running' || true)"
+    running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}' \
+      | grep -c '^Running' || true)"
     want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
     if [[ "$running_ps" -ge "$want_replicas" && "$running_ps" -gt 0 ]]; then
       log INFO "Service $svc rollout complete (${running_ps}/${want_replicas} tasks running via service ps)"
