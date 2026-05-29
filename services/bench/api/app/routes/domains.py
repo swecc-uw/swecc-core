@@ -3,7 +3,14 @@ from typing import Any, Union
 from app.auth.deps import get_principal, require_member
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
-from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, DomainListItem, RunListItem
+from app.schemas import (
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
+    DomainEnvironmentListItem,
+    DomainListItem,
+    RunListItem,
+)
+from app.services.domain_environments import list_environments_for_domain_member
 from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import parse_created_before, runs_to_list_items
 from app.services.url_safety import assert_public_http_url
@@ -141,6 +148,34 @@ async def list_domain_gallery_runs(
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
     runs = await list_gallery_runs_for_domain(domain_id, limit=limit)
     return await runs_to_list_items(runs, include_episode_summary=True)
+
+
+@router.get("/{domain_id}/environments", response_model=list[DomainEnvironmentListItem])
+async def list_domain_environments(
+    domain_id: str,
+    member: Member = Depends(require_member),
+) -> list[DomainEnvironmentListItem]:
+    """Developer environments for a domain (member auth).
+
+    The slim ``GET /v1/domains`` gallery list does not include environments; load
+    this endpoint on domain detail instead of ``GET /v1/developer/environments``.
+    """
+    domain = await db.get_domain(domain_id)
+    if domain is None:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    rows = await list_environments_for_domain_member(domain_id, member)
+    return [
+        DomainEnvironmentListItem(
+            id=env["id"],
+            name=env["name"],
+            status=env["status"],
+            domain_id=env.get("domain_id"),
+            env_url=env.get("env_url"),
+            scope=env.get("scope", "solo"),
+            team_id=env.get("team_id"),
+        )
+        for env in rows
+    ]
 
 
 @router.get("/{domain_id}", response_model=Domain)

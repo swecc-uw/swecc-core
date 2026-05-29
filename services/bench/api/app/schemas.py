@@ -30,6 +30,18 @@ class DomainListItem(BaseModel):
     image: str | None = None
 
 
+class DomainEnvironmentListItem(BaseModel):
+    """Slim env row for domain detail (fetch via GET /v1/domains/{id}/environments)."""
+
+    id: str
+    name: str
+    status: str
+    domain_id: str | None
+    env_url: str | None
+    scope: str
+    team_id: str | None = None
+
+
 class DomainActivityItem(RunListItem):
     source: str  # "mine" | "gallery"
 

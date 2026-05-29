@@ -13,7 +13,7 @@ from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
 from app.schemas import RunListItem
 from app.services import teams as team_svc
-from bench.models import ActorType, EnvScope
+from app.services.domain_environments import list_environments_for_domain_member
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
@@ -23,6 +23,8 @@ from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_develop
 from bench_common.utils.github import normalize_github_url
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
+
+from bench.models import ActorType, EnvScope
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/v1/developer", tags=["developer"])
@@ -351,31 +353,7 @@ async def list_environments(
     member: Member = Depends(require_member),
 ) -> list[dict[str, Any]]:
     if domain_id and not scope and not team_id:
-        solo = await db.list_developer_environments(
-            scope=EnvScope.SOLO,
-            actor_id=str(member.user_id),
-            domain_id=domain_id,
-        )
-        teams = await team_svc.list_teams_for_user(member.user_id)
-        team_envs: list[dict[str, Any]] = []
-        for t in teams:
-            tid = parse_team_id(t["team_id"])
-            if tid:
-                team_envs.extend(
-                    await db.list_developer_environments(
-                        scope=EnvScope.TEAM,
-                        team_id=str(tid),
-                        domain_id=domain_id,
-                    )
-                )
-        seen: set[str] = set()
-        out: list[dict[str, Any]] = []
-        for env in solo + team_envs:
-            eid = env.get("id")
-            if eid and eid not in seen:
-                seen.add(eid)
-                out.append(env)
-        return out
+        return await list_environments_for_domain_member(domain_id, member)
 
     if team_id:
         tid = parse_team_id(team_id)

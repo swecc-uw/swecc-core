@@ -44,9 +44,10 @@ def _ensure_django_ready() -> None:
 
 
 def _reset_bench_tables() -> None:
-    from bench.models import BenchTeam, BenchTeamMembership, Domain, Run
+    from bench.models import BenchTeam, BenchTeamMembership, DeveloperEnvironment, Domain, Run
 
     Run.objects.all().delete()
+    DeveloperEnvironment.objects.all().delete()
     Domain.objects.all().delete()
     BenchTeamMembership.objects.all().delete()
     BenchTeam.objects.all().delete()
