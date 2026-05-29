@@ -24,6 +24,8 @@ async def get_leaderboard(domain_id: str, limit: int = 50) -> list[LeaderboardEn
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    if domain.status != "published":
+        return []
 
     # Leaderboards are public surfaces — only show gallery-public completed
     # runs. Without this filter, private member runs (default visibility) and
