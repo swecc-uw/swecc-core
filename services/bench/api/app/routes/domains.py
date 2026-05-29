@@ -1,15 +1,16 @@
-from typing import Any
+from typing import Any, Union
 
 from app.auth.deps import require_member
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
+from app.schemas import DomainListItem
 from app.services.url_safety import assert_public_http_url
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
 from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/domains", tags=["domains"])
@@ -84,15 +85,25 @@ async def create_domain(
     return domain
 
 
-@router.get("", response_model=list[Domain])
+@router.get("")
 async def list_domains(
     published: bool | None = None,
     include_archived: bool = False,
-) -> list[Domain]:
-    return await db.list_domains(
+    slim: bool = Query(
+        True,
+        description="When true (default), return id/name/tags/image only for gallery surfaces",
+    ),
+) -> Union[list[DomainListItem], list[Domain]]:
+    if not slim:
+        return await db.list_domains(
+            published_only=published is True,
+            include_archived=include_archived,
+        )
+    rows = await db.list_domains_summary(
         published_only=published is True,
         include_archived=include_archived,
     )
+    return [DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image) for r in rows]
 
 
 @router.get("/{domain_id}", response_model=Domain)

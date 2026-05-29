@@ -72,11 +72,23 @@ async def test_get_domain_usage_stats_breakdown(django_db):
     await store.save_domain(domain)
 
     runs = [
-        (_sample_run(domain.id, "private-completed", scores={"score": 10.0}), "private"),
-        (_sample_run(domain.id, "public-completed", scores={"score": 8.0}), "gallery_public"),
-        (_sample_run(domain.id, "public-failed", status="failed", scores={}), "gallery_public"),
+        (
+            _sample_run(domain.id, "private-completed", scores={"score": 10.0}),
+            "private",
+        ),
+        (
+            _sample_run(domain.id, "public-completed", scores={"score": 8.0}),
+            "gallery_public",
+        ),
+        (
+            _sample_run(domain.id, "public-failed", status="failed", scores={}),
+            "gallery_public",
+        ),
         (_sample_run(domain.id, "public-no-scores", scores={}), "gallery_public"),
-        (_sample_run(domain.id, "public-high", scores={"score": 12.0}), "gallery_public"),
+        (
+            _sample_run(domain.id, "public-high", scores={"score": 12.0}),
+            "gallery_public",
+        ),
     ]
     for run, visibility in runs:
         await store.save_run(

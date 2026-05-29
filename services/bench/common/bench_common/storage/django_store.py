@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, NamedTuple, TypeVar
 
 from asgiref.sync import sync_to_async
 
@@ -31,6 +31,9 @@ from bench.models import Run as RunRow
 from bench.models import Visibility
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
+from django.db.models import Avg, Count, FloatField, Q
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from pydantic import BaseModel
@@ -114,6 +117,33 @@ async def list_domains(
     return out
 
 
+class DomainListEntry(NamedTuple):
+    id: str
+    name: str
+    tags: list[str]
+    image: str | None
+
+
+async def list_domains_summary(
+    *,
+    published_only: bool = False,
+    include_archived: bool = False,
+) -> list[DomainListEntry]:
+    domains = await list_domains(
+        published_only=published_only,
+        include_archived=include_archived,
+    )
+    return [
+        DomainListEntry(
+            id=d.id,
+            name=d.name,
+            tags=list(d.tags),
+            image=d.image_url or d.profile_picture_url,
+        )
+        for d in domains
+    ]
+
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 
@@ -172,7 +202,10 @@ async def list_runs(
     team_id: str | None = None,
     env_id: str | None = None,
     visibility: str | None = None,
+    status_in: list[str] | None = None,
     limit: int = 100,
+    cursor: str | None = None,
+    created_before: datetime | None = None,
 ) -> list[Run]:
     qs = RunRow.objects.all()
     if domain_id:
@@ -187,7 +220,105 @@ async def list_runs(
         qs = qs.filter(data__env_id=env_id)
     if visibility:
         qs = qs.filter(visibility=visibility)
-    return [_run_from_row(row) async for row in qs.order_by("-id")[:limit]]
+    if status_in:
+        qs = qs.filter(status__in=status_in)
+    if created_before is not None:
+        qs = qs.filter(data__created_at__lt=created_before.isoformat())
+    if cursor:
+        try:
+            cur_row = await RunRow.objects.aget(id=cursor)
+            cur_created = _run_from_row(cur_row).created_at.isoformat()
+            qs = qs.filter(
+                Q(data__created_at__lt=cur_created)
+                | (Q(data__created_at=cur_created) & Q(id__lt=cursor))
+            )
+        except RunRow.DoesNotExist:
+            pass
+    qs = qs.order_by("-data__created_at", "-id")
+    return [_run_from_row(row) async for row in qs[:limit]]
+
+
+class EpisodeSummary(NamedTuple):
+    completed_count: int
+    failed_count: int
+    avg_reward: float | None
+
+
+_FAILED_EPISODE_STATUSES = ("failed", "timeout", "cancelled")
+
+
+async def episode_summaries_for_runs(run_ids: list[str]) -> dict[str, EpisodeSummary]:
+    if not run_ids:
+        return {}
+    reward_key = KeyTextTransform("total_reward", "data")
+    rows = (
+        EpisodeRow.objects.filter(run_id__in=run_ids)
+        .values("run_id")
+        .annotate(
+            completed_count=Count("id", filter=Q(status="completed")),
+            failed_count=Count("id", filter=Q(status__in=_FAILED_EPISODE_STATUSES)),
+            avg_reward=Avg(Cast(reward_key, FloatField())),
+        )
+    )
+    out: dict[str, EpisodeSummary] = {}
+    async for row in rows:
+        avg = row["avg_reward"]
+        out[row["run_id"]] = EpisodeSummary(
+            completed_count=row["completed_count"] or 0,
+            failed_count=row["failed_count"] or 0,
+            avg_reward=float(avg) if avg is not None else None,
+        )
+    return out
+
+
+async def list_active_runs(
+    *,
+    domain_id: str | None = None,
+    actor_type: str | None = None,
+    actor_id: str | None = None,
+    limit: int = 50,
+) -> list[Run]:
+    return await list_runs(
+        domain_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        status_in=["pending", "running"],
+        limit=limit,
+    )
+
+
+class LeaderboardRun(NamedTuple):
+    run: Run
+    num_episodes: int
+
+
+async def list_leaderboard_runs(
+    domain_id: str,
+    *,
+    primary_metric: str,
+    higher_is_better: bool,
+    limit: int,
+) -> list[LeaderboardRun]:
+    """Completed gallery-public runs for a published domain, ordered by primary score."""
+    score_path = KeyTextTransform(primary_metric, "data__scores")
+    qs = (
+        RunRow.objects.filter(
+            domain_id=domain_id,
+            visibility=Visibility.GALLERY_PUBLIC,
+            status="completed",
+            domain__published=True,
+        )
+        .exclude(data__scores__isnull=True)
+        .annotate(primary_score=Cast(score_path, FloatField()))
+        .filter(primary_score__isnull=False)
+    )
+    order = "-primary_score" if higher_is_better else "primary_score"
+    out: list[LeaderboardRun] = []
+    async for row in qs.order_by(order, "-id")[:limit]:
+        run = _run_from_row(row)
+        ep_count = await EpisodeRow.objects.filter(run_id=row.id).acount()
+        out.append(LeaderboardRun(run=run, num_episodes=ep_count))
+    return out
 
 
 async def reap_orphan_work() -> dict[str, int]:
