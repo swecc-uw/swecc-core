@@ -13,16 +13,20 @@ from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
 from app.schemas import RunListItem
 from app.services import teams as team_svc
-from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
-from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
+from bench_common.storage.dev_sync import (
+    ensure_gallery_visible,
+    mirror_developer_env_from_domain,
+)
 from bench_common.utils.github import normalize_github_url
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
+
+from bench.models import ActorType, EnvScope
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/v1/developer", tags=["developer"])
@@ -73,7 +77,9 @@ async def submit_environment(
     member: Member = Depends(require_member),
 ) -> dict[str, Any]:
     github_url = normalize_github_url(req.github_url)
-    owner_key = str(member.user_id) if not auth_disabled() else (req.owner_id or "local")
+    owner_key = (
+        str(member.user_id) if not auth_disabled() else (req.owner_id or "local")
+    )
     team_uuid = parse_team_id(req.team_id) if req.team_id else None
     if team_uuid and not await team_svc.is_member(team_uuid, member.user_id):
         raise HTTPException(status_code=403, detail="Not a member of this team")
@@ -81,7 +87,9 @@ async def submit_environment(
     scope = EnvScope.TEAM if team_uuid else EnvScope.SOLO
     existing = await _find_existing_submission(scope, owner_key, github_url, team_uuid)
     if existing is not None:
-        return await _handle_duplicate_submission(existing, req, github_url, response, owner_key)
+        return await _handle_duplicate_submission(
+            existing, req, github_url, response, owner_key
+        )
 
     env_id = str(uuid.uuid4())
     env: dict[str, Any] = {

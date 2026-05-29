@@ -97,7 +97,9 @@ async def test_create_run_internal_error_includes_cors_for_mesocosm(monkeypatch)
         return Guest(session_id="guest-test")
 
     app.dependency_overrides[get_principal] = fake_principal
-    monkeypatch.setattr("app.routes.runs.assert_guest_rate_limit", noop_guest_rate_limit)
+    monkeypatch.setattr(
+        "app.routes.runs.assert_guest_rate_limit", noop_guest_rate_limit
+    )
     monkeypatch.setattr(
         "app.routes.runs.assert_run_submission_cooldown", noop_run_submission_cooldown
     )
@@ -130,7 +132,11 @@ async def test_create_run_unauthorized_includes_cors_for_mesocosm(monkeypatch):
         resp = await client.post(
             "/v1/runs",
             headers={"Origin": MESOCOSM_ORIGIN, "Content-Type": "application/json"},
-            json={"domain_id": "example", "binding_vow_version": "1", "num_episodes": 1},
+            json={
+                "domain_id": "example",
+                "binding_vow_version": "1",
+                "num_episodes": 1,
+            },
         )
     assert resp.status_code == 401
     assert resp.headers.get("access-control-allow-origin") == MESOCOSM_ORIGIN

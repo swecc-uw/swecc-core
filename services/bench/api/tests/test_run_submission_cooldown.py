@@ -23,7 +23,9 @@ class _FakeRedis:
     def __init__(self) -> None:
         self._entries: dict[str, tuple[str, float | None]] = {}
 
-    async def set(self, key: str, value: str, *, nx: bool = False, ex: int | None = None) -> bool:
+    async def set(
+        self, key: str, value: str, *, nx: bool = False, ex: int | None = None
+    ) -> bool:
         now = time.monotonic()
         self._expire_stale(now)
         if nx and key in self._entries:
@@ -45,7 +47,9 @@ class _FakeRedis:
         return max(remaining, 0)
 
     def _expire_stale(self, now: float) -> None:
-        expired = [k for k, (_, exp) in self._entries.items() if exp is not None and exp <= now]
+        expired = [
+            k for k, (_, exp) in self._entries.items() if exp is not None and exp <= now
+        ]
         for key in expired:
             del self._entries[key]
 

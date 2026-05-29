@@ -28,9 +28,13 @@ from app.routes.bench import TestBenchRequest as BenchRequest
 
 def test_dev_bench_request_rejects_silent_multi_episode_request() -> None:
     with pytest.raises(ValidationError):
-        BenchRequest(env_id="env-1", model="gemini/gemini-3.1-flash-lite", num_episodes=2)
+        BenchRequest(
+            env_id="env-1", model="gemini/gemini-3.1-flash-lite", num_episodes=2
+        )
 
 
 def test_dev_bench_request_accepts_explicit_single_episode() -> None:
-    req = BenchRequest(env_id="env-1", model="gemini/gemini-3.1-flash-lite", num_episodes=1)
+    req = BenchRequest(
+        env_id="env-1", model="gemini/gemini-3.1-flash-lite", num_episodes=1
+    )
     assert req.num_episodes == 1

@@ -5,10 +5,11 @@ import uuid
 
 from app.auth.guest_tokens import decode_guest_token
 from app.auth.principal import Anonymous, Guest, Member
-from bench.models import BenchGuestSession
 from django.utils import timezone
 from fastapi import Request
 from swecc_jwt import validate_member_token
+
+from bench.models import BenchGuestSession
 
 
 def auth_disabled() -> bool:
@@ -23,7 +24,9 @@ async def _valid_guest_session(token: str) -> str | None:
         sid = uuid.UUID(guest_id)
     except ValueError:
         return None
-    row = await BenchGuestSession.objects.filter(id=sid, expires_at__gt=timezone.now()).afirst()
+    row = await BenchGuestSession.objects.filter(
+        id=sid, expires_at__gt=timezone.now()
+    ).afirst()
     if row is None:
         return None
     return guest_id

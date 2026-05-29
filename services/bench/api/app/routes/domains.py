@@ -3,14 +3,17 @@ from typing import Any, Union
 from app.auth.deps import require_member
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
+from app.schemas import DomainListItem
 from app.services.url_safety import assert_public_http_url
 from bench_common.core.binding_vow import BindingVow
-from app.schemas import DomainListItem
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
-from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
-from fastapi import APIRouter, Depends, HTTPException
+from bench_common.storage.dev_sync import (
+    ensure_gallery_visible,
+    mirror_developer_env_from_domain,
+)
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/domains", tags=["domains"])
@@ -104,8 +107,7 @@ async def list_domains(
         include_archived=include_archived,
     )
     return [
-        DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image)
-        for r in rows
+        DomainListItem(id=r.id, name=r.name, tags=r.tags, image=r.image) for r in rows
     ]
 
 

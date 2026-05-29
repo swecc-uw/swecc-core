@@ -51,7 +51,9 @@ def sample_domain():
         scoring=ScoringConfig(
             primary_metric="score",
             higher_is_better=True,
-            metrics=[MetricDef(name="score", type="episode_reward", aggregation="mean")],
+            metrics=[
+                MetricDef(name="score", type="episode_reward", aggregation="mean")
+            ],
         ),
         status="published",
     )
@@ -91,7 +93,9 @@ async def test_archive_domain_non_owner_forbidden(api_app, sample_domain, monkey
 
 
 @pytest.mark.asyncio
-async def test_archive_domain_bench_admin_forbidden(api_app, sample_domain, monkeypatch):
+async def test_archive_domain_bench_admin_forbidden(
+    api_app, sample_domain, monkeypatch
+):
     from bench_common.storage import django_store as store
 
     monkeypatch.delenv("BENCH_AUTH_DISABLED", raising=False)
@@ -138,7 +142,9 @@ async def test_archive_legacy_string_owner_non_owner_forbidden(api_app, monkeypa
         scoring=ScoringConfig(
             primary_metric="score",
             higher_is_better=True,
-            metrics=[MetricDef(name="score", type="episode_reward", aggregation="mean")],
+            metrics=[
+                MetricDef(name="score", type="episode_reward", aggregation="mean")
+            ],
         ),
         status="published",
     )

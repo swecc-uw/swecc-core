@@ -6,9 +6,10 @@ import uuid
 
 from app.auth.access import assert_dev_env_access
 from app.auth.principal import Guest, Member
-from bench.models import EnvScope
 from bench_common.storage import database as db
 from fastapi import HTTPException
+
+from bench.models import EnvScope
 
 
 async def resolve_run_environment_id(
@@ -28,7 +29,9 @@ async def resolve_run_environment_id(
         await assert_dev_env_access(env_id, principal)
         env = await db.get_developer_environment(env_id)
         if env is None:
-            raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Environment '{env_id}' not found"
+            )
         if env.get("status") != "ready":
             raise HTTPException(
                 status_code=400,
@@ -69,14 +72,19 @@ async def resolve_run_environment_id(
             seen.add(eid)
             unique.append(env)
 
-    ready = [e for e in unique if e.get("status") == "ready" and e.get("domain_id") == domain_id]
+    ready = [
+        e
+        for e in unique
+        if e.get("status") == "ready" and e.get("domain_id") == domain_id
+    ]
     if len(ready) == 1:
         return ready[0]["id"]
     if len(ready) > 1:
         raise HTTPException(
             status_code=422,
             detail=(
-                "Multiple developer environments match this domain; " "pass env_id on POST /v1/runs"
+                "Multiple developer environments match this domain; "
+                "pass env_id on POST /v1/runs"
             ),
         )
     return None

@@ -24,7 +24,9 @@ def parse_created_before(value: str | None) -> datetime | None:
     return parsed
 
 
-async def runs_to_list_items(runs: list[Run], *, include_episode_summary: bool) -> list[RunListItem]:
+async def runs_to_list_items(
+    runs: list[Run], *, include_episode_summary: bool
+) -> list[RunListItem]:
     if not runs:
         return []
     summaries = {}

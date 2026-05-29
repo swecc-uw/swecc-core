@@ -3,11 +3,10 @@ Leaderboard routes.
 Builds rankings dynamically from completed Run records in Postgres.
 """
 
+from app.schemas import DEFAULT_LEADERBOARD_LIMIT, MAX_LEADERBOARD_LIMIT
 from bench_common.storage import database as db
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-
-from app.schemas import DEFAULT_LEADERBOARD_LIMIT, MAX_LEADERBOARD_LIMIT
 
 router = APIRouter(prefix="/v1/leaderboards", tags=["leaderboard"])
 
@@ -89,7 +88,9 @@ async def get_leaderboard(
     return await _leaderboard_for_domain(domain_id, limit=limit)
 
 
-async def _leaderboard_for_domain(domain_id: str, *, limit: int) -> list[LeaderboardEntry]:
+async def _leaderboard_for_domain(
+    domain_id: str, *, limit: int
+) -> list[LeaderboardEntry]:
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")

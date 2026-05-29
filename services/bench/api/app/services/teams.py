@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 import uuid
 
+from django.db import IntegrityError
+
 from bench.models import (
     MAX_TEAM_MEMBERS,
     BenchTeam,
@@ -10,7 +12,6 @@ from bench.models import (
     TeamRole,
     generate_join_code,
 )
-from django.db import IntegrityError
 
 
 def _slugify(name: str) -> str:
@@ -41,10 +42,14 @@ async def member_count(team_id: uuid.UUID) -> int:
 
 
 async def is_member(team_id: uuid.UUID, user_id: int) -> bool:
-    return await BenchTeamMembership.objects.filter(team_id=team_id, user_id=user_id).aexists()
+    return await BenchTeamMembership.objects.filter(
+        team_id=team_id, user_id=user_id
+    ).aexists()
 
 
-async def create_team(*, name: str, owner_user_id: int, slug: str | None = None) -> BenchTeam:
+async def create_team(
+    *, name: str, owner_user_id: int, slug: str | None = None
+) -> BenchTeam:
     resolved_slug = slug or await _unique_slug(name)
     if slug and await BenchTeam.objects.filter(slug=resolved_slug).aexists():
         raise ValueError("Team slug already exists")
@@ -105,7 +110,9 @@ async def regenerate_join_code(team_id: uuid.UUID, *, owner_user_id: int) -> str
 
 
 async def list_teams_for_user(user_id: int) -> list[dict]:
-    memberships = BenchTeamMembership.objects.filter(user_id=user_id).select_related("team")
+    memberships = BenchTeamMembership.objects.filter(user_id=user_id).select_related(
+        "team"
+    )
     out = []
     async for m in memberships:
         count = await member_count(m.team_id)
@@ -138,7 +145,9 @@ async def get_team_detail(team_id: uuid.UUID, *, viewer_user_id: int) -> dict:
         "role": membership.role if membership else None,
         "member_count": count,
         "max_members": MAX_TEAM_MEMBERS,
-        "join_code": (team.join_code if membership and membership.role == TeamRole.OWNER else None),
+        "join_code": (
+            team.join_code if membership and membership.role == TeamRole.OWNER else None
+        ),
     }
 
 
@@ -152,22 +161,30 @@ async def delete_team(team_id: uuid.UUID, *, owner_user_id: int) -> None:
 
 
 async def leave_team(team_id: uuid.UUID, *, user_id: int) -> None:
-    membership = await BenchTeamMembership.objects.filter(team_id=team_id, user_id=user_id).afirst()
+    membership = await BenchTeamMembership.objects.filter(
+        team_id=team_id, user_id=user_id
+    ).afirst()
     if membership is None:
         raise ValueError("Not a member of this team")
     if membership.role == TeamRole.OWNER:
-        raise ValueError("Owner must transfer ownership or delete the team before leaving")
+        raise ValueError(
+            "Owner must transfer ownership or delete the team before leaving"
+        )
     await membership.adelete()
 
 
-async def remove_member(team_id: uuid.UUID, *, owner_user_id: int, target_user_id: int) -> None:
+async def remove_member(
+    team_id: uuid.UUID, *, owner_user_id: int, target_user_id: int
+) -> None:
     owner = await BenchTeamMembership.objects.filter(
         team_id=team_id, user_id=owner_user_id, role=TeamRole.OWNER
     ).afirst()
     if owner is None:
         raise PermissionError("Only the team owner can remove members")
     if owner_user_id == target_user_id:
-        raise ValueError("Owner cannot remove themselves; delete team or transfer ownership")
+        raise ValueError(
+            "Owner cannot remove themselves; delete team or transfer ownership"
+        )
     deleted, _ = await BenchTeamMembership.objects.filter(
         team_id=team_id, user_id=target_user_id
     ).adelete()

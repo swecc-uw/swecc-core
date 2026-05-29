@@ -4,13 +4,14 @@ from app.auth.deps import get_optional_principal, require_member
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
 from app.services.url_safety import assert_public_http_url
-from bench.models import ActorType, Visibility
 from bench_common.core.run import AgentConfig, Episode
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import trace_store
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from bench.models import ActorType, Visibility
 
 router = APIRouter(prefix="/v1/test", tags=["test"])
 log = structlog.get_logger()
@@ -32,7 +33,9 @@ async def start_test_episode(
     domain = await db.get_domain(req.domain_id)
     if domain is None:
         log.warning("test_episode_domain_missing", domain_id=req.domain_id)
-        raise HTTPException(status_code=404, detail=f"Domain '{req.domain_id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Domain '{req.domain_id}' not found"
+        )
     if not auth_disabled() and domain.owner_id != str(member.user_id):
         log.warning(
             "test_episode_forbidden",

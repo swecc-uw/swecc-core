@@ -5,16 +5,17 @@ from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
 from app.schemas import (
     DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
     DomainActivityItem,
     DomainActivityResponse,
-    MAX_LIST_LIMIT,
 )
 from app.services.run_list import runs_to_list_items
-from bench.models import ActorType
 from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+
+from bench.models import ActorType
 
 router = APIRouter(prefix="/v1/gallery", tags=["gallery"])
 
@@ -37,13 +38,17 @@ async def list_gallery_runs(
     if domain_id:
         domain = await db.get_domain(domain_id)
         if domain is None:
-            raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Domain '{domain_id}' not found"
+            )
 
     entries: list[GalleryRunEntry] = []
     primary_key = domain.scoring.primary_metric if domain else None
     higher = domain.scoring.higher_is_better if domain else True
 
-    for run, row in await db.list_gallery_runs(domain_id=domain_id, limit=min(limit, 100)):
+    for run, row in await db.list_gallery_runs(
+        domain_id=domain_id, limit=min(limit, 100)
+    ):
         scores = run.scores or {}
         primary = None
         if primary_key and primary_key in scores:
@@ -64,7 +69,9 @@ async def list_gallery_runs(
     if primary_key:
         missing_sentinel = float("-inf") if higher else float("inf")
         entries.sort(
-            key=lambda e: (e.primary_score if e.primary_score is not None else missing_sentinel),
+            key=lambda e: (
+                e.primary_score if e.primary_score is not None else missing_sentinel
+            ),
             reverse=higher,
         )
     return entries
