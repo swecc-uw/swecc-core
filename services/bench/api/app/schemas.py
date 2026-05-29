@@ -18,6 +18,9 @@ class RunListItem(Run):
     completed_count: int = 0
     failed_count: int = 0
     avg_reward: float | None = None
+    actor_type: str | None = None
+    actor_id: str | None = None
+    actor_username: str | None = None
 
 
 class DomainListItem(BaseModel):
@@ -25,6 +28,18 @@ class DomainListItem(BaseModel):
     name: str
     tags: list[str] = []
     image: str | None = None
+
+
+class DomainEnvironmentListItem(BaseModel):
+    """Slim env row for domain detail (fetch via GET /v1/domains/{id}/environments)."""
+
+    id: str
+    name: str
+    status: str
+    domain_id: str | None
+    env_url: str | None
+    scope: str
+    team_id: str | None = None
 
 
 class DomainActivityItem(RunListItem):
@@ -42,6 +57,19 @@ class MeWithContextResponse(BaseModel):
     username: str | None = None
     guest_session_id: str | None = None
     context: dict | None = None
+
+
+class RunStatusItem(BaseModel):
+    """Lightweight run row for batch status polling."""
+
+    id: str
+    status: str
+    scores: dict[str, float] = {}
+    completed_at: str | None = None
+
+
+class RunStatusBatchResponse(BaseModel):
+    runs: dict[str, RunStatusItem]
 
 
 # Pagination caps (documented on OpenAPI query params)

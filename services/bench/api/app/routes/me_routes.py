@@ -79,6 +79,7 @@ async def me_context(member: Member = Depends(require_member)) -> MeContextRespo
 
 @router.get("/runs", response_model=list[RunListItem])
 async def my_runs(
+    domain_id: str | None = Query(None, description="Filter to a single domain"),
     team_id: str | None = Query(None),
     limit: int = Query(
         DEFAULT_LIST_LIMIT,
@@ -93,6 +94,7 @@ async def my_runs(
     created = parse_created_before(created_before)
     if isinstance(principal, Guest):
         runs = await db.list_runs(
+            domain_id=domain_id,
             actor_type=ActorType.GUEST,
             actor_id=principal.session_id,
             team_id=team_id,
@@ -102,6 +104,7 @@ async def my_runs(
         )
     else:
         runs = await db.list_runs(
+            domain_id=domain_id,
             actor_type=ActorType.MEMBER,
             actor_id=str(principal.user_id),
             team_id=team_id,
