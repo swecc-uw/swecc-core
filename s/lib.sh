@@ -242,6 +242,25 @@ swarm_dump_service_tasks() {
   docker service ps "$svc" --no-trunc 2>/dev/null || true
 }
 
+# Fail fast when Swarm cannot place tasks (common on single-node bench-sandbox deploys).
+swarm_check_service_scheduling_failure() {
+  local svc="$1"
+  local err
+
+  err="$(docker service ps "$svc" --no-trunc --format '{{.Error}}' 2>/dev/null \
+    | grep -iE 'insufficient resources|no suitable node' | head -1 || true)"
+  if [[ -n "$err" ]]; then
+    swarm_dump_service_tasks "$svc"
+    die "Service $svc cannot be scheduled: $err"
+  fi
+
+  if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
+    2>/dev/null | grep -qE 'Rejected|Failed'; then
+    swarm_dump_service_tasks "$svc"
+    die "Service $svc has failed or rejected tasks"
+  fi
+}
+
 wait_for_service() {
   local svc="$1"
   local max_attempts="${2:-30}"
@@ -250,11 +269,7 @@ wait_for_service() {
 
   log INFO "Waiting for service $svc to be healthy..."
   while [[ $attempt -lt $max_attempts ]]; do
-    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
-      | grep -qE 'Rejected|Failed'; then
-      swarm_dump_service_tasks "$svc"
-      die "Service $svc has failed or rejected tasks"
-    fi
+    swarm_check_service_scheduling_failure "$svc"
     if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
       | grep -q "Running"; then
       log INFO "Service $svc is healthy"
@@ -277,11 +292,7 @@ wait_for_service_rollout() {
 
   log INFO "Waiting for rollout of $svc (timeout ${timeout_sec}s)..."
   while [[ $elapsed -lt $timeout_sec ]]; do
-    if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
-      | grep -qE 'Rejected|Failed'; then
-      swarm_dump_service_tasks "$svc"
-      die "Service $svc rollout has failed or rejected tasks"
-    fi
+    swarm_check_service_scheduling_failure "$svc"
 
     # Use service inspect (not `docker service ls --filter name=^svc$` — anchors are
     # literal substrings in Swarm filters, so replica checks never matched).
@@ -317,6 +328,11 @@ wait_for_service_rollout() {
 
   swarm_dump_service_tasks "$svc"
   die "Service $svc rollout timed out after ${timeout_sec}s"
+}
+
+# Create a service without blocking on the first task (CLI can spin for 15+ min otherwise).
+swarm_service_create_detached() {
+  docker service create --detach "$@"
 }
 
 # Apply a service update without blocking indefinitely on swarm convergence.
