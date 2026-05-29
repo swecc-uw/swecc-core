@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # Quotas
     max_parallel_episodes: int = 10
-    max_episodes_per_run: int = 50
+    max_episodes_per_run: int = 20
     # Hard platform cap for one episode. Env authors may declare a lower
     # Binding Vow max_steps, but cloud execution never exceeds this value.
     max_episode_steps: int = 35

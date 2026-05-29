@@ -20,15 +20,15 @@ def _base_config(**overrides):
 
 
 def test_run_config_accepts_episodes_at_platform_cap(monkeypatch):
-    monkeypatch.setattr(settings, "max_episodes_per_run", 50)
-    config = _base_config(num_episodes=50)
-    assert config.num_episodes == 50
+    monkeypatch.setattr(settings, "max_episodes_per_run", 20)
+    config = _base_config(num_episodes=20)
+    assert config.num_episodes == 20
 
 
 def test_run_config_rejects_episodes_above_platform_cap(monkeypatch):
-    monkeypatch.setattr(settings, "max_episodes_per_run", 50)
-    with pytest.raises(ValidationError, match="exceeds the platform maximum \\(50\\)"):
-        _base_config(num_episodes=51)
+    monkeypatch.setattr(settings, "max_episodes_per_run", 20)
+    with pytest.raises(ValidationError, match="exceeds the platform maximum \\(20\\)"):
+        _base_config(num_episodes=21)
 
 
 def test_run_config_rejects_zero_episodes():
