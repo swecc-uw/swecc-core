@@ -273,7 +273,7 @@ wait_for_service_rollout() {
   local svc="$1"
   local timeout_sec="${2:-${DEPLOY_ROLLOUT_TIMEOUT_SEC:-600}}"
   local elapsed=0
-  local replicas
+  local running desired
 
   log INFO "Waiting for rollout of $svc (timeout ${timeout_sec}s)..."
   while [[ $elapsed -lt $timeout_sec ]]; do
@@ -283,11 +283,15 @@ wait_for_service_rollout() {
       die "Service $svc rollout has failed or rejected tasks"
     fi
 
-    replicas="$(docker service ls --filter "name=^${svc}$" --format '{{.Replicas}}' | head -1)"
-    if [[ "$replicas" =~ ^([0-9]+)/\1$ ]] && [[ "${BASH_REMATCH[1]}" -gt 0 ]]; then
+    # Use service inspect (not `docker service ls --filter name=^svc$` — anchors are
+    # literal substrings in Swarm filters, so replica checks never matched).
+    running="$(docker service inspect "$svc" --format '{{.ServiceStatus.RunningTasks}}' 2>/dev/null)" || running=""
+    desired="$(docker service inspect "$svc" --format '{{.ServiceStatus.DesiredTasks}}' 2>/dev/null)" || desired=""
+
+    if [[ -n "$running" && -n "$desired" && "$desired" -gt 0 && "$running" == "$desired" ]]; then
       if docker service ps "$svc" --filter "desired-state=running" --format "{{.CurrentState}}" \
         | grep -q "Running"; then
-        log INFO "Service $svc rollout complete ($replicas)"
+        log INFO "Service $svc rollout complete (${running}/${desired} tasks running)"
         return 0
       fi
     fi
