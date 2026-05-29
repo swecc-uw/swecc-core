@@ -15,10 +15,10 @@ from app.services import teams as team_svc
 from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
-from bench_common.core.domain import Domain, EnvironmentEndpoint
+from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
 from bench_common.core.scoring import ScoringConfig
 from bench_common.storage import database as db
-from bench_common.storage.dev_sync import ensure_gallery_visible
+from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_developer_env_from_domain
 from bench_common.utils.github import normalize_github_url
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
@@ -132,6 +132,93 @@ async def _find_existing_submission(
     return await db.get_developer_environment_by_github_repo(owner_key, github_url)
 
 
+async def _domain_from_manifest(
+    *,
+    manifest: dict[str, Any],
+    owner_id: str,
+    env_id: str,
+    sandbox_base: str,
+    name: str,
+    description: str,
+    reuse_domain_id: str | None,
+) -> Domain:
+    """Create a new domain or update an existing one in place (resubmit / retry)."""
+    existing = await db.get_domain(reuse_domain_id) if reuse_domain_id else None
+    if reuse_domain_id:
+        domain_id = reuse_domain_id
+        prior_status = existing.status if existing else "draft"
+        version_history = list(existing.version_history) if existing else []
+    else:
+        domain_id = str(uuid.uuid4())
+        prior_status = "draft"
+        version_history = []
+
+    vow_data: dict[str, Any] = {
+        **manifest["binding_vow"],
+        "id": f"{domain_id}-vow",
+        "domain_id": domain_id,
+    }
+    vow = BindingVow.model_validate(vow_data)
+    scoring = ScoringConfig.model_validate(manifest["scoring"])
+
+    if existing and vow.version != existing.binding_vow.version:
+        version_history.append(
+            VersionEntry(
+                version=vow.version,
+                date=datetime.utcnow().strftime("%Y-%m-%d"),
+                changes="Environment resubmitted from GitHub",
+            )
+        )
+
+    base = {
+        "id": domain_id,
+        "name": manifest.get("name", name),
+        "owner_id": owner_id,
+        "binding_vow": vow,
+        "endpoint": EnvironmentEndpoint(
+            mode="sandbox",
+            url=f"{sandbox_base}/envs/{env_id}",
+        ),
+        "scoring": scoring,
+        "status": prior_status,
+        "detail": manifest.get("description", description),
+        "version_history": version_history,
+    }
+    if existing:
+        return existing.model_copy(
+            update={
+                **base,
+                "tags": existing.tags,
+                "pricing": existing.pricing,
+                "image_url": existing.image_url,
+                "profile_picture_url": existing.profile_picture_url,
+                "has_gold_benchmark": existing.has_gold_benchmark,
+            }
+        )
+    return Domain(**base)
+
+
+async def _persist_domain_after_onboard(
+    domain: Domain,
+    *,
+    env_id: str,
+    github_url: str,
+) -> Domain:
+    await db.save_domain(domain)
+    if domain.status == "published":
+        await mirror_developer_env_from_domain(
+            domain,
+            env_row_id=env_id,
+            github_url=github_url,
+        )
+        return domain
+    return await ensure_gallery_visible(
+        domain,
+        env_row_id=env_id,
+        github_url=github_url,
+    )
+
+
 async def _handle_duplicate_submission(
     env: dict[str, Any],
     req: SubmitEnvironmentRequest,
@@ -153,21 +240,11 @@ async def _handle_duplicate_submission(
     env["description"] = req.description
     env["github_url"] = github_url
 
-    history = list(env.get("domain_history") or [])
-    if env.get("domain_id"):
-        history.append(
-            {
-                "domain_id": env["domain_id"],
-                "submission_version": env.get("submission_version", 1),
-                "superseded_at": datetime.utcnow().isoformat(),
-            }
-        )
+    reuse_domain_id = env.get("domain_id")
     env["submission_version"] = int(env.get("submission_version") or 1) + 1
-    env["domain_history"] = history
     env["resubmitted_at"] = datetime.utcnow().isoformat()
     env["status"] = "pending"
     env["error_message"] = None
-    env["domain_id"] = None
     env["env_url"] = None
     await db.save_developer_environment(env)
     response.status_code = 200
@@ -180,6 +257,7 @@ async def _handle_duplicate_submission(
             env["description"],
             env.get("scope", EnvScope.SOLO),
             uuid.UUID(env["team_id"]) if env.get("team_id") else None,
+            reuse_domain_id=reuse_domain_id,
         )
     )
     return env
@@ -193,8 +271,10 @@ async def _onboard_environment(
     description: str,
     scope: str = EnvScope.SOLO,
     team_id: uuid.UUID | None = None,
+    *,
+    reuse_domain_id: str | None = None,
 ) -> None:
-    """Background task: clone repo via sandbox, create Domain, mark ready."""
+    """Background task: clone repo via sandbox, create or update Domain, mark ready."""
     sandbox_base = settings.sandbox_url.rstrip("/")
 
     async def _update(status: str, **kwargs: Any) -> None:
@@ -232,33 +312,20 @@ async def _onboard_environment(
         await _update("failed", error_message=str(exc))
         return
 
-    # Build Domain from manifest
+    # Build or update Domain from manifest (resubmit keeps the same domain_id)
     try:
-        domain_id = str(uuid.uuid4())
-        vow_data: dict[str, Any] = {
-            **manifest["binding_vow"],
-            "id": f"{domain_id}-vow",
-            "domain_id": domain_id,
-        }
-        vow = BindingVow.model_validate(vow_data)
-        scoring = ScoringConfig.model_validate(manifest["scoring"])
-        domain = Domain(
-            id=domain_id,
-            name=manifest.get("name", name),
+        domain = await _domain_from_manifest(
+            manifest=manifest,
             owner_id=owner_id,
-            binding_vow=vow,
-            endpoint=EnvironmentEndpoint(
-                mode="sandbox",
-                url=f"{sandbox_base}/envs/{env_id}",
-            ),
-            scoring=scoring,
-            status="draft",
-            detail=manifest.get("description", description),
+            env_id=env_id,
+            sandbox_base=sandbox_base,
+            name=name,
+            description=description,
+            reuse_domain_id=reuse_domain_id,
         )
-        await db.save_domain(domain)
-        domain = await ensure_gallery_visible(
+        domain = await _persist_domain_after_onboard(
             domain,
-            env_row_id=env_id,
+            env_id=env_id,
             github_url=github_url,
         )
     except Exception as exc:
@@ -351,10 +418,10 @@ async def retry_environment(
     if env["status"] == "ready":
         raise HTTPException(status_code=409, detail="Environment is already ready")
 
-    # Reset to pending and re-run onboarding
+    # Reset to pending and re-run onboarding (reuse domain_id when already assigned)
+    reuse_domain_id = env.get("domain_id")
     env["status"] = "pending"
     env["error_message"] = None
-    env["domain_id"] = None
     env["env_url"] = None
     await db.save_developer_environment(env)
     asyncio.create_task(
@@ -366,6 +433,7 @@ async def retry_environment(
             env["description"],
             env.get("scope", EnvScope.SOLO),
             uuid.UUID(env["team_id"]) if env.get("team_id") else None,
+            reuse_domain_id=reuse_domain_id,
         )
     )
     return env
