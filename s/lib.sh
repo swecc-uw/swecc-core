@@ -240,13 +240,17 @@ is_main_branch() {
 # Recover services left with no running tasks (e.g. after a failed stop-first rollout).
 swarm_recover_if_no_running_tasks() {
   local svc="$1"
-  local running_ps want_replicas
+  local running_ps want_replicas running_status task_rows
 
   running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}' \
     | grep -c '^Running' || true)"
+  task_rows="$(docker service ps "$svc" --format '{{.ID}}' 2>/dev/null | wc -l | tr -d ' ')"
   want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
+  running_status="$(docker service inspect "$svc" --format '{{.ServiceStatus.RunningTasks}}' 2>/dev/null)" || running_status=""
 
-  if [[ "$running_ps" -lt "${want_replicas:-1}" ]]; then
+  if [[ "${task_rows:-0}" -eq 0 ]] \
+    || [[ -n "$running_status" && "$running_status" -lt "${want_replicas:-1}" ]] \
+    || [[ "$running_ps" -lt "${want_replicas:-1}" ]]; then
     log WARN "Service $svc has ${running_ps}/${want_replicas} running tasks; forcing reschedule"
     docker service update --force --detach "$svc" || die "Failed to force-recover service $svc"
     wait_for_service "$svc" 90
