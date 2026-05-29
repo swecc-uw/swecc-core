@@ -3,13 +3,12 @@ from __future__ import annotations
 from app.auth.access import parse_team_id
 from app.auth.deps import require_member
 from app.services import teams as team_svc
+from bench.models import MAX_TEAM_MEMBERS, EnvScope
+from bench.models import Run as RunRow
 from bench_common.core.run import Run
 from bench_common.storage.django_store import _model_from_row_data
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-
-from bench.models import MAX_TEAM_MEMBERS, EnvScope
-from bench.models import Run as RunRow
 
 router = APIRouter(prefix="/v1/teams", tags=["teams"])
 
@@ -45,9 +44,7 @@ class LeaderboardEntry(BaseModel):
 
 
 @router.post("", response_model=CreateTeamResponse, status_code=201)
-async def create_team(
-    req: CreateTeamRequest, member=Depends(require_member)
-) -> CreateTeamResponse:
+async def create_team(req: CreateTeamRequest, member=Depends(require_member)) -> CreateTeamResponse:
     team = await team_svc.create_team(
         name=req.name,
         owner_user_id=member.user_id,
@@ -126,14 +123,10 @@ async def leave_team(team_id: str, member=Depends(require_member)) -> dict:
 
 
 @router.delete("/{team_id}/members/{user_id}")
-async def remove_member(
-    team_id: str, user_id: int, member=Depends(require_member)
-) -> dict:
+async def remove_member(team_id: str, user_id: int, member=Depends(require_member)) -> dict:
     tid = parse_team_id(team_id)
     try:
-        await team_svc.remove_member(
-            tid, owner_user_id=member.user_id, target_user_id=user_id
-        )
+        await team_svc.remove_member(tid, owner_user_id=member.user_id, target_user_id=user_id)
     except (PermissionError, ValueError) as exc:
         status = 403 if isinstance(exc, PermissionError) else 404
         raise HTTPException(status_code=status, detail=str(exc)) from exc
@@ -167,16 +160,12 @@ async def team_runs(team_id: str, member=Depends(require_member)) -> list[Run]:
 
 
 @router.get("/{team_id}/leaderboard", response_model=list[LeaderboardEntry])
-async def team_leaderboard(
-    team_id: str, member=Depends(require_member), limit: int = 50
-) -> list:
+async def team_leaderboard(team_id: str, member=Depends(require_member), limit: int = 50) -> list:
     tid = parse_team_id(team_id)
     if not await team_svc.is_member(tid, member.user_id):
         raise HTTPException(status_code=403, detail="Not a member of this team")
     safe_limit = max(1, min(limit, 100))
-    rows = RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")[
-        :safe_limit
-    ]
+    rows = RunRow.objects.filter(team_id=tid, status="completed").order_by("-id")[:safe_limit]
     entries: list[LeaderboardEntry] = []
     async for row in rows:
         run = _model_from_row_data(Run, row.data)

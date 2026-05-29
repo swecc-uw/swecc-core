@@ -59,9 +59,7 @@ def _reset_bench_tables() -> None:
 def _bench_schema():
     """Run bench migrations once per session against Postgres."""
     if not POSTGRES_AVAILABLE:
-        pytest.skip(
-            "Postgres required for bench ORM integration tests (see DB_* env vars)"
-        )
+        pytest.skip("Postgres required for bench ORM integration tests (see DB_* env vars)")
     _ensure_django_ready()
     from django.core.management import call_command
 

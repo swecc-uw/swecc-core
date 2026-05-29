@@ -97,9 +97,7 @@ async def test_create_run_internal_error_includes_cors_for_mesocosm(monkeypatch)
         return Guest(session_id="guest-test")
 
     app.dependency_overrides[get_principal] = fake_principal
-    monkeypatch.setattr(
-        "app.routes.runs.assert_guest_rate_limit", noop_guest_rate_limit
-    )
+    monkeypatch.setattr("app.routes.runs.assert_guest_rate_limit", noop_guest_rate_limit)
     monkeypatch.setattr(
         "app.routes.runs.assert_run_submission_cooldown", noop_run_submission_cooldown
     )

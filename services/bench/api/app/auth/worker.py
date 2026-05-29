@@ -12,9 +12,7 @@ log = structlog.get_logger()
 
 
 def _expected_worker_token() -> str | None:
-    return os.environ.get("BENCH_WORKER_TOKEN") or os.environ.get(
-        "SWECC_BENCH_WORKER_TOKEN"
-    )
+    return os.environ.get("BENCH_WORKER_TOKEN") or os.environ.get("SWECC_BENCH_WORKER_TOKEN")
 
 
 async def require_worker(request: Request) -> None:

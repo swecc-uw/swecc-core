@@ -4,12 +4,11 @@ import uuid
 from datetime import timedelta
 
 from app.auth.guest_tokens import encode_guest_token
+from bench.models import BenchGuestSession
 from bench_common.config import settings
 from django.utils import timezone
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
-
-from bench.models import BenchGuestSession
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 

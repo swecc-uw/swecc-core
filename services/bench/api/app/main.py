@@ -183,9 +183,7 @@ async def health() -> dict:
 # ── WebSocket trace streaming ─────────────────────────────────────────────────
 
 
-_TERMINAL_EPISODE_STATUSES = frozenset(
-    {"completed", "failed", "cancelled", "timeout", "truncated"}
-)
+_TERMINAL_EPISODE_STATUSES = frozenset({"completed", "failed", "cancelled", "timeout", "truncated"})
 
 
 @app.websocket("/v1/ws/episodes/{episode_id}/trace")
