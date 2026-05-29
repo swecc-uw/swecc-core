@@ -15,12 +15,12 @@ from bench_common.env_sdk.registration import DomainConfig
 
 _REQUIRED_KEYS = ("adapter", "name", "binding_vow", "scoring")
 
-INIT_FILES_DIR = "files"
+INIT_FILES_DIR = "auxiliary"
 DEFAULT_MANIFEST = f"{INIT_FILES_DIR}/benchanything.json"
 
 
 def find_manifest_path(repo_dir: Path) -> Path | None:
-    """Return benchanything.json under repo root or ``files/``, or None."""
+    """Return benchanything.json under repo root or ``auxiliary/``, or None."""
     for rel in (Path("benchanything.json"), Path(INIT_FILES_DIR) / "benchanything.json"):
         path = (repo_dir / rel).resolve()
         if path.is_file():

@@ -195,7 +195,7 @@ def _read_manifest(repo_dir: Path) -> tuple[dict[str, Any], Path]:
     manifest_path = find_manifest_path(repo_dir)
     if manifest_path is None:
         raise RuntimeError(
-            "Repository has no benchanything.json at its root or under files/. "
+            "Repository has no benchanything.json at its root or under auxiliary/. "
             "See the environment authoring guide for the required format."
         )
     try:
