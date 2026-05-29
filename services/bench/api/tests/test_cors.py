@@ -130,7 +130,11 @@ async def test_create_run_unauthorized_includes_cors_for_mesocosm(monkeypatch):
         resp = await client.post(
             "/v1/runs",
             headers={"Origin": MESOCOSM_ORIGIN, "Content-Type": "application/json"},
-            json={"domain_id": "example", "binding_vow_version": "1", "num_episodes": 1},
+            json={
+                "domain_id": "example",
+                "binding_vow_version": "1",
+                "num_episodes": 1,
+            },
         )
     assert resp.status_code == 401
     assert resp.headers.get("access-control-allow-origin") == MESOCOSM_ORIGIN

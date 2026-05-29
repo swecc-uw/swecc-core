@@ -234,7 +234,7 @@ async def _run_full_bench_local(job_id: str) -> None:
             )
             model_results[model] = {
                 "run_id": run.id if run else None,
-                "status": "cancelled" if timed_out else (run.status if run else "failed"),
+                "status": ("cancelled" if timed_out else (run.status if run else "failed")),
                 "primary_score": primary_score,
             }
             log.info("full_bench_model_done", job_id=job_id, model=model, score=primary_score)

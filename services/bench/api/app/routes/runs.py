@@ -1,3 +1,4 @@
+import hashlib
 from datetime import timedelta
 
 from app.auth.access import assert_run_read, parse_team_id
@@ -9,11 +10,11 @@ from app.auth.policy import (
 )
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
+from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, RunListItem
 from app.services import teams as team_svc
 from app.services.run_env import resolve_run_environment_id
+from app.services.run_list import parse_created_before, runs_to_list_items
 from bench.models import ActorType
-from bench.models import DeveloperEnvironment as DevEnvRow
-from bench.models import EnvScope
 from bench.models import Run as RunRow
 from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
@@ -22,7 +23,7 @@ from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
 from bench_common.storage.trace_store import trace_store
 from django.utils import timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
@@ -40,21 +41,37 @@ def _requester_id(principal: Guest | Member) -> str:
     return f"guest:{principal.session_id}"
 
 
-@router.get("", response_model=list[Run])
-async def list_runs(
-    domain_id: str | None = None,
-    env_id: str | None = None,
-    principal=Depends(get_optional_principal),
+def _run_etag(run: Run) -> str:
+    payload = f"{run.status}|{run.completed_at}|{run.scores}"
+    return f'W/"{hashlib.sha256(payload.encode()).hexdigest()[:16]}"'
+
+
+async def _fetch_runs_for_principal(
+    principal,
+    *,
+    domain_id: str | None,
+    env_id: str | None,
+    limit: int,
+    cursor: str | None,
+    created_before,
 ) -> list[Run]:
     if auth_disabled():
-        return await db.list_runs(domain_id=domain_id, env_id=env_id)
-
+        return await db.list_runs(
+            domain_id=domain_id,
+            env_id=env_id,
+            limit=limit,
+            cursor=cursor,
+            created_before=created_before,
+        )
     if isinstance(principal, Guest):
         return await db.list_runs(
             domain_id=domain_id,
             env_id=env_id,
             actor_type=ActorType.GUEST,
             actor_id=principal.session_id,
+            limit=limit,
+            cursor=cursor,
+            created_before=created_before,
         )
     if isinstance(principal, Member):
         return await db.list_runs(
@@ -62,10 +79,71 @@ async def list_runs(
             env_id=env_id,
             actor_type=ActorType.MEMBER,
             actor_id=str(principal.user_id),
+            limit=limit,
+            cursor=cursor,
+            created_before=created_before,
         )
-    # Anonymous: only gallery-visible completed runs
-    rows = await db.list_gallery_runs(domain_id=domain_id, limit=50)
+    rows = await db.list_gallery_runs(domain_id=domain_id, limit=limit)
     return [r for r, _ in rows]
+
+
+@router.get("", response_model=list[RunListItem])
+async def list_runs(
+    domain_id: str | None = None,
+    env_id: str | None = None,
+    limit: int = Query(
+        DEFAULT_LIST_LIMIT,
+        ge=1,
+        le=MAX_LIST_LIMIT,
+        description=f"Max runs to return (default {DEFAULT_LIST_LIMIT}, max {MAX_LIST_LIMIT})",
+    ),
+    cursor: str | None = Query(
+        None,
+        description="Pagination cursor: id of the last run from the previous page",
+    ),
+    created_before: str | None = Query(
+        None,
+        description="ISO-8601 datetime; return only runs created before this instant",
+    ),
+    principal=Depends(get_optional_principal),
+) -> list[RunListItem]:
+    runs = await _fetch_runs_for_principal(
+        principal,
+        domain_id=domain_id,
+        env_id=env_id,
+        limit=limit,
+        cursor=cursor,
+        created_before=parse_created_before(created_before),
+    )
+    return await runs_to_list_items(runs, include_episode_summary=True)
+
+
+@router.get("/active", response_model=list[RunListItem])
+async def list_active_runs(
+    domain_id: str | None = None,
+    limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    principal=Depends(get_optional_principal),
+) -> list[RunListItem]:
+    """Pending/running runs only — lightweight polling surface."""
+    if auth_disabled():
+        runs = await db.list_active_runs(domain_id=domain_id, limit=limit)
+        return await runs_to_list_items(runs, include_episode_summary=False)
+
+    actor_type = actor_id = None
+    if isinstance(principal, Guest):
+        actor_type, actor_id = ActorType.GUEST, principal.session_id
+    elif isinstance(principal, Member):
+        actor_type, actor_id = ActorType.MEMBER, str(principal.user_id)
+    else:
+        return []
+
+    runs = await db.list_active_runs(
+        domain_id=domain_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        limit=limit,
+    )
+    return await runs_to_list_items(runs, include_episode_summary=False)
 
 
 @router.post("", response_model=Run, status_code=202)
@@ -151,12 +229,18 @@ async def cancel_run(
 @router.get("/{run_id}", response_model=Run)
 async def get_run(
     run_id: str,
+    request: Request,
+    response: Response,
     principal=Depends(get_optional_principal),
-) -> Run:
+) -> Run | Response:
     await assert_run_read(run_id, principal)
     run = await db.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    etag = _run_etag(run)
+    response.headers["ETag"] = etag
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
     return run
 
 
@@ -209,10 +293,6 @@ async def export_run(
     for ep in episodes:
         traces_by_episode[ep.id] = await trace_store.read(ep.id)
 
-    # Redact author + model fields when the viewer is not the owner/teammate.
-    # Public-gallery surfaces are world-readable when status=completed, so any
-    # anonymous viewer hitting this endpoint must not see raw chain-of-thought,
-    # author system prompts, or internal user IDs.
     redact_sensitive = not await _viewer_owns_run(row, principal)
 
     return build_run_export_dict(
@@ -226,9 +306,6 @@ async def export_run(
 
 
 async def _viewer_owns_run(row: RunRow, principal) -> bool:
-    """True when the viewer is the run's author or a teammate — i.e. allowed
-    to see raw prompts, raw chain-of-thought, and internal IDs.  Public-gallery
-    viewers get a redacted bundle."""
     if auth_disabled():
         return True
     if isinstance(principal, Member):

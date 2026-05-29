@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from app.auth.deps import get_optional_principal, get_principal, require_member
-from app.auth.principal import Anonymous, Guest, Member
+from app.auth.principal import Guest, Member
+from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MeWithContextResponse, RunListItem
 from app.services import teams as team_svc
+from app.services.run_list import parse_created_before, runs_to_list_items
 from bench.models import ActorType, EnvScope
 from bench.models import Run as RunRow
-from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -25,21 +26,7 @@ class MeContextResponse(BaseModel):
     teams: list[dict]
 
 
-@router.get("", response_model=MeResponse)
-async def me(principal=Depends(get_optional_principal)) -> MeResponse:
-    if isinstance(principal, Member):
-        return MeResponse(
-            type="member",
-            user_id=principal.user_id,
-            username=principal.username,
-        )
-    if isinstance(principal, Guest):
-        return MeResponse(type="guest", guest_session_id=principal.session_id)
-    return MeResponse(type="anonymous")
-
-
-@router.get("/context", response_model=MeContextResponse)
-async def me_context(member: Member = Depends(require_member)) -> MeContextResponse:
+async def _build_me_context(member: Member) -> MeContextResponse:
     solo_envs = await db.count_dev_envs(actor_id=str(member.user_id), scope=EnvScope.SOLO)
     solo_run_count = await RunRow.objects.filter(
         actor_type=ActorType.MEMBER,
@@ -58,19 +45,68 @@ async def me_context(member: Member = Depends(require_member)) -> MeContextRespo
     )
 
 
-@router.get("/runs", response_model=list[Run])
+@router.get("")
+async def me(
+    include: str | None = Query(
+        None,
+        description="Optional expansions, e.g. include=context for dashboard counts",
+    ),
+    principal=Depends(get_optional_principal),
+) -> MeResponse | MeWithContextResponse:
+    """Idempotent identity probe; safe to call on every page load."""
+    if isinstance(principal, Member):
+        base = MeResponse(
+            type="member",
+            user_id=principal.user_id,
+            username=principal.username,
+        )
+        if include == "context":
+            ctx = await _build_me_context(principal)
+            return MeWithContextResponse(
+                **base.model_dump(),
+                context=ctx.model_dump(),
+            )
+        return base
+    if isinstance(principal, Guest):
+        return MeResponse(type="guest", guest_session_id=principal.session_id)
+    return MeResponse(type="anonymous")
+
+
+@router.get("/context", response_model=MeContextResponse)
+async def me_context(member: Member = Depends(require_member)) -> MeContextResponse:
+    return await _build_me_context(member)
+
+
+@router.get("/runs", response_model=list[RunListItem])
 async def my_runs(
     team_id: str | None = Query(None),
+    limit: int = Query(
+        DEFAULT_LIST_LIMIT,
+        ge=1,
+        le=MAX_LIST_LIMIT,
+        description=f"Max runs (default {DEFAULT_LIST_LIMIT}, max {MAX_LIST_LIMIT})",
+    ),
+    cursor: str | None = Query(None, description="Id of the last run from the previous page"),
+    created_before: str | None = Query(None, description="ISO-8601 created_before filter"),
     principal=Depends(get_principal),
-) -> list[Run]:
+) -> list[RunListItem]:
+    created = parse_created_before(created_before)
     if isinstance(principal, Guest):
-        return await db.list_runs(
+        runs = await db.list_runs(
             actor_type=ActorType.GUEST,
             actor_id=principal.session_id,
             team_id=team_id,
+            limit=limit,
+            cursor=cursor,
+            created_before=created,
         )
-    return await db.list_runs(
-        actor_type=ActorType.MEMBER,
-        actor_id=str(principal.user_id),
-        team_id=team_id,
-    )
+    else:
+        runs = await db.list_runs(
+            actor_type=ActorType.MEMBER,
+            actor_id=str(principal.user_id),
+            team_id=team_id,
+            limit=limit,
+            cursor=cursor,
+            created_before=created,
+        )
+    return await runs_to_list_items(runs, include_episode_summary=True)
