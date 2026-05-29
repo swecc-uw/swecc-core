@@ -79,7 +79,5 @@ async def list_techniques() -> list[dict]:
 async def get_technique(technique_id: str) -> dict:
     t = _TECHNIQUES.get(technique_id)
     if t is None:
-        raise HTTPException(
-            status_code=404, detail=f"Technique '{technique_id}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Technique '{technique_id}' not found")
     return t

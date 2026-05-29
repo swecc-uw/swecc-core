@@ -8,9 +8,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 
-def _sample_domain(
-    domain_id: str = "usage-alignment-domain", *, status: str = "published"
-):
+def _sample_domain(domain_id: str = "usage-alignment-domain", *, status: str = "published"):
     from bench_common.core.binding_vow import BindingVow
     from bench_common.core.domain import Domain, EnvironmentEndpoint
     from bench_common.core.scoring import MetricDef, ScoringConfig
@@ -36,9 +34,7 @@ def _sample_domain(
         scoring=ScoringConfig(
             primary_metric="score",
             higher_is_better=True,
-            metrics=[
-                MetricDef(name="score", type="episode_reward", aggregation="mean")
-            ],
+            metrics=[MetricDef(name="score", type="episode_reward", aggregation="mean")],
         ),
         status=status,
     )
@@ -69,9 +65,8 @@ def _sample_run(
 
 @pytest.mark.asyncio
 async def test_get_domain_usage_stats_breakdown(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain()
     await store.save_domain(domain)
@@ -117,9 +112,8 @@ async def test_get_domain_usage_stats_breakdown(django_db):
 
 @pytest.mark.asyncio
 async def test_get_domain_usage_stats_unpublished_domain_excludes_gallery(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain(status="draft")
     run = _sample_run(domain.id, "draft-public", scores={"score": 5.0})
@@ -142,9 +136,8 @@ async def test_get_domain_usage_stats_unpublished_domain_excludes_gallery(django
 
 @pytest.mark.asyncio
 async def test_get_domain_usage_stats_does_not_query_leaderboard_table(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain()
     run = _sample_run(domain.id, "scored-run", scores={"score": 7.0})
@@ -158,9 +151,7 @@ async def test_get_domain_usage_stats_does_not_query_leaderboard_table(django_db
 
     with patch(
         "bench_common.storage.django_store.LeaderboardRow.objects.filter",
-        new=AsyncMock(
-            side_effect=AssertionError("Leaderboard table must not be queried")
-        ),
+        new=AsyncMock(side_effect=AssertionError("Leaderboard table must not be queried")),
     ):
         stats = await store.get_domain_usage_stats(domain.id)
 
@@ -170,9 +161,8 @@ async def test_get_domain_usage_stats_does_not_query_leaderboard_table(django_db
 
 @pytest.mark.asyncio
 async def test_leaderboard_excludes_unpublished_domain(api_app, django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain("leaderboard-draft-domain", status="draft")
     run = _sample_run(domain.id, "leaderboard-draft-run", scores={"score": 9.0})

@@ -17,9 +17,6 @@ from datetime import datetime
 from typing import Any, NamedTuple, TypeVar
 
 from asgiref.sync import sync_to_async
-from django.db.models import Avg, Count, FloatField, Q
-from django.db.models.fields.json import KeyTextTransform
-from django.db.models.functions import Cast
 
 # These imports require django.setup() to have been called already.
 from bench.models import ActorType
@@ -34,6 +31,9 @@ from bench.models import Run as RunRow
 from bench.models import Visibility
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
+from django.db.models import Avg, Count, FloatField, Q
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from pydantic import BaseModel

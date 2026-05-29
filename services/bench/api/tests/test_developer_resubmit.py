@@ -28,9 +28,7 @@ def _sample_manifest(*, vow_version: str = "1.0.0") -> dict:
         "scoring": {
             "primary_metric": "score",
             "higher_is_better": True,
-            "metrics": [
-                {"name": "score", "type": "episode_reward", "aggregation": "mean"}
-            ],
+            "metrics": [{"name": "score", "type": "episode_reward", "aggregation": "mean"}],
         },
     }
 
@@ -59,24 +57,18 @@ def published_domain():
         name="Minesweeper",
         owner_id="42",
         binding_vow=vow,
-        endpoint=EnvironmentEndpoint(
-            mode="sandbox", url="http://bench-sandbox:8001/envs/old"
-        ),
+        endpoint=EnvironmentEndpoint(mode="sandbox", url="http://bench-sandbox:8001/envs/old"),
         scoring=ScoringConfig(
             primary_metric="score",
             higher_is_better=True,
-            metrics=[
-                MetricDef(name="score", type="episode_reward", aggregation="mean")
-            ],
+            metrics=[MetricDef(name="score", type="episode_reward", aggregation="mean")],
         ),
         status="published",
     )
 
 
 @pytest.mark.asyncio
-async def test_domain_from_manifest_reuses_id_and_updates_vow(
-    django_db, published_domain
-):
+async def test_domain_from_manifest_reuses_id_and_updates_vow(django_db, published_domain):
     from app.routes.developer import _domain_from_manifest
     from bench_common.storage import django_store as store
 

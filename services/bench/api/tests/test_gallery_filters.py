@@ -31,9 +31,7 @@ def _sample_domain(domain_id: str = "gallery-test-domain"):
         scoring=ScoringConfig(
             primary_metric="score",
             higher_is_better=True,
-            metrics=[
-                MetricDef(name="score", type="episode_reward", aggregation="mean")
-            ],
+            metrics=[MetricDef(name="score", type="episode_reward", aggregation="mean")],
         ),
         status="published",
     )
@@ -57,9 +55,8 @@ def _sample_run(domain_id: str, run_id: str = "gallery-test-run"):
 
 @pytest.mark.asyncio
 async def test_list_gallery_runs_excludes_unpublished_domain(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain()
     run = _sample_run(domain.id)
@@ -80,11 +77,10 @@ async def test_list_gallery_runs_excludes_unpublished_domain(django_db):
 
 @pytest.mark.asyncio
 async def test_archive_domain_gallery_demotes_public_runs(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
     from bench.models import Run as RunRow
     from bench.models import Visibility
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain("archive-domain")
     run = _sample_run(domain.id, run_id="archive-run")

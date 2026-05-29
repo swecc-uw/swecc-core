@@ -16,7 +16,4 @@ def test_fastapi_root_path_prefixes_openapi_url_in_swagger():
     """Document expected FastAPI behavior used by bench-api (root_path=ORCH_GATEWAY_PREFIX)."""
     app = FastAPI(root_path="/bench")
     client = TestClient(app)
-    assert (
-        _openapi_url_from_swagger_html(client.get("/docs").text)
-        == "/bench/openapi.json"
-    )
+    assert _openapi_url_from_swagger_html(client.get("/docs").text) == "/bench/openapi.json"

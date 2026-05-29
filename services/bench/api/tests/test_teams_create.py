@@ -20,7 +20,6 @@ async def test_create_team_persists_owner_membership(django_db):
 @pytest.mark.asyncio
 async def test_delete_team_owner_removes_team(django_db):
     from app.services import teams as team_svc
-
     from bench.models import BenchTeam
 
     team = await team_svc.create_team(name="delete-me", owner_user_id=42)

@@ -18,9 +18,7 @@ def assert_can_manage_teams(principal: Principal) -> Member:
     if auth_disabled():
         return Member(user_id=0, username="local", groups=("is_authenticated",))
     if not isinstance(principal, Member):
-        raise HTTPException(
-            status_code=403, detail="SWECC member account required for teams"
-        )
+        raise HTTPException(status_code=403, detail="SWECC member account required for teams")
     return principal
 
 
