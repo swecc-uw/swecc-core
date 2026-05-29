@@ -198,7 +198,7 @@ get_resource_limits() {
   local svc="$1"
   case "$svc" in
     bench-sandbox)
-      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=8G CPU_RESERVE=0.2 MEMORY_RESERVE=2G"
+      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
       ;;
     server)
       echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
