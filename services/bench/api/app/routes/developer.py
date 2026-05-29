@@ -11,6 +11,7 @@ from app.auth.access import assert_dev_env_access, parse_team_id
 from app.auth.deps import get_optional_principal, require_member
 from app.auth.principal import Member
 from app.auth.resolve import auth_disabled
+from app.schemas import RunListItem
 from app.services import teams as team_svc
 from bench.models import ActorType, EnvScope
 from bench_common.config import settings
@@ -397,10 +398,19 @@ async def list_environments(
 @router.get("/environments/{env_id}/runs")
 async def list_environment_runs(
     env_id: str,
+    limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="Recent runs for this environment (default 10, max 50)",
+    ),
     member: Member = Depends(require_member),
-) -> list:
+) -> list[RunListItem]:
+    from app.services.run_list import runs_to_list_items
+
     await assert_dev_env_access(env_id, member)
-    return await db.list_runs(env_id=env_id, limit=50)
+    runs = await db.list_runs(env_id=env_id, limit=limit)
+    return await runs_to_list_items(runs, include_episode_summary=True)
 
 
 @router.post("/environments/{env_id}/retry", response_model=DeveloperEnvironment)
