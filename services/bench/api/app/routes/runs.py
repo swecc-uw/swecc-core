@@ -20,6 +20,9 @@ from app.schemas import (
 from app.services import teams as team_svc
 from app.services.run_env import resolve_run_environment_id
 from app.services.run_list import parse_created_before, runs_to_list_items
+from bench.models import ActorType
+from bench.models import Run as RunRow
+from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
 from bench_common.export.replay import build_run_export_dict
 from bench_common.orchestrator import service as orchestrator
@@ -29,10 +32,6 @@ from bench_common.storage.trace_store import trace_store
 from django.utils import timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
-
-from bench.models import ActorType
-from bench.models import Run as RunRow
-from bench.models import Visibility
 
 router = APIRouter(prefix="/v1/runs", tags=["runs"])
 

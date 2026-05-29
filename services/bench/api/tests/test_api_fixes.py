@@ -58,9 +58,8 @@ def _sample_run(domain_id: str, run_id: str, *, status: str = "completed"):
 
 @pytest.mark.asyncio
 async def test_list_runs_honors_limit_in_db(django_db, api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain()
@@ -99,9 +98,8 @@ async def test_list_domains_slim_by_default(django_db, api_app):
 
 @pytest.mark.asyncio
 async def test_leaderboard_respects_limit(django_db, api_app):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain("lb-limit-domain")
     await store.save_domain(domain)
@@ -124,9 +122,8 @@ async def test_leaderboard_respects_limit(django_db, api_app):
 
 @pytest.mark.asyncio
 async def test_leaderboard_batch(django_db, api_app):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
 
     d1 = _sample_domain("batch-d1")
     d2 = _sample_domain("batch-d2")
@@ -154,9 +151,8 @@ async def test_leaderboard_batch(django_db, api_app):
 
 @pytest.mark.asyncio
 async def test_gallery_activity_feed_merges(django_db, api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain("activity-domain")
@@ -186,9 +182,8 @@ async def test_gallery_activity_feed_merges(django_db, api_app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_domain_runs_mine_and_gallery(django_db, api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain("split-runs-domain")
@@ -221,9 +216,8 @@ async def test_domain_runs_mine_and_gallery(django_db, api_app, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_batch_run_status_respects_access(django_db, api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
     domain = _sample_domain("status-batch-domain")

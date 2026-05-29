@@ -72,9 +72,8 @@ def _sample_run(domain_id: str, run_id: str, *, env_id: str):
 async def test_list_runs_env_id_includes_all_team_members_runs(api_app, monkeypatch):
     from app.services import run_list as run_list_svc
     from app.services import teams as team_svc
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, EnvScope
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
 
@@ -134,9 +133,8 @@ async def test_list_runs_env_id_includes_all_team_members_runs(api_app, monkeypa
 
 @pytest.mark.asyncio
 async def test_list_runs_without_env_id_still_filters_to_caller(api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain("solo-filter-domain")
@@ -165,9 +163,8 @@ async def test_list_runs_without_env_id_still_filters_to_caller(api_app, monkeyp
 
 @pytest.mark.asyncio
 async def test_list_runs_env_id_forbidden_without_access(api_app, monkeypatch):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, EnvScope
+    from bench_common.storage import django_store as store
 
     monkeypatch.setenv("BENCH_AUTH_DISABLED", "0")
     domain = _sample_domain("forbidden-env-domain")

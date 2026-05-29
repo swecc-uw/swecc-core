@@ -14,6 +14,7 @@ from app.auth.resolve import auth_disabled
 from app.schemas import RunListItem
 from app.services import teams as team_svc
 from app.services.domain_environments import list_environments_for_domain_member
+from bench.models import ActorType, EnvScope
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow
 from bench_common.core.domain import Domain, EnvironmentEndpoint, VersionEntry
@@ -23,8 +24,6 @@ from bench_common.storage.dev_sync import ensure_gallery_visible, mirror_develop
 from bench_common.utils.github import normalize_github_url
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
-
-from bench.models import ActorType, EnvScope
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/v1/developer", tags=["developer"])

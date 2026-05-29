@@ -5,10 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.auth.principal import Guest, Member, Principal
+from bench.models import ActorType
 from bench_common.core.run import Run
 from bench_common.storage import database as db
-
-from bench.models import ActorType
 
 
 async def list_mine_runs_for_domain(

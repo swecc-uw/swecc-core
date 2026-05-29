@@ -6,9 +6,8 @@ from typing import Any
 
 from app.auth.principal import Member
 from app.services import teams as team_svc
-from bench_common.storage import database as db
-
 from bench.models import EnvScope
+from bench_common.storage import database as db
 
 
 async def list_environments_for_domain_member(

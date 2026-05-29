@@ -6,12 +6,11 @@ from datetime import datetime
 
 from app.schemas import RunListItem
 from app.services.actor_usernames import member_usernames_by_id
+from bench.models import ActorType
+from bench.models import Run as RunRow
 from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import HTTPException
-
-from bench.models import ActorType
-from bench.models import Run as RunRow
 
 
 def parse_created_before(value: str | None) -> datetime | None:
