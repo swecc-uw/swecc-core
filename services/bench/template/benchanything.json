@@ -3,6 +3,7 @@
   "adapter": "adapter.py",
   "name": "My Environment",
   "description": "One-sentence description of what this benchmark evaluates.",
+  "tags": ["tier1"],
 
   "binding_vow": {
     "version": "1.0.0",

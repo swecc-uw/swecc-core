@@ -18,12 +18,14 @@ _TEMPLATE = (
 def test_load_manifest_template() -> None:
     manifest = load_manifest(_TEMPLATE)
     assert manifest["name"] == "My Environment"
+    assert manifest["tags"] == ["tier1"]
     assert "binding_vow" in manifest
 
 
 def test_domain_config_from_manifest() -> None:
     cfg = domain_config_from_manifest(_TEMPLATE, env_url="http://localhost:9999")
     assert cfg.id == "my-env"
+    assert cfg.tags == ["tier1"]
     assert cfg.endpoint.url == "http://localhost:9999"
     assert cfg.binding_vow.version == "1.0.0"
     cfg.binding_vow.validate()
