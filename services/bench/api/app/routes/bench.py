@@ -161,7 +161,7 @@ async def full_bench(
 
 
 async def _run_full_bench_local(job_id: str) -> None:
-    """Local full-bench runner — iterates all 5 models sequentially."""
+    """Local full-bench runner — iterates all canonical models sequentially."""
     job = await db.get_bench_job(job_id)
     if job is None:
         return
