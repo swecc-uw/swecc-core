@@ -1,9 +1,8 @@
 import asyncio
 import logging
-import os
-import urllib
 
 import pika
+from bench_common.mq.amqp_url import build_amqp_url_from_env
 from pika.adapters.asyncio_connection import AsyncioConnection
 
 logger = logging.getLogger(__name__)
@@ -64,13 +63,7 @@ class ConnectionManager:
         self._connected = False
 
     def _build_amqp_url(self) -> str:
-        user = os.getenv("BENCH_RABBIT_USER", "guest")
-        password = os.getenv("BENCH_RABBIT_PASS", "guest")
-        host = os.getenv("RABBIT_HOST", "rabbitmq-host")
-        port = os.getenv("RABBIT_PORT", "5672")
-        vhost = os.getenv("RABBIT_VHOST", "/")
-        vhost = urllib.parse.quote(vhost, safe="")
-        return f"amqp://{user}:{password}@{host}:{port}/{vhost}"
+        return build_amqp_url_from_env()
 
     def on_connection_closed(self, connection, reason):
         self._connected = False

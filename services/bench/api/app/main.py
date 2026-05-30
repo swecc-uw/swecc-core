@@ -66,16 +66,26 @@ GATEWAY_PREFIX = bench_settings.gateway_prefix
 
 # Mesocosm (Vite) and other SPAs send Bearer JWT + credentials; wildcard origin
 # is invalid with allow_credentials=True and breaks error responses in browsers.
-CORS_ORIGINS = [
-    o.strip()
-    for o in os.environ.get(
-        "BENCH_CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,"
-        "http://localhost:3000,http://127.0.0.1:3000,"
-        "https://mesocosm.swecc.org,https://swecc-uw.github.io",
-    ).split(",")
-    if o.strip()
-]
+_DEFAULT_CORS_ORIGINS_CSV = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "http://localhost:3000,http://127.0.0.1:3000,"
+    "https://mesocosm.swecc.org,https://swecc-uw.github.io"
+)
+
+
+def cors_origins_from_env(raw: str | None = None) -> list[str]:
+    """Parse BENCH_CORS_ORIGINS; blank/unset falls back to dev + Mesocosm defaults.
+
+    Swarm can retain an empty duplicate BENCH_CORS_ORIGINS that overrides Python's
+    os.environ.get default — treat whitespace-only as unset.
+    """
+    if raw is None:
+        raw = os.environ.get("BENCH_CORS_ORIGINS", "")
+    value = (raw or "").strip() or _DEFAULT_CORS_ORIGINS_CSV
+    return [o.strip() for o in value.split(",") if o.strip()]
+
+
+CORS_ORIGINS = cors_origins_from_env()
 
 
 def _public_path(path: str) -> str:

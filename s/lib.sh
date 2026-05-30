@@ -59,31 +59,70 @@ swarm_config_to_env_file() {
   [[ -s "$out_file" ]] || die "Docker config $config_name is empty"
 }
 
-# docker service update --env-file is unreliable on existing services; always use --env-add per line.
+# docker service update --env-file is unreliable on existing services; use --env-rm/--env-add.
 swarm_service_update_with_env() {
   local svc="$1"
   local env_file="$2"
   shift 2
   local -a update_args=("$@")
+  local -a env_rm=()
   local -a env_add=()
-  local line
+  local deduped line key dup_count i
 
   [[ -f "$env_file" ]] || die "env file not found: $env_file"
 
+  deduped="$(mktemp)"
+  python3 - "$env_file" >"$deduped" <<'PY'
+import sys
+from pathlib import Path
+
+order: list[str] = []
+vals: dict[str, str] = {}
+for raw in Path(sys.argv[1]).read_text().splitlines():
+    line = raw.rstrip("\r").strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, _, value = line.partition("=")
+    if key not in vals:
+        order.append(key)
+    vals[key] = value
+for key in order:
+    print(f"{key}={vals[key]}")
+PY
+
   while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line%$'\r'}"
-    local trimmed="${line#"${line%%[![:space:]]*}"}"
-    [[ -z "$trimmed" ]] && continue
-    [[ "$trimmed" == \#* ]] && continue
     [[ "$line" != *"="* ]] && continue
+    key="${line%%=*}"
+    dup_count="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
+      | grep -c "^${key}=" || true)"
+    for ((i = 0; i < dup_count; i++)); do
+      env_rm+=(--env-rm "$key")
+    done
     env_add+=(--env-add "$line")
-  done <"$env_file"
+  done <"$deduped"
+  rm -f "$deduped"
 
   if [[ ${#env_add[@]} -eq 0 ]]; then
     die "no env entries in $env_file"
   fi
 
-  swarm_service_update_detached "$svc" "${update_args[@]}" "${env_add[@]}"
+  swarm_service_update_detached "$svc" "${update_args[@]}" "${env_rm[@]}" "${env_add[@]}"
+}
+
+# Remove every duplicate KEY entry, then set KEY=value (separate updates per key).
+swarm_force_env_var() {
+  local svc="$1"
+  local key="$2"
+  local value="$3"
+
+  while docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
+    | grep -q "^${key}="; do
+    docker service update --detach --env-rm "$key" "$svc" \
+      || die "Failed to --env-rm ${key} on ${svc}"
+  done
+
+  docker service update --detach --env-add "${key}=${value}" "$svc" \
+    || die "Failed to --env-add ${key} on ${svc}"
 }
 
 # Apply Django migrations before rolling the server service. Uses the same
