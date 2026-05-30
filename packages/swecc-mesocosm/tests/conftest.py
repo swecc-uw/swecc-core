@@ -74,6 +74,7 @@ def bench_client_with_handler(
     client = BenchClient(base_url=base_url)
     client._client = httpx.AsyncClient(
         base_url=client._base,
+        headers=client._client.headers,
         transport=httpx.MockTransport(handler),
     )
     return client
