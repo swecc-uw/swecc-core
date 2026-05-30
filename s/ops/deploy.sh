@@ -134,11 +134,6 @@ deploy_service() {
       fi
       log INFO "Refreshing BENCH_CORS_ORIGINS on ${svc} (strip duplicates, set for Mesocosm CORS)"
       swarm_force_env_var "$svc" "BENCH_CORS_ORIGINS" "$cors_val"
-
-      # TEMPORARY (PR #66): disable RabbitMQ until BENCH_RABBIT_PASS URL encoding is fixed.
-      # bench-api crash-loops on startup (ValueError parsing AMQP port). Remove after creds fix.
-      log INFO "TEMP: forcing ORCH_MQ_ENABLED=0 on ${svc} (skip broken RabbitMQ startup)"
-      swarm_force_env_var "$svc" "ORCH_MQ_ENABLED" "0"
     fi
 
     wait_for_service_rollout "$svc"
