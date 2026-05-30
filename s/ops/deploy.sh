@@ -61,6 +61,12 @@ deploy_service() {
   log INFO "Preparing environment from Docker config"
   swarm_config_to_env_file "$config_name" "/tmp/${svc}_env.tmp"
 
+  if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]]; then
+    if ! grep -qE '^ANTHROPIC_API_KEY=.+$' "/tmp/${svc}_env.tmp"; then
+      log WARN "ANTHROPIC_API_KEY missing or empty in ${config_name}; Anthropic LLM will fail until config is fixed"
+    fi
+  fi
+
   if [[ "$svc" == "server" ]]; then
     swarm_run_django_migrate "$image" "/tmp/${svc}_env.tmp"
   fi
@@ -102,6 +108,18 @@ deploy_service() {
     )
     swarm_service_update_with_env "$svc" "/tmp/${svc}_env.tmp" "${update_args[@]}" \
       || die "Failed to update service $svc"
+
+    if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]]; then
+      local llm_key llm_line llm_val
+      for llm_key in ANTHROPIC_API_KEY OPENAI_API_KEY; do
+        llm_line="$(grep -E "^${llm_key}=" "/tmp/${svc}_env.tmp" | tail -1 || true)"
+        [[ -z "$llm_line" ]] && continue
+        llm_val="${llm_line#${llm_key}=}"
+        [[ -z "$llm_val" ]] && continue
+        log INFO "Refreshing ${llm_key} on ${svc} (strip duplicates, set from config)"
+        swarm_force_env_var "$svc" "$llm_key" "$llm_val"
+      done
+    fi
 
     wait_for_service_rollout "$svc"
   else
