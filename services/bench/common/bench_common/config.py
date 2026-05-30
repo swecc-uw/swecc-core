@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Sandbox — where cloned envs run (overridden to http://sandbox:8001 in Docker)
     sandbox_url: str = "http://localhost:8001"
 
-    # Canonical model set for "full bench" runs (exactly 5 models).
+    # Canonical model set for "full bench" runs (Anthropic, OpenAI, Gemini).
     # NOTE: Google AI Studio is served by LiteLLM under the `gemini/` prefix
     # (using GEMINI_API_KEY / GOOGLE_API_KEY). The `google/` prefix is NOT a
     # valid LiteLLM provider — use `vertex_ai/` for Vertex AI instead.
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     # EC2 worker — public API URL the worker uses to poll for bench jobs
     worker_api_url: str = ""
 
-    # Full bench — episodes per model when running a full 5-model bench
+    # Full bench — episodes per model when running a full bench across all models
     full_bench_episodes_per_model: int = 5
 
     # Auth — guest demo runs (comma-separated domain IDs; empty = all domains allowed)

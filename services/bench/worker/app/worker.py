@@ -1,6 +1,6 @@
 """
 EC2 Bench Worker — polls the BenchAnything API for queued full-bench jobs,
-clones the env repo, runs all five canonical models against it, and reports
+clones the env repo, runs all canonical models against it, and reports
 results back.
 
 Required environment variables:

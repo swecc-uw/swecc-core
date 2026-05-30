@@ -37,7 +37,7 @@ docker compose up bench-api bench-sandbox
 docker compose --profile bench-worker up   # optional worker
 ```
 
-Add API keys to root `.env` (see `.env.example` — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`).
+Add API keys to root `.env` (see `.env.example` — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`).
 
 ### RabbitMQ (production / scaled local)
 

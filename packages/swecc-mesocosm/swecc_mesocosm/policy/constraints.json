@@ -14,9 +14,7 @@
     "openai/",
     "anthropic/",
     "google/",
-    "gemini/",
-    "deepseek/",
-    "xai/"
+    "gemini/"
   ],
   "scoring_source_allowed": ["terminal", "episode_reward"]
 }
