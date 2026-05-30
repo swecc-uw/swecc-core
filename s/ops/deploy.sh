@@ -59,7 +59,7 @@ deploy_service() {
   docker pull "$image"
 
   log INFO "Preparing environment from Docker config"
-  docker config inspect "$config_name" --format pretty | grep -e '=' > /tmp/${svc}_env.tmp || true
+  swarm_config_to_env_file "$config_name" "/tmp/${svc}_env.tmp"
 
   if [[ "$svc" == "server" ]]; then
     swarm_run_django_migrate "$image" "/tmp/${svc}_env.tmp"
@@ -100,14 +100,8 @@ deploy_service() {
       --update-failure-action rollback
       --with-registry-auth
     )
-    if docker service update --help 2>&1 | grep -q -- '--env-file'; then
-      update_args+=(--env-file /tmp/${svc}_env.tmp)
-      swarm_service_update_detached "$svc" "${update_args[@]}" \
-        || die "Failed to update service $svc"
-    else
-      swarm_service_update_with_env "$svc" /tmp/${svc}_env.tmp "${update_args[@]}" \
-        || die "Failed to update service $svc"
-    fi
+    swarm_service_update_with_env "$svc" "/tmp/${svc}_env.tmp" "${update_args[@]}" \
+      || die "Failed to update service $svc"
 
     wait_for_service_rollout "$svc"
   else
