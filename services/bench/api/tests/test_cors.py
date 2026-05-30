@@ -1,10 +1,21 @@
 """CORS: Mesocosm SPA must receive Access-Control-Allow-Origin on success and errors."""
 
 import pytest
-from app.main import app
+from app.main import app, cors_origins_from_env
 from httpx import ASGITransport, AsyncClient
 
 MESOCOSM_ORIGIN = "https://mesocosm.swecc.org"
+
+
+def test_cors_origins_from_env_blank_uses_defaults():
+    origins = cors_origins_from_env("")
+    assert MESOCOSM_ORIGIN in origins
+    assert "http://localhost:5173" in origins
+
+
+def test_cors_origins_from_env_whitespace_uses_defaults():
+    origins = cors_origins_from_env("   ")
+    assert MESOCOSM_ORIGIN in origins
 
 
 @pytest.mark.asyncio

@@ -121,6 +121,21 @@ deploy_service() {
       done
     fi
 
+    if [[ "$svc" == "bench-api" ]]; then
+      local cors_line cors_val
+      cors_line="$(grep -E '^BENCH_CORS_ORIGINS=' "/tmp/${svc}_env.tmp" | tail -1 || true)"
+      cors_val=""
+      if [[ -n "$cors_line" ]]; then
+        cors_val="${cors_line#BENCH_CORS_ORIGINS=}"
+      fi
+      if [[ -z "$cors_val" ]]; then
+        cors_val="https://mesocosm.swecc.org,https://swecc-uw.github.io"
+        log INFO "BENCH_CORS_ORIGINS missing or empty in ${config_name}; using prod Mesocosm default"
+      fi
+      log INFO "Refreshing BENCH_CORS_ORIGINS on ${svc} (strip duplicates, set for Mesocosm CORS)"
+      swarm_force_env_var "$svc" "BENCH_CORS_ORIGINS" "$cors_val"
+    fi
+
     wait_for_service_rollout "$svc"
   else
     log INFO "Creating production service: $svc"
