@@ -48,8 +48,18 @@ swarm_env_config() {
   esac
 }
 
-# docker service update does not support --env-file (only create does on some versions).
-# Apply KEY=value lines via --env-add (updates existing keys).
+swarm_config_to_env_file() {
+  local config_name="$1"
+  local out_file="$2"
+  require_cmd docker
+  require_cmd python3
+  docker config inspect "$config_name" --format '{{json .Spec.Data}}' \
+    | python3 -c "import sys, json, base64; sys.stdout.buffer.write(base64.b64decode(json.load(sys.stdin)))" \
+    >"$out_file" || die "Failed to read Docker config: $config_name"
+  [[ -s "$out_file" ]] || die "Docker config $config_name is empty"
+}
+
+# docker service update --env-file is unreliable on existing services; always use --env-add per line.
 swarm_service_update_with_env() {
   local svc="$1"
   local env_file="$2"
