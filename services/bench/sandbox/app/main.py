@@ -38,6 +38,7 @@ def _forward_headers(headers: dict[str, str]) -> dict[str, str]:
 class CloneRequest(BaseModel):
     env_id: str
     github_url: str
+    subfolder: str = ""
 
 
 @app.get("/health")
@@ -57,7 +58,7 @@ async def port_usage() -> dict[str, int]:
 @app.post("/clone")
 async def clone(req: CloneRequest) -> dict[str, Any]:
     try:
-        return await manager.clone_and_start(req.env_id, req.github_url)
+        return await manager.clone_and_start(req.env_id, req.github_url, req.subfolder)
     except ManifestError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except EnvironmentStartupError as exc:

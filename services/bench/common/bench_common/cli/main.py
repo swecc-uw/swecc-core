@@ -381,6 +381,8 @@ def _cmd_env_submit(args: argparse.Namespace) -> None:
         "description": args.description or "",
         "github_url": args.github_url,
     }
+    if args.subfolder:
+        payload["subfolder"] = args.subfolder
     if team_id:
         payload["team_id"] = team_id
     with _require_member_session(args) as session:
@@ -786,6 +788,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--name", required=True)
     p.add_argument("--github-url", required=True)
     p.add_argument("--description", default="")
+    p.add_argument("--subfolder", default="", help="Subdirectory within the repo containing the env (default: repo root)")
     p.add_argument("--team", default=None)
     p.add_argument("--solo", action="store_true")
     p.set_defaults(func=_cmd_env_submit)

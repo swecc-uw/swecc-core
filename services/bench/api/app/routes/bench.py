@@ -138,6 +138,7 @@ async def full_bench(
         env_id=env_id,
         domain_id=env.get("domain_id"),
         github_url=env["github_url"],
+        subfolder=env.get("subfolder", ""),
     )
 
     # Run locally in background (EC2 worker will claim queued jobs in production)

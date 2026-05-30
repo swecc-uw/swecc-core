@@ -125,11 +125,12 @@ async def run_full_bench(job: dict[str, Any]) -> dict[str, Any]:
     """Clone the env repo, start the adapter, bench all models, return scores."""
     github_url = job["github_url"]
     domain_id = job.get("domain_id")
+    subfolder = job.get("subfolder", "")
 
     work_dir = Path(tempfile.mkdtemp(prefix=f"bench_{job['id']}_"))
     log.info(f"working in {work_dir}")
     try:
-        repo_dir = await _clone_repo(github_url, work_dir)
+        repo_dir = await _clone_repo(github_url, work_dir, subfolder)
         manifest, manifest_path = _read_manifest(repo_dir)
         await _install_deps(repo_dir)
 
@@ -149,7 +150,7 @@ async def run_full_bench(job: dict[str, Any]) -> dict[str, Any]:
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
-async def _clone_repo(github_url: str, work_dir: Path) -> Path:
+async def _clone_repo(github_url: str, work_dir: Path, subfolder: str = "") -> Path:
     github_url = validate_github_url(github_url)
     repo_dir = work_dir / "repo"
     log.info(f"cloning {github_url}")
@@ -168,6 +169,22 @@ async def _clone_repo(github_url: str, work_dir: Path) -> Path:
         raise RuntimeError(
             f"git clone failed for {github_url!r}:\n{result.stderr.decode().strip()}"
         )
+
+    if subfolder:
+        sub_path = repo_dir / subfolder
+        if not sub_path.is_dir():
+            raise RuntimeError(
+                f"Subfolder '{subfolder}' not found in cloned repository at {github_url!r}"
+            )
+        tmp = repo_dir / "__swecc_subfolder__"
+        shutil.move(str(sub_path), str(tmp))
+        for item in list(repo_dir.iterdir()):
+            if item != tmp:
+                (shutil.rmtree if item.is_dir() else item.unlink)(item)
+        for item in tmp.iterdir():
+            shutil.move(str(item), str(repo_dir / item.name))
+        shutil.rmtree(tmp)
+
     return repo_dir
 
 

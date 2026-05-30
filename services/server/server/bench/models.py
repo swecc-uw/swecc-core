@@ -231,6 +231,7 @@ class DeveloperEnvironment(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(default="", blank=True)
     github_url = models.URLField(max_length=512)
+    subfolder = models.CharField(max_length=512, default="", blank=True)
     status = models.CharField(
         max_length=64,
         choices=DeveloperEnvironmentStatus.choices,
@@ -283,6 +284,7 @@ class BenchJob(models.Model):
         related_name="bench_jobs",
     )
     github_url = models.URLField(max_length=512)
+    subfolder = models.CharField(max_length=512, default="", blank=True)
     status = models.CharField(
         max_length=64,
         choices=BenchJobStatus.choices,

@@ -117,8 +117,12 @@ async def _terminate_process_tree(
         log.warning("env_subprocess_unresponsive_after_sigkill", pid=pid)
 
 
-async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
+async def clone_and_start(env_id: str, github_url: str, subfolder: str = "") -> dict[str, Any]:
     """Clone a repo, install its deps, start adapter server, return env URL.
+
+    If *subfolder* is set, the repo is cloned normally and then the contents
+    of that subdirectory are moved to the repo root so that the rest of the
+    pipeline (manifest search, adapter start, etc.) works unchanged.
 
     All failure paths return the port to the pool and rmtree the env_dir
     so a broken submission can't leak ports (eventually exhausting the
@@ -195,6 +199,22 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
             raise EnvironmentStartupError(
                 f"git clone failed for {github_url!r}:\n{stderr.decode().strip()}"
             )
+
+        # Move subfolder contents to root if requested
+        if subfolder:
+            sub_path = env_dir / subfolder
+            if not sub_path.is_dir():
+                raise ManifestError(
+                    f"Subfolder '{subfolder}' not found in cloned repository at {github_url!r}"
+                )
+            tmp = env_dir / "__swecc_subfolder__"
+            shutil.move(str(sub_path), str(tmp))
+            for item in list(env_dir.iterdir()):
+                if item != tmp:
+                    (shutil.rmtree if item.is_dir() else item.unlink)(item)
+            for item in tmp.iterdir():
+                shutil.move(str(item), str(env_dir / item.name))
+            shutil.rmtree(tmp)
 
         # Validate manifest
         from bench_common.env_sdk.manifest import find_manifest_path

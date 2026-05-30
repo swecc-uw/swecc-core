@@ -31,6 +31,7 @@ class SubmitEnvironmentRequest(BaseModel):
     name: str
     description: str = ""
     github_url: str
+    subfolder: str = ""
     team_id: str | None = None
     owner_id: str | None = None  # ignored when auth enabled
 
@@ -41,6 +42,7 @@ class DeveloperEnvironment(BaseModel):
     name: str
     description: str
     github_url: str
+    subfolder: str = ""
     status: str
     domain_id: str | None
     env_url: str | None
@@ -89,6 +91,7 @@ async def submit_environment(
         "name": req.name,
         "description": req.description,
         "github_url": github_url,
+        "subfolder": req.subfolder,
         "status": "pending",
         "domain_id": None,
         "env_url": None,
@@ -107,7 +110,8 @@ async def submit_environment(
     response.status_code = 201
     asyncio.create_task(
         _onboard_environment(
-            env_id, github_url, owner_key, req.name, req.description, scope, team_uuid
+            env_id, github_url, owner_key, req.name, req.description, scope, team_uuid,
+            subfolder=req.subfolder,
         )
     )
     return env
@@ -239,6 +243,7 @@ async def _handle_duplicate_submission(
     env["name"] = req.name
     env["description"] = req.description
     env["github_url"] = github_url
+    env["subfolder"] = req.subfolder
 
     reuse_domain_id = env.get("domain_id")
     env["submission_version"] = int(env.get("submission_version") or 1) + 1
@@ -258,6 +263,7 @@ async def _handle_duplicate_submission(
             env.get("scope", EnvScope.SOLO),
             uuid.UUID(env["team_id"]) if env.get("team_id") else None,
             reuse_domain_id=reuse_domain_id,
+            subfolder=req.subfolder,
         )
     )
     return env
@@ -273,6 +279,7 @@ async def _onboard_environment(
     team_id: uuid.UUID | None = None,
     *,
     reuse_domain_id: str | None = None,
+    subfolder: str = "",
 ) -> None:
     """Background task: clone repo via sandbox, create or update Domain, mark ready."""
     sandbox_base = settings.sandbox_url.rstrip("/")
@@ -292,7 +299,7 @@ async def _onboard_environment(
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 f"{sandbox_base}/clone",
-                json={"env_id": env_id, "github_url": github_url},
+                json={"env_id": env_id, "github_url": github_url, "subfolder": subfolder},
             )
         if resp.status_code != 200:
             detail = resp.json().get("detail", resp.text)

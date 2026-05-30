@@ -340,6 +340,7 @@ async def save_developer_environment(env: dict[str, Any]) -> None:
         "name": env["name"],
         "description": env.get("description", ""),
         "github_url": env["github_url"],
+        "subfolder": env.get("subfolder", ""),
         "status": env.get("status", "pending"),
         "domain_id": env.get("domain_id"),
         "env_url": env.get("env_url"),
@@ -417,6 +418,7 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
         "name": row.name,
         "description": row.description,
         "github_url": row.github_url,
+        "subfolder": row.subfolder,
         "status": row.status,
         "domain_id": row.domain_id,
         "env_url": row.env_url,
@@ -494,13 +496,14 @@ async def get_domain_usage_stats(domain_id: str) -> dict[str, Any]:
 # ── Bench Jobs ────────────────────────────────────────────────────────────────
 
 
-async def create_bench_job(env_id: str, domain_id: str | None, github_url: str) -> dict[str, Any]:
+async def create_bench_job(env_id: str, domain_id: str | None, github_url: str, subfolder: str = "") -> dict[str, Any]:
     job_id = str(uuid.uuid4())
     row = await BenchJobRow.objects.acreate(
         id=job_id,
         environment_id=env_id,
         domain_id=domain_id,
         github_url=github_url,
+        subfolder=subfolder,
         status="queued",
     )
     return _bench_job_to_dict(row)
@@ -571,6 +574,7 @@ def _bench_job_to_dict(row: BenchJobRow) -> dict[str, Any]:
         "env_id": row.environment_id,
         "domain_id": row.domain_id,
         "github_url": row.github_url,
+        "subfolder": row.subfolder,
         "status": row.status,
         "model_results": results,
         "claimed_at": _iso_dt(row.claimed_at),
