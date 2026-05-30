@@ -1,0 +1,156 @@
+# TEMPORARY (PR #66): read-only bench-api diagnostics on prod Swarm.
+# Remove after bench-api 502 is resolved. workflow_dispatch only — no auto-runs.
+name: Debug Bench API (temporary PR 66)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: debug-bench-api
+  cancel-in-progress: false
+
+env:
+  SERVICE: bench-api
+  NETWORK: prod_swecc-network
+  GATEWAY_HOST: swecc_stack_bench-api
+
+jobs:
+  diagnose:
+    name: Inspect bench-api on Swarm
+    timeout-minutes: 10
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Collect diagnostics
+        run: |
+          set -uo pipefail
+          OUT="/tmp/bench-api-debug.txt"
+          SVC="${{ env.SERVICE }}"
+          NET="${{ env.NETWORK }}"
+          GW="${{ env.GATEWAY_HOST }}"
+
+          section() { printf '\n=== %s ===\n\n' "$1"; }
+
+          redact_env_lines() {
+            while IFS= read -r line || [[ -n "$line" ]]; do
+              [[ -z "$line" || "$line" != *"="* ]] && continue
+              key="${line%%=*}"
+              val="${line#*=}"
+              case "$key" in
+                BENCH_CORS_ORIGINS|ORCH_*|DB_HOST|DB_NAME|DB_PORT|DB_USER|DJANGO_SETTINGS_MODULE|ORCH_GATEWAY_PREFIX)
+                  printf '%s\n' "$line"
+                  ;;
+                *_KEY|*_SECRET|*_PASSWORD|*_TOKEN|JWT_*)
+                  if [[ -z "$val" ]]; then
+                    printf '%s=<empty>\n' "$key"
+                  else
+                    printf '%s=[REDACTED len=%s]\n' "$key" "${#val}"
+                  fi
+                  ;;
+                *)
+                  if [[ ${#val} -gt 40 ]]; then
+                    printf '%s=[REDACTED len=%s]\n' "$key" "${#val}"
+                  else
+                    printf '%s\n' "$line"
+                  fi
+                  ;;
+              esac
+            done
+          }
+
+          {
+            section "Meta"
+            date -u
+            hostname || true
+            echo "branch=${{ github.ref_name }} sha=${{ github.sha }}"
+
+            section "Swarm node"
+            docker info --format 'Swarm: {{.Swarm.LocalNodeState}}' 2>&1 || true
+
+            section "Bench services"
+            docker service ls --filter name=bench 2>&1 || true
+
+            section "Service summary"
+            if docker service inspect "$SVC" &>/dev/null; then
+              docker service inspect "$SVC" --format 'Image: {{.Spec.TaskTemplate.ContainerSpec.Image}}'
+              docker service inspect "$SVC" --format 'UpdateStatus: {{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}none{{end}}'
+              docker service inspect "$SVC" --format 'Networks: {{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}'
+            else
+              echo "ERROR: service $SVC not found"
+            fi
+
+            section "Task status (docker service ps --no-trunc)"
+            docker service ps "$SVC" --no-trunc 2>&1 || true
+
+            section "Duplicate env keys on service (count > 1)"
+            docker service inspect "$SVC" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
+              | cut -d= -f1 | sort | uniq -c | awk '$1 > 1 {print}' || true
+
+            section "Service env (CORS / LLM keys redacted)"
+            docker service inspect "$SVC" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
+              | sort | redact_env_lines || true
+
+            section "Docker config bench-api_env (keys only / redacted)"
+            if docker config inspect bench-api_env &>/dev/null; then
+              docker config inspect bench-api_env --format '{{json .Spec.Data}}' \
+                | python3 -c "
+          import json, sys, base64
+          raw = json.load(sys.stdin)
+          text = base64.b64decode(raw).decode('utf-8', errors='replace')
+          for line in text.splitlines():
+              line = line.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              k, _, v = line.partition('=')
+              if k == 'BENCH_CORS_ORIGINS' or k.startswith('ORCH_') or k.startswith('DB_'):
+                  print(line if len(v) <= 120 else f'{k}=<{len(v)} chars>')
+              elif any(x in k for x in ('KEY', 'SECRET', 'PASSWORD', 'TOKEN')):
+                  print(f'{k}=<{len(v)} chars>' if v else f'{k}=<empty>')
+          "
+            else
+              echo "bench-api_env config not found"
+            fi
+
+            section "Recent logs (tail 120, truncated to 400 lines)"
+            docker service logs "$SVC" --tail 120 2>&1 | tail -n 400 || true
+
+            section "Internal health via prod_swecc-network"
+            if docker run --rm --network "$NET" curlimages/curl:8.5.0 \
+              -sS -m 15 -o /tmp/bench-health.body -w 'HTTP %{http_code}\n' \
+              "http://${GW}:8000/health" 2>&1; then
+              echo "body (first 500 bytes):"
+              head -c 500 /tmp/bench-health.body 2>/dev/null || true
+              echo
+            else
+              echo "Internal curl to http://${GW}:8000/health failed"
+            fi
+
+            section "Internal preflight OPTIONS /v1/domains"
+            docker run --rm --network "$NET" curlimages/curl:8.5.0 \
+              -sS -m 15 -D - -o /dev/null -X OPTIONS \
+              -H 'Origin: https://mesocosm.swecc.org' \
+              -H 'Access-Control-Request-Method: GET' \
+              "http://${GW}:8000/v1/domains" 2>&1 | head -n 25 || true
+
+            section "Gateway alias resolution (getent)"
+            getent hosts "$GW" 2>&1 || echo "getent failed for $GW"
+
+          } 2>&1 | tee "$OUT"
+
+          # Short summary for the Actions UI
+          {
+            echo "## bench-api debug summary"
+            echo ""
+            echo '```'
+            grep -E '^(=== |ERROR:|HTTP |Image:|UpdateStatus:)' "$OUT" | head -n 40 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic log
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-api-debug-${{ github.run_id }}
+          path: /tmp/bench-api-debug.txt
+          retention-days: 7
+          if-no-files-found: error
