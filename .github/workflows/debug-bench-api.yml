@@ -1,9 +1,14 @@
 # TEMPORARY (PR #66): read-only bench-api diagnostics on prod Swarm.
-# Remove after bench-api 502 is resolved. workflow_dispatch only — no auto-runs.
+# Remove after bench-api 502 is resolved.
+# Note: workflow_dispatch requires this file on default branch (main). Until merged,
+# opening/updating PR #67 also triggers a diagnostic run via pull_request below.
 name: Debug Bench API (temporary PR 66)
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/debug-bench-api.yml'
 
 concurrency:
   group: debug-bench-api
