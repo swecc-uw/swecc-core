@@ -47,9 +47,9 @@ class Settings(BaseSettings):
     max_tokens_per_episode: int = 100_000
 
     # Mark stranded "running"/"pending"/"cloning" rows as failed on bench-api
-    # startup. SAFE ONLY FOR SINGLE-REPLICA DEPLOYS: with rolling restarts the
-    # new replica would otherwise mark the old replica's live work as failed.
-    # Disabled automatically when mq_enabled (multi-replica safe dispatch).
+    # startup. With multiple bench-api replicas and rolling restarts, a new
+    # replica could mark another replica's live work as failed — set
+    # ORCH_ENABLE_ORPHAN_REAPER=false when horizontally scaling bench-api.
     enable_orphan_reaper: bool = True
 
     # RabbitMQ — enqueue runs/jobs for horizontal workers (see services/bench/README.md).
@@ -92,8 +92,6 @@ class Settings(BaseSettings):
         prefetch_raw = os.environ.get("BENCH_MQ_PREFETCH", "").strip()
         if prefetch_raw:
             object.__setattr__(self, "mq_prefetch", max(1, int(prefetch_raw)))
-        if self.mq_enabled:
-            object.__setattr__(self, "enable_orphan_reaper", False)
         return self
 
     @model_validator(mode="after")

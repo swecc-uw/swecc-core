@@ -111,7 +111,8 @@ async def lifespan(app: FastAPI):
             consume_runs=bench_settings.mq_consume_runs,
             prefetch=bench_settings.mq_prefetch,
         )
-    elif bench_settings.enable_orphan_reaper:
+
+    if bench_settings.enable_orphan_reaper:
         reaped = await reap_orphan_work()
         if any(reaped.values()):
             log.warning("orphan_work_reaped", **reaped)
