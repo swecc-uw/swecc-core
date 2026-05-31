@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from typing import Any, cast
 
 import httpx
+from bench_common.auth.credentials import load_credentials
 from swecc_mesocosm.settings import settings
 
 
@@ -14,13 +16,29 @@ def _json_list_dict(data: Any) -> list[dict[str, Any]]:
     return cast(list[dict[str, Any]], data)
 
 
+def _auth_headers(token: str | None = None) -> dict[str, str]:
+    if os.environ.get("BENCH_AUTH_DISABLED", "").lower() in ("1", "true", "yes"):
+        return {}
+
+    token = (
+        token
+        or os.environ.get("SWECC_BENCH_TOKEN")
+        or os.environ.get("SWECC_BENCH_GUEST_TOKEN")
+        or (load_credentials() or {}).get("token")
+    )
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
 class BenchClient:
     """Async HTTP client for bench-api (`/v1/...`)."""
 
-    def __init__(self, base_url: str | None = None) -> None:
+    def __init__(self, base_url: str | None = None, token: str | None = None) -> None:
         self._base = (base_url or settings.base_url).rstrip("/")
         self._client = httpx.AsyncClient(
             base_url=self._base,
+            headers=_auth_headers(token),
             timeout=httpx.Timeout(settings.request_timeout_s),
         )
 
