@@ -142,6 +142,60 @@ PY
   swarm_resume_xtrace
 }
 
+# When bench-api_env / bench-worker_env include Rabbit creds, turn on ORCH MQ (config
+# often has BENCH_RABBIT_* but omits ORCH_MQ_ENABLED=1).
+swarm_apply_bench_mq_if_configured() {
+  local svc="$1"
+  local env_file="$2"
+  local rabbit_user rabbit_pass mq_val
+
+  [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]] || return 0
+  [[ -f "$env_file" ]] || return 0
+
+  rabbit_user="$(grep -E '^BENCH_RABBIT_USER=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+  rabbit_pass="$(grep -E '^BENCH_RABBIT_PASS=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+  if [[ -z "$rabbit_user" || -z "$rabbit_pass" ]]; then
+    log WARN "BENCH_RABBIT_* missing in env file for ${svc}; ORCH MQ stays off"
+    return 0
+  fi
+
+  mq_val="$(grep -E '^ORCH_MQ_ENABLED=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+  case "${mq_val,,}" in
+    1|true|yes|on) ;;
+    *)
+      log INFO "Enabling ORCH MQ on ${svc} (BENCH_RABBIT_* present; ORCH_MQ_ENABLED was '${mq_val:-unset}')"
+      swarm_force_env_var "$svc" "ORCH_MQ_ENABLED" "1"
+      ;;
+  esac
+
+  if [[ "$svc" == "bench-worker" ]]; then
+    local consume_val
+    consume_val="$(grep -E '^ORCH_MQ_CONSUME_RUNS=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+    case "${consume_val,,}" in
+      1|true|yes|on) ;;
+      *)
+        log INFO "Enabling run consumption on bench-worker (ORCH_MQ_CONSUME_RUNS=1)"
+        swarm_force_env_var "$svc" "ORCH_MQ_CONSUME_RUNS" "1"
+        ;;
+    esac
+  fi
+}
+
+# Curl bench-api /health from inside prod_swecc-network (gateway DNS name).
+swarm_curl_bench_health() {
+  local alias url code body
+  alias="$(swarm_gateway_dns bench-api)"
+  url="http://${alias}:8000/health"
+  log INFO "Probing ${url} from a one-shot container on ${SWARM_NETWORK}"
+  body="$(docker run --rm --network "$SWARM_NETWORK" curlimages/curl:8.5.0 \
+    -fsS --max-time 15 "$url" 2>&1)" || {
+    log ERROR "Bench health probe failed for ${url}"
+    return 1
+  }
+  log INFO "Bench health OK: ${body}"
+  return 0
+}
+
 # Remove every duplicate KEY entry, then set KEY=value (separate updates per key).
 swarm_force_env_var() {
   local svc="$1"

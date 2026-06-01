@@ -104,6 +104,12 @@ deploy_bench_stack() {
   swarm_run_django_migrate "$server_image" "$server_env"
   rm -f "$server_env"
 
+  chmod +x "${REPO_ROOT}/s/ops/rabbitmq.sh"
+  for svc in bench-api bench-worker; do
+    log INFO "=== RabbitMQ user for $svc ==="
+    "${REPO_ROOT}/s/ops/rabbitmq.sh" create-user "$svc" || log WARN "RabbitMQ create-user $svc failed (continuing)"
+  done
+
   for svc in "${BENCH_SERVICES[@]}"; do
     log INFO "=== deploy $svc (fresh create after rm) ==="
     "$deploy" "$svc"
@@ -125,10 +131,20 @@ main() {
   pull_bench_images
   deploy_bench_stack
 
+  log INFO "Ensuring gateway aliases and probing bench-api /health"
+  for svc in "${BENCH_SERVICES[@]}"; do
+    swarm_ensure_gateway_alias "$svc"
+  done
+  sleep 5
+  swarm_curl_bench_health || die "bench-api not healthy on ${SWARM_NETWORK} after scratch redeploy"
+
   log INFO "Done. Check tasks:"
   for svc in "${BENCH_SERVICES[@]}"; do
     echo "--- $svc ---"
     docker service ps "$svc" --no-trunc 2>/dev/null || echo "(missing)"
+    if [[ "$svc" == "bench-api" ]]; then
+      docker service logs "$svc" --tail 40 2>&1 || true
+    fi
   done
 }
 

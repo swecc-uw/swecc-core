@@ -5,12 +5,37 @@ on:
 
 jobs:
   inspect:
-    name: Inspect bench queues on swarm
+    name: Bench prod diagnose (MQ + services)
+    timeout-minutes: 15
     runs-on:
       group: EC2
       labels: [self-hosted, deploy]
     steps:
-      - name: List bench queue depths
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Swarm bench service status
+        run: |
+          set -euo pipefail
+          for svc in bench-api bench-worker bench-sandbox; do
+            echo "========== $svc =========="
+            docker service ps "$svc" --no-trunc 2>/dev/null || echo "(service missing)"
+            echo "--- MQ-related env ---"
+            docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
+              | grep -E '^(ORCH_MQ_|BENCH_RABBIT|RABBIT_HOST|RABBIT_PORT|RABBIT_VHOST)=' || echo "(none)"
+          done
+          echo "========== bench-api logs (last 60) =========="
+          docker service logs bench-api --tail 60 2>&1 || true
+
+      - name: Internal bench-api health (swarm DNS)
+        run: |
+          set -euo pipefail
+          chmod +x ./s/lib.sh
+          # shellcheck source=s/lib.sh
+          . ./s/lib.sh
+          swarm_curl_bench_health
+
+      - name: List RabbitMQ queues
         run: |
           set -euo pipefail
           container_id=$(docker ps --filter "name=rabbitmq-host" --format "{{.ID}}" | head -1)
