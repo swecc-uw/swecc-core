@@ -11,11 +11,12 @@ from app.schemas import (
 )
 from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import runs_to_list_items
-from bench.models import ActorType
 from bench_common.core.domain import Domain
 from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from bench.models import ActorType
 
 router = APIRouter(prefix="/v1/gallery", tags=["gallery"])
 
@@ -71,8 +72,7 @@ async def list_gallery_runs(
 
     pairs = await db.list_gallery_runs(domain_id=domain_id, limit=limit, cursor=cursor)
     entries = [
-        _gallery_run_entry(run, row_actor_type=row.actor_type, domain=domain)
-        for run, row in pairs
+        _gallery_run_entry(run, row_actor_type=row.actor_type, domain=domain) for run, row in pairs
     ]
     return GalleryRunsResponse(items=entries, next_cursor=_next_cursor(entries, limit=limit))
 
@@ -123,12 +123,8 @@ async def domain_activity_feed(
     m_cap = mine_limit if mine_limit is not None else max(1, limit // 2)
     g_cap = gallery_limit if gallery_limit is not None else max(1, limit - m_cap)
 
-    mine_runs = await list_mine_runs_for_domain(
-        domain_id, principal, limit=m_cap, cursor=cursor
-    )
-    gallery_runs = await list_gallery_runs_for_domain(
-        domain_id, limit=g_cap, cursor=cursor
-    )
+    mine_runs = await list_mine_runs_for_domain(domain_id, principal, limit=m_cap, cursor=cursor)
+    gallery_runs = await list_gallery_runs_for_domain(domain_id, limit=g_cap, cursor=cursor)
 
     mine_items = [
         DomainActivityItem(**item.model_dump(), source="mine")
