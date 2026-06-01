@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from types import SimpleNamespace
 
@@ -11,7 +12,10 @@ from bench_common.runtime.env_client import Observation
 from bench_common.runtime.inference import (
     InferenceRouter,
     StructuredOutputError,
+    _provider_action_schema,
     _resolve_google_api_key,
+    _resolve_structured_action,
+    _uses_action_envelope,
     normalize_model_id,
 )
 
@@ -116,23 +120,144 @@ def _response_with_content(content: str):
     )
 
 
-def test_structured_openai_requires_action_field() -> None:
+JENGA_ACTION_SPACE = {
+    "type": "json",
+    "schema_ref": (
+        '{"type":"object","properties":{"context":{"type":"string"},'
+        '"action":{"type":"object","properties":{"type":{"const":"Push"},'
+        '"layer":{"type":"integer"}},"required":["type","layer"],'
+        '"additionalProperties":false}},"required":["context","action"],'
+        '"additionalProperties":false}'
+    ),
+    "description": "context plus Push action",
+}
+
+
+def test_provider_action_schema_skips_wrap_for_json_envelope() -> None:
+    vow = _vow_for_action_space(JENGA_ACTION_SPACE)
+    schema = _provider_action_schema(vow.action_space)
+
+    assert _uses_action_envelope(vow.action_space)
+    assert "context" in schema["properties"]
+    assert schema["required"] == ["context", "action"]
+    assert set(schema["properties"]) == {"context", "action"}
+
+
+def test_provider_action_schema_wraps_discrete_space() -> None:
+    vow = _vow_for_action_space({"type": "discrete", "enum_values": ["A", "B"]})
+    schema = _provider_action_schema(vow.action_space)
+
+    assert schema == {
+        "type": "object",
+        "properties": {"action": {"type": "string", "enum": ["A", "B"]}},
+        "required": ["action"],
+    }
+
+
+def test_structured_openai_rejects_incomplete_json_envelope() -> None:
     router = InferenceRouter()
+    vow = _vow_for_action_space(JENGA_ACTION_SPACE)
 
-    with pytest.raises(StructuredOutputError, match="action"):
-        router._extract_structured_action(_response_with_content('{"move": "left"}'), "openai")
+    with pytest.raises(StructuredOutputError, match="missing required envelope fields"):
+        router._extract_structured_action(
+            _response_with_content('{"context": "thinking only"}'),
+            "openai",
+            vow.action_space,
+        )
 
 
-def test_structured_openai_extracts_action_field() -> None:
+def test_structured_openai_accepts_json_envelope_at_top_level() -> None:
     router = InferenceRouter()
+    vow = _vow_for_action_space(JENGA_ACTION_SPACE)
+    payload = {
+        "context": "Block looks loose on layer 3.",
+        "action": {"type": "Push", "layer": 3},
+    }
+
+    action, reasoning = router._extract_structured_action(
+        _response_with_content(json.dumps(payload)),
+        "openai",
+        vow.action_space,
+    )
+
+    assert action == payload
+    assert reasoning == "Block looks loose on layer 3."
+
+
+def test_structured_openai_accepts_platform_wrapped_json_envelope() -> None:
+    router = InferenceRouter()
+    vow = _vow_for_action_space(JENGA_ACTION_SPACE)
+    inner = {
+        "context": "Switching camera.",
+        "action": {"type": "Push", "layer": 2},
+    }
+
+    action, reasoning = router._extract_structured_action(
+        _response_with_content(json.dumps({"action": inner})),
+        "gemini",
+        vow.action_space,
+    )
+
+    assert action == inner
+    assert reasoning == "Switching camera."
+
+
+def test_structured_openai_extracts_wrapped_simple_json_action() -> None:
+    router = InferenceRouter()
+    vow = _vow_for_action_space({"type": "json"})
 
     action, reasoning = router._extract_structured_action(
         _response_with_content('{"action": {"move": "left"}}'),
         "openai",
+        vow.action_space,
     )
 
     assert action == {"move": "left"}
     assert reasoning == ""
+
+
+def test_structured_openai_accepts_unwrapped_json_object() -> None:
+    router = InferenceRouter()
+    vow = _vow_for_action_space({"type": "json"})
+
+    action, reasoning = router._extract_structured_action(
+        _response_with_content('{"move": "left", "power": 2}'),
+        "openai",
+        vow.action_space,
+    )
+
+    assert action == {"move": "left", "power": 2}
+    assert reasoning == ""
+
+
+def test_structured_openai_accepts_composite_fields_at_top_level() -> None:
+    router = InferenceRouter()
+    vow = _vow_for_action_space(
+        {
+            "fields": {
+                "direction": {"type": "discrete", "enum_values": ["left", "right"]},
+                "magnitude": {"type": "continuous"},
+            }
+        }
+    )
+
+    action, reasoning = router._extract_structured_action(
+        _response_with_content('{"direction": "right", "magnitude": 0.75}'),
+        "openai",
+        vow.action_space,
+    )
+
+    assert action == {"direction": "right", "magnitude": 0.75}
+    assert reasoning == ""
+
+
+def test_resolve_structured_action_discrete_from_wrapped_payload() -> None:
+    space = _vow_for_action_space(
+        {"type": "discrete", "enum_values": ["A", "B", "C"]}
+    ).action_space
+
+    action, _ = _resolve_structured_action({"action": "B"}, space)
+    assert action == "B"
 
 
 def test_image_content_preserves_data_url_for_openai() -> None:
