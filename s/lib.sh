@@ -342,7 +342,10 @@ docker_image() {
 get_resource_limits() {
   local svc="$1"
   case "$svc" in
-    bench-sandbox|bench-api|server)
+    bench-sandbox)
+      echo "CPU_LIMIT=0.5 MEMORY_LIMIT=1G CPU_RESERVE=0.2 MEMORY_RESERVE=512M"
+      ;;
+    bench-api|server)
       echo "CPU_LIMIT=0.5 MEMORY_LIMIT=512M CPU_RESERVE=0.2 MEMORY_RESERVE=256M"
       ;;
     scheduler)
