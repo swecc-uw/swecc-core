@@ -1,0 +1,58 @@
+# TEMPORARY — delete after bench/server deploys are healthy again.
+# Diagnose (and optionally recover) stuck Docker Swarm service updates on EC2.
+name: Debug Swarm Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Comma-separated services (default bench stack)"
+        required: false
+        default: "server,bench-api,bench-sandbox,bench-worker"
+      recover:
+        description: "Run recovery (rollback + force) on stuck updates"
+        required: false
+        type: boolean
+        default: false
+      redeploy:
+        description: "After recover, run deploy.sh for each service (slow; needs hub auth)"
+        required: false
+        type: boolean
+        default: false
+
+# Do not overlap with production deploy jobs on the same service.
+concurrency:
+  group: deploy-debug-swarm
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnose / recover Swarm
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run swarm deploy diagnostics
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          chmod +x ./s/ops/swarm-deploy-diagnose.sh ./s/lib.sh
+          args=()
+          if [[ "${{ inputs.recover }}" == "true" ]]; then
+            args+=(--recover)
+          fi
+          if [[ "${{ inputs.redeploy }}" == "true" ]]; then
+            args+=(--redeploy)
+          fi
+          IFS=',' read -ra svc_list <<< "${{ inputs.services }}"
+          for s in "${svc_list[@]}"; do
+            s="${s// /}"
+            [[ -n "$s" ]] && args+=("$s")
+          done
+          echo "Running: ./s/ops/swarm-deploy-diagnose.sh ${args[*]}"
+          ./s/ops/swarm-deploy-diagnose.sh "${args[@]}"
