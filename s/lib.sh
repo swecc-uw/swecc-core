@@ -380,6 +380,34 @@ is_main_branch() {
   [[ "$branch" == "main" || "$branch" == "master" ]]
 }
 
+# True when the swarm has a single worker (typical prod EC2); start-first rollouts
+# need 2× memory reservations and often fail with "insufficient resources".
+swarm_is_single_node() {
+  local nodes
+  nodes="$(docker node ls -q 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${nodes:-0}" -le 1 ]]
+}
+
+# stop-first on single-node for memory-heavy services; start-first elsewhere when safe.
+swarm_update_order_for_service() {
+  local svc="$1"
+  case "$svc" in
+    bench-sandbox|server)
+      echo "stop-first"
+      ;;
+    bench-api|bench-worker)
+      if swarm_is_single_node; then
+        echo "stop-first"
+      else
+        echo "start-first"
+      fi
+      ;;
+    *)
+      echo "start-first"
+      ;;
+  esac
+}
+
 # Recover services left with no running tasks (e.g. after a failed stop-first rollout).
 swarm_recover_if_no_running_tasks() {
   local svc="$1"
@@ -451,6 +479,21 @@ swarm_check_service_scheduling_failure() {
   fi
 }
 
+# After a failed start-first rollout, Swarm can leave extra running tasks on one node.
+swarm_reconcile_extra_running_tasks() {
+  local svc="$1"
+  local running_ps want_replicas
+  running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}' \
+    | grep -c '^Running' || true)"
+  want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
+  if [[ "$running_ps" -gt "$want_replicas" ]]; then
+    log WARN "Service $svc has ${running_ps} running tasks (want ${want_replicas}); forcing reconcile"
+    docker service update --force --update-order stop-first --detach "$svc" \
+      || die "Failed to reconcile extra tasks on $svc"
+    wait_for_service "$svc" 120
+  fi
+}
+
 wait_for_service() {
   local svc="$1"
   local max_attempts="${2:-30}"
@@ -507,7 +550,7 @@ wait_for_service_rollout() {
     running_ps="$(docker service ps "$svc" --filter "desired-state=running" --format '{{.CurrentState}}' \
       | grep -c '^Running' || true)"
     want_replicas="$(docker service inspect "$svc" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}1{{end}}' 2>/dev/null)" || want_replicas="1"
-    if [[ "$running_ps" -ge "$want_replicas" && "$running_ps" -gt 0 ]]; then
+    if [[ "$running_ps" -eq "$want_replicas" && "$running_ps" -gt 0 ]]; then
       log INFO "Service $svc rollout complete (${running_ps}/${want_replicas} tasks running via service ps)"
       return 0
     fi

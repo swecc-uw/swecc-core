@@ -79,6 +79,7 @@ deploy_service() {
 
   if [[ "$service_exists" == "true" ]]; then
     swarm_recover_if_no_running_tasks "$svc"
+    swarm_reconcile_extra_running_tasks "$svc"
 
     if docker service inspect "$staging_name" &>/dev/null; then
       log WARN "Removing leftover staging service: $staging_name"
@@ -90,10 +91,8 @@ deploy_service() {
       done
     fi
 
-    local update_order="start-first"
-    if [[ "$svc" == "bench-sandbox" || "$svc" == "server" ]]; then
-      update_order="stop-first"
-    fi
+    local update_order
+    update_order="$(swarm_update_order_for_service "$svc")"
     log INFO "Rolling update $svc (${update_order}; staging skipped on single-node swarm)"
     local -a update_args=(
       --image "$image"
@@ -163,7 +162,7 @@ deploy_service() {
       --reserve-cpu "$CPU_RESERVE" \
       --reserve-memory "$MEMORY_RESERVE" \
       --restart-condition any \
-      --update-order start-first \
+      --update-order "$(swarm_update_order_for_service "$svc")" \
       --update-delay 30s \
       --with-registry-auth \
       "${extra_args[@]}" \
