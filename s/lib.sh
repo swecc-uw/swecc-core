@@ -59,6 +59,24 @@ swarm_config_to_env_file() {
   [[ -s "$out_file" ]] || die "Docker config $config_name is empty"
 }
 
+# [[ ... ]] && cmd under set -e exits when the test is false — use if/fi instead.
+_SWARM_XTRACE_SUSPENDED=0
+
+swarm_suspend_xtrace() {
+  _SWARM_XTRACE_SUSPENDED=0
+  if [[ $- == *x* ]]; then
+    _SWARM_XTRACE_SUSPENDED=1
+    set +x
+  fi
+}
+
+swarm_resume_xtrace() {
+  if [[ "${_SWARM_XTRACE_SUSPENDED}" -eq 1 ]]; then
+    set -x
+    _SWARM_XTRACE_SUSPENDED=0
+  fi
+}
+
 # docker service update --env-file is unreliable on existing services; use --env-rm/--env-add.
 # Swarm services accumulate duplicate env keys across deploys; strip before re-adding.
 swarm_service_update_with_env() {
@@ -94,8 +112,7 @@ PY
 
   current_env="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
 
-  local trace_was_on=0
-  [[ $- == *x* ]] && trace_was_on=1 && set +x
+  swarm_suspend_xtrace
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" != *"="* ]] && continue
     key="${line%%=*}"
@@ -108,7 +125,7 @@ PY
   rm -f "$deduped"
 
   if [[ ${#env_add[@]} -eq 0 ]]; then
-    [[ $trace_was_on -eq 1 ]] && set -x
+    swarm_resume_xtrace
     die "no env entries in $env_file"
   fi
 
@@ -122,7 +139,7 @@ PY
   if ((${#env_add[@]} > 0)); then
     swarm_service_update_flags_in_batches "$svc" "${env_add[@]}"
   fi
-  [[ $trace_was_on -eq 1 ]] && set -x
+  swarm_resume_xtrace
 }
 
 # Remove every duplicate KEY entry, then set KEY=value (separate updates per key).
@@ -130,9 +147,7 @@ swarm_force_env_var() {
   local svc="$1"
   local key="$2"
   local value="$3"
-  local trace_was_on=0
-
-  [[ $- == *x* ]] && trace_was_on=1 && set +x
+  swarm_suspend_xtrace
   while docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
     | grep -q "^${key}="; do
     docker service update --detach --env-rm "$key" "$svc" \
@@ -141,7 +156,7 @@ swarm_force_env_var() {
 
   docker service update --detach --env-add "${key}=${value}" "$svc" \
     || die "Failed to --env-add ${key} on ${svc}"
-  [[ $trace_was_on -eq 1 ]] && set -x
+  swarm_resume_xtrace
 }
 
 # Apply Django migrations before rolling the server service. Uses the same
@@ -458,7 +473,9 @@ swarm_service_update_detached() {
 
   while [[ $attempt -le $max_attempts ]]; do
     if out="$(docker service update --detach "$@" "$svc" 2>&1)"; then
-      [[ "${DEBUG:-}" == "1" && -n "$out" ]] && log DEBUG "$out"
+      if [[ "${DEBUG:-}" == "1" && -n "$out" ]]; then
+        log DEBUG "$out"
+      fi
       return 0
     fi
     if [[ "$out" == *"update is in progress"* ]] \

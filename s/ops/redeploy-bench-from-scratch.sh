@@ -7,7 +7,7 @@
 #   git checkout fix/deploy-swarm-env-batch   # or main after merge
 #   ./s/ops/redeploy-bench-from-scratch.sh
 #
-# Order: server (migrate + schema) → bench-api → bench-worker → bench-sandbox
+# Order: migrate (one-shot, no server roll) → bench-api → bench-worker → bench-sandbox
 #
 # Requires: docker swarm manager, Docker configs bench-api_env, bench-sandbox_env,
 #           bench-worker_env (or bench-api_env), server_env on the swarm.
@@ -28,7 +28,7 @@ Usage: $0 [--yes]
   1. Remove bench-api, bench-worker, bench-sandbox (+ *-staging) Swarm services
   2. Remove any other *-staging orphans
   3. Pull latest images from Docker Hub
-  4. deploy.sh server  (Django migrate; bench schema lives in server)
+  4. Django migrate one-shot (server image; does not roll server service)
   5. deploy.sh bench-api
   6. deploy.sh bench-worker
   7. deploy.sh bench-sandbox
@@ -46,7 +46,7 @@ confirm() {
     return 0
   fi
   echo "This will remove Swarm services: ${BENCH_SERVICES[*]} (+ staging) and redeploy."
-  echo "Server will be rolled first for migrations."
+  echo "Server is not rolled; only a one-shot migrate runs before bench recreate."
   read -r -p "Continue? [y/N] " ans
   [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]
 }
@@ -95,10 +95,14 @@ pull_bench_images() {
 
 deploy_bench_stack() {
   local deploy="${REPO_ROOT}/s/ops/deploy.sh"
+  local server_image server_env="/tmp/server_migrate_env.tmp"
   chmod +x "$deploy" "${REPO_ROOT}/s/lib.sh"
 
-  log INFO "=== deploy server (migrate + roll) ==="
-  "$deploy" server
+  log INFO "=== migrate bench schema (one-shot; skip server service update) ==="
+  swarm_config_to_env_file "server_env" "$server_env"
+  server_image="$(docker_image server "latest")"
+  swarm_run_django_migrate "$server_image" "$server_env"
+  rm -f "$server_env"
 
   for svc in "${BENCH_SERVICES[@]}"; do
     log INFO "=== deploy $svc (fresh create after rm) ==="
