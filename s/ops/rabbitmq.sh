@@ -14,7 +14,7 @@ Commands:
   create-user <service>   Create/update RabbitMQ user for a service
   list-users              List all RabbitMQ users
 
-Services that use RabbitMQ: server, bot, ai, sockets, bench-api
+Services that use RabbitMQ: server, bot, ai, sockets, bench-api, bench-worker
 
 Examples:
   $0 create-user bot    # Create RabbitMQ user for bot service
@@ -66,7 +66,7 @@ create_user() {
       rabbit_user=$(grep "SOCKET_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
       rabbit_pass=$(grep "SOCKET_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
       ;;
-    bench-api)
+    bench-api|bench-worker)
       rabbit_user=$(grep "BENCH_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
       rabbit_pass=$(grep "BENCH_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
       ;;
