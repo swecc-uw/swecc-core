@@ -60,18 +60,11 @@ swarm_config_to_env_file() {
 }
 
 # docker service update --env-file is unreliable on existing services; use --env-rm/--env-add.
-swarm_service_update_with_env() {
-  local svc="$1"
-  local env_file="$2"
-  shift 2
-  local -a update_args=("$@")
-  local -a env_rm=()
-  local -a env_add=()
-  local deduped line key dup_count i
+# Write a deduplicated copy of KEY=value lines (last wins per key).
+swarm_dedupe_env_file() {
+  local env_file="$1"
+  local deduped="$2"
 
-  [[ -f "$env_file" ]] || die "env file not found: $env_file"
-
-  deduped="$(mktemp)"
   python3 - "$env_file" "$deduped" <<'PY'
 import sys
 from pathlib import Path
@@ -90,28 +83,79 @@ Path(sys.argv[2]).write_text(
     "\n".join(f"{key}={vals[key]}" for key in order) + ("\n" if order else "")
 )
 PY
+}
 
-  local trace_was_on=0
-  [[ $- == *x* ]] && trace_was_on=1 && set +x
+# Wait for an in-flight Swarm update to finish; rollback if paused.
+swarm_wait_for_update_idle() {
+  local svc="$1"
+  local timeout_sec="${2:-120}"
+  local elapsed=0 state
+
+  while [[ $elapsed -lt $timeout_sec ]]; do
+    state="$(docker service inspect "$svc" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}' 2>/dev/null || true)"
+    case "$state" in
+      completed | "") return 0 ;;
+      paused)
+        log WARN "Service $svc update paused; rolling back before deploy"
+        docker service update --rollback --detach "$svc" 2>/dev/null || true
+        sleep 5
+        elapsed=$((elapsed + 5))
+        ;;
+      updating | rollback_started | rollback_paused)
+        log INFO "Service $svc UpdateStatus=$state; waiting..."
+        sleep 5
+        elapsed=$((elapsed + 5))
+        ;;
+      *)
+        sleep 5
+        elapsed=$((elapsed + 5))
+        ;;
+    esac
+  done
+
+  log WARN "Service $svc UpdateStatus still ${state:-?} after ${timeout_sec}s; continuing deploy"
+}
+
+# Sync env from config one key at a time (strips duplicate KEY entries per key).
+swarm_sync_env_from_file() {
+  local svc="$1"
+  local env_file="$2"
+  local deduped line key value count=0
+
+  [[ -f "$env_file" ]] || die "env file not found: $env_file"
+
+  deduped="$(mktemp)"
+  swarm_dedupe_env_file "$env_file" "$deduped"
+
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" != *"="* ]] && continue
     key="${line%%=*}"
-    dup_count="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
-      | grep -c "^${key}=" || true)"
-    for ((i = 0; i < dup_count; i++)); do
-      env_rm+=(--env-rm "$key")
-    done
-    env_add+=(--env-add "$line")
+    value="${line#*=}"
+    swarm_force_env_var "$svc" "$key" "$value"
+    count=$((count + 1))
   done <"$deduped"
   rm -f "$deduped"
 
-  if [[ ${#env_add[@]} -eq 0 ]]; then
-    [[ $trace_was_on -eq 1 ]] && set -x
+  if [[ $count -eq 0 ]]; then
     die "no env entries in $env_file"
   fi
+}
 
-  swarm_service_update_detached "$svc" "${update_args[@]}" "${env_rm[@]}" "${env_add[@]}"
-  [[ $trace_was_on -eq 1 ]] && set -x
+# Roll image/resources first, then sync env per-key (avoids huge --env-rm/--env-add batches).
+swarm_service_update_with_env() {
+  local svc="$1"
+  local env_file="$2"
+  shift 2
+  local -a update_args=("$@")
+
+  [[ -f "$env_file" ]] || die "env file not found: $env_file"
+
+  swarm_wait_for_update_idle "$svc"
+
+  swarm_service_update_detached "$svc" "${update_args[@]}" \
+    || die "Failed to update service $svc (image/resources)"
+
+  swarm_sync_env_from_file "$svc" "$env_file"
 }
 
 # Remove every duplicate KEY entry, then set KEY=value (separate updates per key).
@@ -443,5 +487,16 @@ swarm_service_create_detached() {
 swarm_service_update_detached() {
   local svc="$1"
   shift
-  docker service update --detach "$@" "$svc"
+  local out rc=0
+
+  set +e
+  out="$(docker service update --detach "$@" "$svc" 2>&1)"
+  rc=$?
+  set -e
+
+  if [[ $rc -ne 0 ]]; then
+    log ERROR "docker service update failed for $svc: ${out:-<no output>}"
+    return 1
+  fi
+  [[ -n "$out" ]] && log INFO "$out"
 }
