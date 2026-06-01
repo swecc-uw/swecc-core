@@ -60,6 +60,7 @@ swarm_config_to_env_file() {
 }
 
 # docker service update --env-file is unreliable on existing services; use --env-rm/--env-add.
+# Swarm services accumulate duplicate env keys across deploys; strip before re-adding.
 swarm_service_update_with_env() {
   local svc="$1"
   local env_file="$2"
@@ -67,7 +68,7 @@ swarm_service_update_with_env() {
   local -a update_args=("$@")
   local -a env_rm=()
   local -a env_add=()
-  local deduped line key dup_count i
+  local deduped line key dup_count i current_env
 
   [[ -f "$env_file" ]] || die "env file not found: $env_file"
 
@@ -91,13 +92,14 @@ Path(sys.argv[2]).write_text(
 )
 PY
 
+  current_env="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+
   local trace_was_on=0
   [[ $- == *x* ]] && trace_was_on=1 && set +x
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" != *"="* ]] && continue
     key="${line%%=*}"
-    dup_count="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
-      | grep -c "^${key}=" || true)"
+    dup_count="$(printf '%s\n' "$current_env" | grep -c "^${key}=" || true)"
     for ((i = 0; i < dup_count; i++)); do
       env_rm+=(--env-rm "$key")
     done
@@ -110,7 +112,16 @@ PY
     die "no env entries in $env_file"
   fi
 
-  swarm_service_update_detached "$svc" "${update_args[@]}" "${env_rm[@]}" "${env_add[@]}"
+  # Image/resources first so a failed env sync does not block the rollout entirely.
+  if ((${#update_args[@]} > 0)); then
+    swarm_service_update_detached "$svc" "${update_args[@]}"
+  fi
+  if ((${#env_rm[@]} > 0)); then
+    swarm_service_update_flags_in_batches "$svc" "${env_rm[@]}"
+  fi
+  if ((${#env_add[@]} > 0)); then
+    swarm_service_update_flags_in_batches "$svc" "${env_add[@]}"
+  fi
   [[ $trace_was_on -eq 1 ]] && set -x
 }
 
@@ -443,5 +454,37 @@ swarm_service_create_detached() {
 swarm_service_update_detached() {
   local svc="$1"
   shift
-  docker service update --detach "$@" "$svc"
+  local attempt=1 max_attempts=6 out
+
+  while [[ $attempt -le $max_attempts ]]; do
+    if out="$(docker service update --detach "$@" "$svc" 2>&1)"; then
+      [[ "${DEBUG:-}" == "1" && -n "$out" ]] && log DEBUG "$out"
+      return 0
+    fi
+    if [[ "$out" == *"update is in progress"* ]] \
+      || [[ "$out" == *"already being updated"* ]] \
+      || [[ "$out" == *"is already being updated"* ]]; then
+      log WARN "Service ${svc} update in progress (attempt ${attempt}/${max_attempts}); retrying in 10s"
+      sleep 10
+      attempt=$((attempt + 1))
+      continue
+    fi
+    die "docker service update failed for ${svc}: ${out}"
+  done
+  die "docker service update failed for ${svc} after ${max_attempts} attempts: ${out}"
+}
+
+# docker service update rejects very large flag lists (duplicate --env-rm from past deploys).
+swarm_service_update_flags_in_batches() {
+  local svc="$1"
+  shift
+  local -a flags=("$@")
+  local batch_size="${SWARM_UPDATE_ENV_BATCH_SIZE:-48}"
+  local i
+
+  (( ${#flags[@]} == 0 )) && return 0
+
+  for ((i = 0; i < ${#flags[@]}; i += batch_size)); do
+    swarm_service_update_detached "$svc" "${flags[@]:i:batch_size}"
+  done
 }
