@@ -1,0 +1,41 @@
+# TEMPORARY — delete after bench-api deploy is healthy again.
+# Full stop (scale 0) + remove + deploy.sh recreate for stuck Swarm services.
+name: Debug Swarm Stop Restart
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Swarm service to stop and recreate"
+        required: false
+        default: "bench-api"
+        type: choice
+        options:
+          - bench-api
+          - bench-worker
+          - bench-sandbox
+          - server
+
+concurrency:
+  group: deploy-debug-swarm-stop-restart
+  cancel-in-progress: false
+
+jobs:
+  stop-restart:
+    name: Stop and recreate ${{ inputs.service }}
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stop, remove, and redeploy service
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          chmod +x ./s/ops/swarm-stop-restart.sh ./s/ops/deploy.sh ./s/lib.sh
+          export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
+          ./s/ops/swarm-stop-restart.sh "${{ inputs.service }}"
