@@ -6,66 +6,74 @@ from app.schemas import (
     MAX_LIST_LIMIT,
     DomainActivityItem,
     DomainActivityResponse,
+    GalleryRunEntry,
+    GalleryRunsResponse,
 )
 from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import runs_to_list_items
 from bench.models import ActorType
+from bench_common.core.domain import Domain
+from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/gallery", tags=["gallery"])
 
 
-class GalleryRunEntry(BaseModel):
-    run_id: str
-    domain_id: str
-    model: str
-    primary_score: float | None
-    created_at: str
-    actor_label: str = "Guest"
+def _gallery_run_entry(
+    run: Run,
+    *,
+    row_actor_type: str,
+    domain: Domain | None,
+) -> GalleryRunEntry:
+    primary_key = domain.scoring.primary_metric if domain else None
+    scores = run.scores or {}
+    primary = None
+    if primary_key and primary_key in scores:
+        primary = scores[primary_key]
+    elif scores:
+        primary = next(iter(scores.values()))
+    return GalleryRunEntry(
+        run_id=run.id,
+        domain_id=run.config.domain_id,
+        model=run.config.agent_config.model,
+        primary_score=primary,
+        created_at=run.created_at.isoformat(),
+        actor_label="Guest" if row_actor_type == ActorType.GUEST else "Member",
+    )
 
 
-@router.get("/runs", response_model=list[GalleryRunEntry])
+def _next_cursor(items: list[GalleryRunEntry], *, limit: int) -> str | None:
+    if len(items) < limit:
+        return None
+    return items[-1].run_id
+
+
+@router.get("/runs", response_model=GalleryRunsResponse)
 async def list_gallery_runs(
     domain_id: str | None = None,
-    limit: int = 50,
-) -> list[GalleryRunEntry]:
+    limit: int = Query(
+        DEFAULT_LIST_LIMIT,
+        ge=1,
+        le=MAX_LIST_LIMIT,
+        description=f"Max runs per page (default {DEFAULT_LIST_LIMIT}, max {MAX_LIST_LIMIT})",
+    ),
+    cursor: str | None = Query(
+        None,
+        description="Pagination cursor: run_id of the last item from the previous page",
+    ),
+) -> GalleryRunsResponse:
     domain = None
     if domain_id:
         domain = await db.get_domain(domain_id)
         if domain is None:
             raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
 
-    entries: list[GalleryRunEntry] = []
-    primary_key = domain.scoring.primary_metric if domain else None
-    higher = domain.scoring.higher_is_better if domain else True
-
-    for run, row in await db.list_gallery_runs(domain_id=domain_id, limit=min(limit, 100)):
-        scores = run.scores or {}
-        primary = None
-        if primary_key and primary_key in scores:
-            primary = scores[primary_key]
-        elif scores:
-            primary = next(iter(scores.values()))
-        entries.append(
-            GalleryRunEntry(
-                run_id=run.id,
-                domain_id=run.config.domain_id,
-                model=run.config.agent_config.model,
-                primary_score=primary,
-                created_at=run.created_at.isoformat(),
-                actor_label="Guest" if row.actor_type == ActorType.GUEST else "Member",
-            )
-        )
-
-    if primary_key:
-        missing_sentinel = float("-inf") if higher else float("inf")
-        entries.sort(
-            key=lambda e: (e.primary_score if e.primary_score is not None else missing_sentinel),
-            reverse=higher,
-        )
-    return entries
+    pairs = await db.list_gallery_runs(domain_id=domain_id, limit=limit, cursor=cursor)
+    entries = [
+        _gallery_run_entry(run, row_actor_type=row.actor_type, domain=domain) for run, row in pairs
+    ]
+    return GalleryRunsResponse(items=entries, next_cursor=_next_cursor(entries, limit=limit))
 
 
 def _merge_activity(
@@ -94,6 +102,10 @@ def _merge_activity(
 async def domain_activity_feed(
     domain_id: str,
     limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    cursor: str | None = Query(
+        None,
+        description="Pagination cursor: run id of the last item from the previous page",
+    ),
     mine_limit: int | None = Query(None, ge=1, le=MAX_LIST_LIMIT),
     gallery_limit: int | None = Query(None, ge=1, le=MAX_LIST_LIMIT),
     principal=Depends(get_optional_principal),
@@ -110,8 +122,8 @@ async def domain_activity_feed(
     m_cap = mine_limit if mine_limit is not None else max(1, limit // 2)
     g_cap = gallery_limit if gallery_limit is not None else max(1, limit - m_cap)
 
-    mine_runs = await list_mine_runs_for_domain(domain_id, principal, limit=m_cap)
-    gallery_runs = await list_gallery_runs_for_domain(domain_id, limit=g_cap)
+    mine_runs = await list_mine_runs_for_domain(domain_id, principal, limit=m_cap, cursor=cursor)
+    gallery_runs = await list_gallery_runs_for_domain(domain_id, limit=g_cap, cursor=cursor)
 
     mine_items = [
         DomainActivityItem(**item.model_dump(), source="mine")

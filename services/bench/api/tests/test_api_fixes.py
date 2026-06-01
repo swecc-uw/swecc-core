@@ -214,7 +214,7 @@ async def test_domain_runs_mine_and_gallery(django_db, api_app, monkeypatch):
     assert mine.status_code == 200
     assert gallery.status_code == 200
     mine_ids = {r["id"] for r in mine.json()}
-    gallery_ids = {r["id"] for r in gallery.json()}
+    gallery_ids = {r["id"] for r in gallery.json()["items"]}
     assert "mine-only" in mine_ids
     assert "gallery-only" in gallery_ids
     assert "gallery-only" not in mine_ids
