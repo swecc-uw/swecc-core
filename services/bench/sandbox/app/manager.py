@@ -275,12 +275,15 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
         adapter_path = _resolve_repo_file(manifest_path.parent, adapter, "Adapter")
 
         log.info("starting_env_server", env_id=env_id, port=port)
+        adapter_env = os.environ.copy()
+        adapter_env.setdefault("BENCH_ADAPTER_MAX_STEPS", "35")
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
             str(adapter_path),
             "--port",
             str(port),
             cwd=str(adapter_path.parent),
+            env=adapter_env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             # Put adapter + any children it spawns into their own process group

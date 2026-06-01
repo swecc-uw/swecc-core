@@ -76,31 +76,21 @@ def _reward_payload(reward: Any) -> float:
     return value
 
 
-def serve(
+def create_env_app(
     env_class: Type[BaseEnv],
     *,
-    host: str = "0.0.0.0",
-    port: int = 8765,
-    log_level: str = "info",
-) -> None:
-    """
-    Start the HTTP adapter server for *env_class*.
+    max_steps: int | None = None,
+) -> FastAPI:
+    """Build the FastAPI adapter app (used by ``serve`` and tests)."""
+    if max_steps is not None and max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer when set")
 
-    The server manages one env instance per episode_id.  When /close is
-    called (or the server shuts down) instances are cleaned up.  Episodes
-    that are abandoned without a /close call (e.g. due to network loss) are
-    automatically reaped after ``_EPISODE_TTL_SECONDS`` seconds of inactivity.
-
-    Args:
-        env_class:  Your BaseEnv subclass (the class, not an instance).
-        host:       Bind address (default "0.0.0.0").
-        port:       Port to listen on (default 8765).
-        log_level:  Uvicorn log level.
-    """
     # env instance registry: episode_id -> BaseEnv instance
     _episodes: dict[str, BaseEnv] = {}
     # last-activity timestamps (monotonic) for TTL-based reaping
     _last_seen: dict[str, float] = {}
+    # env /step invocations completed for each episode
+    _step_counts: dict[str, int] = {}
 
     def _touch(episode_id: str) -> None:
         _last_seen[episode_id] = time.monotonic()
@@ -112,6 +102,7 @@ def serve(
         for eid in stale:
             env = _episodes.pop(eid, None)
             _last_seen.pop(eid, None)
+            _step_counts.pop(eid, None)
             if env is not None:
                 try:
                     env.close()
@@ -142,12 +133,14 @@ def serve(
         env = env_class()
         _episodes[req.episode_id] = env
         _touch(req.episode_id)
+        _step_counts[req.episode_id] = 0
 
         try:
             obs = env.reset(seed=req.seed, **req.scenario_params)
         except Exception as exc:
             _episodes.pop(req.episode_id, None)
             _last_seen.pop(req.episode_id, None)
+            _step_counts.pop(req.episode_id, None)
             raise HTTPException(status_code=500, detail=str(exc))
 
         # Env authors can signal a non-JSON content-type and/or an episode-level
@@ -183,11 +176,26 @@ def serve(
                 detail=f"No active episode '{req.episode_id}'. Call /reset first.",
             )
         _touch(req.episode_id)
+        steps_done = _step_counts.get(req.episode_id, 0)
+        if max_steps is not None and steps_done >= max_steps:
+            return {
+                "observation": {"data": None, "content_type": "application/json"},
+                "reward": 0.0,
+                "terminated": False,
+                "truncated": True,
+                "info": {
+                    "reason": "step_limit",
+                    "max_steps": str(max_steps),
+                },
+                "system_prompt": None,
+            }
         try:
             action = env.parse_action(req.action)
             result = env.step(action)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
+
+        _step_counts[req.episode_id] = steps_done + 1
 
         return {
             "observation": {
@@ -208,6 +216,7 @@ def serve(
     def close(req: _CloseRequest) -> dict:
         env = _episodes.pop(req.episode_id, None)
         _last_seen.pop(req.episode_id, None)
+        _step_counts.pop(req.episode_id, None)
         if env is not None:
             try:
                 env.close()
@@ -225,5 +234,33 @@ def serve(
         content_type = "text/plain" if isinstance(data, str) else "application/json"
         return {"data": _jsonable_payload(data), "content_type": content_type}
 
+    return app
+
+
+def serve(
+    env_class: Type[BaseEnv],
+    *,
+    host: str = "0.0.0.0",
+    port: int = 8765,
+    log_level: str = "info",
+    max_steps: int | None = None,
+) -> None:
+    """
+    Start the HTTP adapter server for *env_class*.
+
+    The server manages one env instance per episode_id.  When /close is
+    called (or the server shuts down) instances are cleaned up.  Episodes
+    that are abandoned without a /close call (e.g. due to network loss) are
+    automatically reaped after ``_EPISODE_TTL_SECONDS`` seconds of inactivity.
+
+    Args:
+        env_class:  Your BaseEnv subclass (the class, not an instance).
+        host:       Bind address (default "0.0.0.0").
+        port:       Port to listen on (default 8765).
+        log_level:  Uvicorn log level.
+        max_steps:  Optional hard cap on POST /step calls per episode. When
+                    exhausted, returns truncated=True without calling env.step().
+    """
+    app = create_env_app(env_class, max_steps=max_steps)
     log.info(f"Starting {env_class.__name__} adapter on {host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level=log_level)

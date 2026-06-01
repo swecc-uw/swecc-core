@@ -14,6 +14,13 @@ os.environ.setdefault("DB_USER", "test")
 os.environ.setdefault("DB_PASSWORD", "test")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret")
 
+# Unit tests import bench_common.orchestrator (Django models). Bootstrap ORM early.
+import django  # noqa: E402
+from django.apps import apps as django_apps  # noqa: E402
+
+if not django_apps.ready:
+    django.setup()
+
 
 def _postgres_reachable() -> bool:
     try:

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, NamedTuple, TypeVar
 
 from asgiref.sync import sync_to_async
@@ -31,6 +31,7 @@ from bench.models import Run as RunRow
 from bench.models import Visibility
 from bench_common.core.domain import Domain
 from bench_common.core.run import Episode, Run
+from bench_common.core.status import EpisodeOutcomeSummary, summarize_episodes
 from django.db.models import Avg, Count, FloatField, Q
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
@@ -238,10 +239,7 @@ async def list_runs(
     return [_run_from_row(row) async for row in qs[:limit]]
 
 
-class EpisodeSummary(NamedTuple):
-    completed_count: int
-    failed_count: int
-    avg_reward: float | None
+EpisodeSummary = EpisodeOutcomeSummary
 
 
 _FAILED_EPISODE_STATUSES = ("failed", "timeout", "cancelled")
@@ -256,7 +254,10 @@ async def episode_summaries_for_runs(run_ids: list[str]) -> dict[str, EpisodeSum
         .values("run_id")
         .annotate(
             completed_count=Count("id", filter=Q(status="completed")),
-            failed_count=Count("id", filter=Q(status__in=_FAILED_EPISODE_STATUSES)),
+            failed_count=Count("id", filter=Q(status="failed")),
+            truncated_count=Count("id", filter=Q(status="truncated")),
+            cancelled_count=Count("id", filter=Q(status="cancelled")),
+            timeout_count=Count("id", filter=Q(status="timeout")),
             avg_reward=Avg(Cast(reward_key, FloatField())),
         )
     )
@@ -265,8 +266,30 @@ async def episode_summaries_for_runs(run_ids: list[str]) -> dict[str, EpisodeSum
         avg = row["avg_reward"]
         out[row["run_id"]] = EpisodeSummary(
             completed_count=row["completed_count"] or 0,
-            failed_count=row["failed_count"] or 0,
+            failed_count=(row["failed_count"] or 0) + (row["timeout_count"] or 0),
+            truncated_count=row["truncated_count"] or 0,
+            cancelled_count=row["cancelled_count"] or 0,
+            timeout_count=row["timeout_count"] or 0,
             avg_reward=float(avg) if avg is not None else None,
+        )
+
+    # Top terminal_info reasons per run (small N+1; only for listed runs).
+    for run_id in run_ids:
+        if run_id not in out:
+            continue
+        episodes = await get_episodes(run_id)
+        rich = summarize_episodes(episodes)
+        base = out[run_id]
+        out[run_id] = EpisodeSummary(
+            completed_count=base.completed_count,
+            failed_count=base.failed_count,
+            truncated_count=base.truncated_count,
+            cancelled_count=base.cancelled_count,
+            timeout_count=base.timeout_count,
+            avg_reward=base.avg_reward,
+            failure_reasons=rich.failure_reasons,
+            truncation_reasons=rich.truncation_reasons,
+            cancellation_reasons=rich.cancellation_reasons,
         )
     return out
 
@@ -321,80 +344,120 @@ async def list_leaderboard_runs(
     return out
 
 
-async def reap_orphan_work() -> dict[str, int]:
-    """Mark in-flight rows as failed after a bench-api restart.
-
-    `_active_run_tasks` lives in process memory, so a crash/redeploy strands
-    any `running`/`pending` run, episode, or `cloning` developer env. Without
-    this sweep, those rows stay non-terminal forever — `cancel_run` flips the
-    flag but no worker is left to react, and the UI shows "running" indefinitely.
-
-    UNSAFE for multi-replica deploys (would mark the OTHER replica's live work
-    as failed). Gated behind `settings.enable_orphan_reaper` at the call site.
-    """
-
-    def _patch_data(
-        payload: Any, *, status: str, reason: str, terminal_field: str
-    ) -> dict[str, Any]:
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except json.JSONDecodeError:
-                payload = {}
-        if not isinstance(payload, dict):
+def _patch_terminal_data(
+    payload: Any, *, status: str, reason: str, terminal_field: str, detail: str | None = None
+) -> dict[str, Any]:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
             payload = {}
-        payload["status"] = status
-        # Run uses `completed_at`; Episode uses `ended_at`. Picking the wrong
-        # name silently drops on Pydantic round-trip and leaves UI/exports
-        # showing a terminal episode with no end time.
-        payload.setdefault(terminal_field, datetime.utcnow().isoformat())
-        terminal_info = payload.get("terminal_info") or {}
-        if isinstance(terminal_info, dict):
-            terminal_info.setdefault("reason", reason)
-            payload["terminal_info"] = terminal_info
-        return payload
+    if not isinstance(payload, dict):
+        payload = {}
+    payload["status"] = status
+    payload["status_reason"] = reason
+    status_detail: dict[str, Any] = dict(payload.get("status_detail") or {})
+    if detail:
+        status_detail["detail"] = detail
+    payload["status_detail"] = status_detail
+    payload.setdefault(terminal_field, datetime.utcnow().isoformat())
+    return payload
 
+
+def _run_created_at(run: Run) -> datetime:
+    created = run.created_at
+    if created.tzinfo is not None:
+        return created.replace(tzinfo=None)
+    return created
+
+
+def _is_run_stale(run: Run, *, stale_after_seconds: int, now: datetime | None = None) -> bool:
+    if stale_after_seconds <= 0:
+        return True
+    now = now or datetime.utcnow()
+    return _run_created_at(run) < now - timedelta(seconds=stale_after_seconds)
+
+
+async def list_stale_run_ids(
+    *,
+    min_age_seconds: int,
+    limit: int = 50,
+) -> list[str]:
+    """Run ids in pending/running older than min_age_seconds (for watchdog rescue)."""
+    now = datetime.utcnow()
+    out: list[str] = []
+    qs = RunRow.objects.filter(status__in=["pending", "running"]).order_by("id")
+    async for row in qs:
+        run = _run_from_row(row)
+        if _is_run_stale(run, stale_after_seconds=min_age_seconds, now=now):
+            out.append(row.id)
+            if len(out) >= limit:
+                break
+    return out
+
+
+async def reap_stale_work(
+    *,
+    stale_after_seconds: int = 0,
+    reason: str = "stale_orphan",
+) -> dict[str, int]:
+    """Mark in-flight rows as failed when they exceed a minimum age.
+
+    ``stale_after_seconds=0`` reaps all pending/running rows (startup after a
+    single-replica crash). With a positive age, safe for multi-replica deploys:
+    only rows older than the threshold are failed.
+    """
+    now = datetime.utcnow()
+    stale_run_ids: list[str] = []
     orphan_run_qs = RunRow.objects.filter(status__in=["pending", "running"])
-    orphan_runs = [row async for row in orphan_run_qs]
     run_count = 0
-    for row in orphan_runs:
+    async for row in orphan_run_qs:
+        run = _run_from_row(row)
+        if not _is_run_stale(run, stale_after_seconds=stale_after_seconds, now=now):
+            continue
         row.status = "failed"
-        row.data = _patch_data(
+        row.data = _patch_terminal_data(
             row.data,
             status="failed",
-            reason="bench_api_restart",
+            reason=reason,
             terminal_field="completed_at",
         )
         await row.asave(update_fields=["status", "data"])
+        stale_run_ids.append(row.id)
         run_count += 1
 
-    orphan_ep_qs = EpisodeRow.objects.filter(status__in=["pending", "running"])
-    orphan_eps = [row async for row in orphan_ep_qs]
     ep_count = 0
-    for row in orphan_eps:
+    orphan_ep_qs = EpisodeRow.objects.filter(status__in=["pending", "running"])
+    async for row in orphan_ep_qs:
+        if stale_after_seconds > 0 and row.run_id not in stale_run_ids:
+            parent = await RunRow.objects.filter(id=row.run_id).afirst()
+            if parent is not None and parent.status in ("pending", "running"):
+                parent_run = _run_from_row(parent)
+                if not _is_run_stale(parent_run, stale_after_seconds=stale_after_seconds, now=now):
+                    continue
         row.status = "failed"
-        row.data = _patch_data(
+        row.data = _patch_terminal_data(
             row.data,
             status="failed",
-            reason="bench_api_restart",
+            reason=reason,
             terminal_field="ended_at",
         )
         await row.asave(update_fields=["status", "data"])
         ep_count += 1
 
-    env_count = await DeveloperEnvironmentRow.objects.filter(status="cloning").aupdate(
-        status="failed",
-        error_message="bench-api restarted while cloning; resubmit to retry",
-    )
+    env_count = 0
+    if stale_after_seconds <= 0:
+        env_count = await DeveloperEnvironmentRow.objects.filter(status="cloning").aupdate(
+            status="failed",
+            error_message="bench-api restarted while cloning; resubmit to retry",
+        )
 
-    # BenchJob rows live in a separate table.  Once a worker claims a job and
-    # then dies, the row stays "running" forever — claim_bench_job filters on
-    # status="queued" so nothing can pick it up again, and there's no
-    # heartbeat to detect liveness.
-    bench_job_count = await BenchJobRow.objects.filter(status="running").aupdate(
-        status="failed",
-        completed_at=timezone.now(),
-    )
+    bench_job_count = 0
+    if stale_after_seconds <= 0:
+        bench_job_count = await BenchJobRow.objects.filter(status="running").aupdate(
+            status="failed",
+            completed_at=timezone.now(),
+        )
 
     return {
         "runs": run_count,
@@ -402,6 +465,11 @@ async def reap_orphan_work() -> dict[str, int]:
         "developer_envs": env_count,
         "bench_jobs": bench_job_count,
     }
+
+
+async def reap_orphan_work() -> dict[str, int]:
+    """Mark all in-flight rows as failed (legacy startup sweep)."""
+    return await reap_stale_work(stale_after_seconds=0, reason="bench_api_restart")
 
 
 async def archive_domain_gallery(domain_id: str) -> None:

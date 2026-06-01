@@ -9,7 +9,13 @@ from pydantic import BaseModel
 class RunEpisodeSummary(BaseModel):
     completed_count: int = 0
     failed_count: int = 0
+    truncated_count: int = 0
+    cancelled_count: int = 0
+    timeout_count: int = 0
     avg_reward: float | None = None
+    failure_reasons: list[str] = []
+    truncation_reasons: list[str] = []
+    cancellation_reasons: list[str] = []
 
 
 class RunListItem(Run):
@@ -17,7 +23,13 @@ class RunListItem(Run):
 
     completed_count: int = 0
     failed_count: int = 0
+    truncated_count: int = 0
+    cancelled_count: int = 0
+    timeout_count: int = 0
     avg_reward: float | None = None
+    failure_reasons: list[str] = []
+    truncation_reasons: list[str] = []
+    cancellation_reasons: list[str] = []
     actor_type: str | None = None
     actor_id: str | None = None
     actor_username: str | None = None
@@ -67,6 +79,13 @@ class RunStatusItem(BaseModel):
     status: str
     scores: dict[str, float] = {}
     completed_at: str | None = None
+    status_reason: str | None = None
+    status_detail: dict = {}
+    truncated_count: int = 0
+    failed_count: int = 0
+    cancelled_count: int = 0
+    truncation_reasons: list[str] = []
+    failure_reasons: list[str] = []
 
 
 class RunStatusBatchResponse(BaseModel):

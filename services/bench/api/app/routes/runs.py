@@ -31,6 +31,7 @@ from bench.models import ActorType
 from bench.models import Run as RunRow
 from bench.models import Visibility
 from bench_common.core.run import Episode, Run, RunConfig
+from bench_common.core.status import resolve_run_status, resolve_run_status_from_summary
 from bench_common.export.replay import build_run_export_dict
 from bench_common.orchestrator import service as orchestrator
 from bench_common.storage import database as db
@@ -186,16 +187,29 @@ async def batch_run_status(
         raise HTTPException(status_code=422, detail="At most 50 run ids per request")
 
     runs: dict[str, RunStatusItem] = {}
+    summaries = await db.episode_summaries_for_runs(run_ids)
     async for row in RunRow.objects.filter(id__in=run_ids):
         if not await can_read_run(row, principal):
             continue
         run = _run_from_row(row)
         completed = run.completed_at.isoformat() if run.completed_at else None
+        summary = summaries.get(row.id)
+        status_reason = run.status_reason
+        status_detail = dict(run.status_detail or {})
+        if run.status in ("failed", "cancelled") and not status_reason and summary:
+            status_reason, status_detail = resolve_run_status_from_summary(run, summary)
         runs[row.id] = RunStatusItem(
             id=row.id,
             status=run.status,
             scores=run.scores or {},
             completed_at=completed,
+            status_reason=status_reason,
+            status_detail=status_detail,
+            truncated_count=summary.truncated_count if summary else 0,
+            failed_count=summary.failed_count if summary else 0,
+            cancelled_count=summary.cancelled_count if summary else 0,
+            truncation_reasons=list(summary.truncation_reasons) if summary else [],
+            failure_reasons=list(summary.failure_reasons) if summary else [],
         )
     return RunStatusBatchResponse(runs=runs)
 
@@ -312,6 +326,10 @@ async def get_run(
     run = await db.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    if run.status in ("failed", "cancelled") and not run.status_reason:
+        episodes = await db.get_episodes(run_id)
+        reason, detail = resolve_run_status(run, episodes=episodes)
+        run = run.model_copy(update={"status_reason": reason, "status_detail": detail})
     etag = _run_etag(run)
     response.headers["ETag"] = etag
     if request.headers.get("if-none-match") == etag:

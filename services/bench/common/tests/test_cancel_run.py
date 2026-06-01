@@ -39,6 +39,7 @@ async def test_cancel_run_marks_pending_episodes_cancelled() -> None:
         result = await orchestrator.cancel_run("run-1")
 
     assert result.status == "cancelled"
+    assert result.status_reason == "user_cancelled"
     assert save_run.await_count == 1
     assert save_episode.await_count == 2
     saved_statuses = [c.args[0].status for c in save_episode.await_args_list]

@@ -39,3 +39,21 @@ jobs:
 
       - name: List RabbitMQ users
         run: ./s/ops/rabbitmq.sh list-users
+
+      - name: Inspect bench queue depths
+        run: |
+          set -euo pipefail
+          container_id=$(docker ps --filter "name=rabbitmq-host" --format "{{.ID}}" | head -1)
+          [[ -n "$container_id" ]] || { echo "rabbitmq-host container not found"; exit 1; }
+          echo "container=$container_id"
+          docker exec "$container_id" rabbitmqctl list_queues name messages messages_ready messages_unacknowledged consumers
+          echo "--- exchanges (bench) ---"
+          docker exec "$container_id" rabbitmqctl list_exchanges name type | grep -E 'bench|swecc' || true
+          echo "--- bindings (bench) ---"
+          docker exec "$container_id" rabbitmqctl list_bindings source_name destination_name routing_key | grep bench || true
+          echo "--- consumers ---"
+          docker exec "$container_id" rabbitmqctl list_consumers | grep bench || true
+          echo "--- bench.run-queue (requeue after peek) ---"
+          docker exec "$container_id" rabbitmqadmin get queue=bench.run-queue ackmode=ack_requeue_true count=20 2>/dev/null || true
+          echo "--- bench.job-queue (requeue after peek) ---"
+          docker exec "$container_id" rabbitmqadmin get queue=bench.job-queue ackmode=ack_requeue_true count=20 2>/dev/null || true

@@ -73,6 +73,9 @@ class Run(BaseModel):
     scores: dict[str, float] = {}
     team_id: str | None = None
     env_id: str | None = None
+    # Set when status is failed or cancelled — machine-readable cause for API/UI.
+    status_reason: str | None = None
+    status_detail: dict[str, Any] = {}
 
 
 class Episode(BaseModel):

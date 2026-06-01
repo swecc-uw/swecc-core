@@ -236,12 +236,15 @@ async def _start_adapter(
     adapter = manifest.get("adapter", "adapter.py")
     adapter_path = _resolve_repo_file(manifest_path.parent, adapter, "Adapter")
     log.info(f"starting adapter on port {port}")
+    adapter_env = os.environ.copy()
+    adapter_env.setdefault("BENCH_ADAPTER_MAX_STEPS", "35")
     return await asyncio.create_subprocess_exec(
         sys.executable,
         str(adapter_path),
         "--port",
         str(port),
         cwd=str(adapter_path.parent),
+        env=adapter_env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

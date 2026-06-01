@@ -19,6 +19,8 @@ from bench.models import Episode as EpisodeRow
 from bench.models import Run as RunRow
 from bench_common.config import settings as bench_settings
 from bench_common.orchestrator import service as orchestrator
+from bench_common.storage import database as db
+from bench_common.storage.django_store import _run_from_row
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -47,6 +49,14 @@ class PlatformStatus(BaseModel):
     in_flight: InFlight
     recent_failures: list[dict[str, Any]]
     reaper_enabled: bool
+    stale_watchdog_enabled: bool
+
+
+class ReapStaleResponse(BaseModel):
+    runs: int
+    episodes: int
+    developer_envs: int
+    bench_jobs: int
 
 
 async def _counts(model_cls) -> dict[str, int]:
@@ -77,11 +87,13 @@ async def _recent_failures(limit: int = 10) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     qs = RunRow.objects.filter(status__in=["failed", "cancelled"]).order_by("-id")[:limit]
     async for row in qs:
+        run = _run_from_row(row)
         out.append(
             {
                 "run_id": row.id,
                 "domain_id": row.domain_id,
                 "status": row.status,
+                "status_reason": run.status_reason,
                 "actor_type": row.actor_type,
             }
         )
@@ -118,4 +130,19 @@ async def platform_status(_: Any = Depends(require_member)) -> PlatformStatus:
         ),
         recent_failures=failures,
         reaper_enabled=bench_settings.enable_orphan_reaper,
+        stale_watchdog_enabled=bench_settings.enable_stale_watchdog,
     )
+
+
+@router.post("/reap-stale", response_model=ReapStaleResponse)
+async def reap_stale(
+    stale_after_seconds: int = 0,
+    _: Any = Depends(require_member),
+) -> ReapStaleResponse:
+    """Mark pending/running bench rows older than *stale_after_seconds* as failed."""
+    result = await db.reap_stale_work(
+        stale_after_seconds=max(0, stale_after_seconds),
+        reason="manual_reap",
+    )
+    log.warning("manual_stale_reap", stale_after_seconds=stale_after_seconds, **result)
+    return ReapStaleResponse(**result)

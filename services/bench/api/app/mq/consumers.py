@@ -29,4 +29,4 @@ async def consume_run_execute(body, properties):
         return
 
     log.info("mq_run_execute_received", run_id=run_id, routing_key="bench.run.execute")
-    asyncio.create_task(orchestrator.execute_run(run_id))
+    await orchestrator.dispatch_run_execute(run_id)
