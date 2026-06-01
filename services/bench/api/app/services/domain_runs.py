@@ -40,6 +40,11 @@ async def list_mine_runs_for_domain(
     return []
 
 
-async def list_gallery_runs_for_domain(domain_id: str, *, limit: int) -> list[Run]:
-    pairs = await db.list_gallery_runs(domain_id=domain_id, limit=limit)
+async def list_gallery_runs_for_domain(
+    domain_id: str,
+    *,
+    limit: int,
+    cursor: str | None = None,
+) -> list[Run]:
+    pairs = await db.list_gallery_runs(domain_id=domain_id, limit=limit, cursor=cursor)
     return [run for run, _ in pairs]

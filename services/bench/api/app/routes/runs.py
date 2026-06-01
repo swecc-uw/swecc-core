@@ -111,7 +111,7 @@ async def _fetch_runs_for_principal(
             cursor=cursor,
             created_before=created_before,
         )
-    rows = await db.list_gallery_runs(domain_id=domain_id, limit=limit)
+    rows = await db.list_gallery_runs(domain_id=domain_id, limit=limit, cursor=cursor)
     return [r for r, _ in rows]
 
 

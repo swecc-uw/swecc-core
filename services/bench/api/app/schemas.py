@@ -64,6 +64,25 @@ class DomainActivityResponse(BaseModel):
     next_cursor: str | None = None
 
 
+class GalleryRunEntry(BaseModel):
+    run_id: str
+    domain_id: str
+    model: str
+    primary_score: float | None
+    created_at: str
+    actor_label: str = "Guest"
+
+
+class GalleryRunsResponse(BaseModel):
+    items: list[GalleryRunEntry]
+    next_cursor: str | None = None
+
+
+class RunListPageResponse(BaseModel):
+    items: list[RunListItem]
+    next_cursor: str | None = None
+
+
 class MeWithContextResponse(BaseModel):
     type: str
     user_id: int | None = None

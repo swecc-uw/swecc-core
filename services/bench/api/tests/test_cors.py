@@ -55,7 +55,7 @@ async def test_options_preflight_for_mesocosm():
 
 @pytest.mark.asyncio
 async def test_list_runs_includes_cors_for_mesocosm(monkeypatch):
-    async def fake_gallery_runs(*, domain_id=None, limit=50):
+    async def fake_gallery_runs(*, domain_id=None, limit=50, cursor=None):
         return []
 
     monkeypatch.setattr(

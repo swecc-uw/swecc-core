@@ -1,7 +1,7 @@
 from app.auth.deps import get_principal, require_member
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
-from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, DomainEnvironmentListItem, RunListItem
+from app.schemas import DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, DomainEnvironmentListItem, RunListItem, RunListPageResponse
 from app.services.domain_environments import list_environments_for_domain_member
 from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import parse_created_before, runs_to_list_items
@@ -119,17 +119,20 @@ async def list_domain_mine_runs(
     return await runs_to_list_items(runs, include_episode_summary=True)
 
 
-@router.get("/{domain_id}/runs/gallery", response_model=list[RunListItem])
+@router.get("/{domain_id}/runs/gallery", response_model=RunListPageResponse)
 async def list_domain_gallery_runs(
     domain_id: str,
     limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
-) -> list[RunListItem]:
+    cursor: str | None = Query(None, description="Id of the last run from the previous page"),
+) -> RunListPageResponse:
     """Public gallery runs for one domain as RunListItem rows."""
     domain = await db.get_domain(domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
-    runs = await list_gallery_runs_for_domain(domain_id, limit=limit)
-    return await runs_to_list_items(runs, include_episode_summary=True)
+    runs = await list_gallery_runs_for_domain(domain_id, limit=limit, cursor=cursor)
+    items = await runs_to_list_items(runs, include_episode_summary=True)
+    next_cursor = items[-1].id if len(items) >= limit else None
+    return RunListPageResponse(items=items, next_cursor=next_cursor)
 
 
 @router.get("/{domain_id}/environments", response_model=list[DomainEnvironmentListItem])

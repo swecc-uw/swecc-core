@@ -48,7 +48,7 @@ Commit `showcase/data/replay.json` (or fetch live from the API) and wire your fr
 | `POST /v1/test/episode` (dev smoke) | `private` | Internal dev harness only; not promoted to the gallery. |
 | `mesocosm run create` | `gallery_public` | CLI `--visibility private` opts out. |
 
-Public completed runs appear on `GET /v1/gallery/runs` and domain gallery endpoints; private runs show only in the caller's mine lists (`GET /v1/runs`, `GET /v1/domains/{id}/runs/mine`).
+Public completed runs appear on `GET /v1/gallery/runs` (paginated: `{ items, next_cursor }`) and domain gallery endpoints; private runs show only in the caller's mine lists (`GET /v1/runs`, `GET /v1/domains/{id}/runs/mine`).
 
 ## Export API
 

@@ -487,6 +487,7 @@ async def list_gallery_runs(
     *,
     domain_id: str | None = None,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> list[tuple[Run, RunRow]]:
     qs = RunRow.objects.filter(
         visibility=Visibility.GALLERY_PUBLIC,
@@ -495,8 +496,19 @@ async def list_gallery_runs(
     )
     if domain_id:
         qs = qs.filter(domain_id=domain_id)
+    if cursor:
+        try:
+            cur_row = await RunRow.objects.aget(id=cursor)
+            cur_created = _run_from_row(cur_row).created_at.isoformat()
+            qs = qs.filter(
+                Q(data__created_at__lt=cur_created)
+                | (Q(data__created_at=cur_created) & Q(id__lt=cursor))
+            )
+        except RunRow.DoesNotExist:
+            pass
+    qs = qs.order_by("-data__created_at", "-id")
     out: list[tuple[Run, RunRow]] = []
-    async for row in qs.order_by("-id")[:limit]:
+    async for row in qs[:limit]:
         out.append((_model_from_row_data(Run, row.data), row))
     return out
 

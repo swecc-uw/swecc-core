@@ -115,3 +115,44 @@ async def test_list_domains_excludes_archived_by_default(django_db):
 
     with_archived = await store.list_domains(include_archived=True)
     assert archived.id in {d.id for d in with_archived}
+
+
+@pytest.mark.asyncio
+async def test_gallery_runs_pagination(django_db, api_app):
+    from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
+
+    domain = _sample_domain("gallery-page-domain")
+    await store.save_domain(domain)
+    for i in range(6):
+        await store.save_run(
+            _sample_run(domain.id, f"gallery-run-{i}"),
+            actor_type=ActorType.GUEST,
+            actor_id=f"g{i}",
+            visibility=Visibility.GALLERY_PUBLIC,
+        )
+
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        page1 = await client.get("/v1/gallery/runs", params={"domain_id": domain.id, "limit": 5})
+        assert page1.status_code == 200
+        body1 = page1.json()
+        assert len(body1["items"]) == 5
+        assert body1["next_cursor"] is not None
+
+        page2 = await client.get(
+            "/v1/gallery/runs",
+            params={
+                "domain_id": domain.id,
+                "limit": 5,
+                "cursor": body1["next_cursor"],
+            },
+        )
+        assert page2.status_code == 200
+        body2 = page2.json()
+        assert len(body2["items"]) == 1
+        assert body2["next_cursor"] is None
+
+        page1_ids = {item["run_id"] for item in body1["items"]}
+        page2_ids = {item["run_id"] for item in body2["items"]}
+        assert page1_ids.isdisjoint(page2_ids)
