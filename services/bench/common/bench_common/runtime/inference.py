@@ -579,11 +579,11 @@ class InferenceRouter:
         step_prefix: str,
         provider: str,
     ) -> list[dict[str, Any]]:
-        """Build a provider-appropriate multipart content list for image observations.
+        """Build a multipart user content list for image observations.
 
-        Supports bytes (raw binary), str (base64), and dict{"url": ...} (remote URL).
-        Anthropic requires base64; OpenAI/Gemini accept either base64 data-URLs or
-        remote https:// URLs.
+        Always uses OpenAI-style ``image_url`` blocks — LiteLLM validates
+        messages in that format and translates per provider.  Supports bytes
+        (raw binary), str (base64 or data-URL), and dict{"url": ...} (remote URL).
         """
         import base64
 
@@ -606,36 +606,15 @@ class InferenceRouter:
             b64 = str(data)
             url = None
 
+        # LiteLLM validates user messages against the OpenAI chat-completion
+        # schema before routing to any provider — always use image_url blocks
+        # here; LiteLLM translates them to each provider's native wire format.
+        img_url = url if url is not None else f"data:{media_type};base64,{b64}"
         text_block: dict[str, Any] = {"type": "text", "text": step_prefix}
-
-        if provider == "anthropic":
-            # Anthropic requires base64; fall back gracefully if only a URL was given.
-            if b64 is None:
-                log.warning(
-                    "image_obs_url_not_supported_for_anthropic",
-                    hint="Return bytes or a base64 string from step(); URLs are not accepted.",
-                )
-                return [
-                    {
-                        "type": "text",
-                        "text": f"{step_prefix}\n[image — URL not supported for Anthropic provider]",
-                    }
-                ]
-            image_block: dict[str, Any] = {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": b64,
-                },
-            }
-        else:
-            # OpenAI / Gemini — data-URL for base64, plain URL otherwise.
-            img_url = url if url is not None else f"data:{media_type};base64,{b64}"
-            image_block = {
-                "type": "image_url",
-                "image_url": {"url": img_url, "detail": "auto"},
-            }
+        image_block: dict[str, Any] = {
+            "type": "image_url",
+            "image_url": {"url": img_url, "detail": "auto"},
+        }
 
         return [text_block, image_block]
 

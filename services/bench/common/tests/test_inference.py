@@ -152,7 +152,8 @@ def test_image_content_preserves_data_url_for_openai() -> None:
     ]
 
 
-def test_image_content_strips_data_url_for_anthropic_base64_source() -> None:
+def test_image_content_uses_openai_blocks_for_anthropic_via_litellm() -> None:
+    """LiteLLM validates user messages as OpenAI chat completions before routing."""
     router = InferenceRouter(allow_any_model=True)
     content = router._build_user_content(
         Observation(data="data:image/png;base64,AAEC", content_type="image/png"),
@@ -163,11 +164,7 @@ def test_image_content_strips_data_url_for_anthropic_base64_source() -> None:
     assert content == [
         {"type": "text", "text": "[Step 4]"},
         {
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": "AAEC",
-            },
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,AAEC", "detail": "auto"},
         },
     ]
