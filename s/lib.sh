@@ -33,21 +33,6 @@ swarm_ensure_gateway_alias() {
     "$svc" >/dev/null 2>&1 || true
 }
 
-# SWAG (linuxserver/swag) often sits on swag-network only; its nginx upstreams use
-# swecc_stack_<service>. After a scratch bench recreate, attach that alias here too.
-swarm_ensure_swag_network_alias() {
-  local svc="$1"
-  local alias
-  alias="$(swarm_gateway_dns "$svc")"
-  if ! docker network inspect swag-network &>/dev/null; then
-    return 0
-  fi
-  log INFO "Ensuring ${svc} is on swag-network as ${alias} (SWAG upstream DNS)"
-  docker service update \
-    --network-add "name=swag-network,alias=${alias}" \
-    "$svc" >/dev/null 2>&1 || true
-}
-
 # Swarm Docker config for --env-file.
 # bench-api → bench-api_env (server_env copy + ORCH_* from swecc-infra sync-configs).
 # Include BENCH_CORS_ORIGINS with https://mesocosm.swecc.org (and local Vite ports if needed).
@@ -209,17 +194,6 @@ swarm_curl_bench_health() {
     return 1
   }
   log INFO "Bench health OK: ${body}"
-
-  if docker network inspect swag-network &>/dev/null; then
-    local swag_url="http://${alias}:8000/health"
-    log INFO "Probing ${swag_url} from swag-network (SWAG path)"
-    body="$(docker run --rm --network swag-network curlimages/curl:8.5.0 \
-      -fsS --max-time 15 "$swag_url")" || {
-      log ERROR "Bench not reachable on swag-network — SWAG will 502 until swarm_ensure_swag_network_alias runs"
-      return 1
-    }
-    log INFO "Bench health OK via swag-network: ${body}"
-  fi
   return 0
 }
 

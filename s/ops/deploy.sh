@@ -188,9 +188,6 @@ deploy_service() {
   rm -f /tmp/${svc}_env.tmp
   wait_for_service "$svc"
   swarm_ensure_gateway_alias "$svc"
-  if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" || "$svc" == "bench-sandbox" ]]; then
-    swarm_ensure_swag_network_alias "$svc"
-  fi
   if [[ "$svc" == "bench-api" ]]; then
     sleep 3
     swarm_curl_bench_health || die "bench-api is not reachable on the swarm network after deploy"
