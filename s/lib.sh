@@ -198,11 +198,11 @@ swarm_force_env_var() {
   [[ $- == *x* ]] && trace_was_on=1 && set +x
   while docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
     | grep -q "^${key}="; do
-    swarm_docker_service_update "$svc" --env-rm "$key" \
+    swarm_docker_service_update "$svc" --update-order stop-first --env-rm "$key" \
       || die "Failed to --env-rm ${key} on ${svc}"
   done
 
-  swarm_docker_service_update "$svc" --env-add "${key}=${value}" \
+  swarm_docker_service_update "$svc" --update-order stop-first --env-add "${key}=${value}" \
     || die "Failed to --env-add ${key} on ${svc}"
   [[ $trace_was_on -eq 1 ]] && set -x
 }
