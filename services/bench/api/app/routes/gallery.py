@@ -11,12 +11,11 @@ from app.schemas import (
 )
 from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
 from app.services.run_list import runs_to_list_items
+from bench.models import ActorType
 from bench_common.core.domain import Domain
 from bench_common.core.run import Run
 from bench_common.storage import database as db
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-from bench.models import ActorType
 
 router = APIRouter(prefix="/v1/gallery", tags=["gallery"])
 

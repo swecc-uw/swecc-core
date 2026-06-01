@@ -56,9 +56,8 @@ def _sample_run(domain_id: str, run_id: str = "gallery-test-run"):
 
 @pytest.mark.asyncio
 async def test_list_gallery_runs_excludes_unpublished_domain(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain()
     run = _sample_run(domain.id)
@@ -79,11 +78,10 @@ async def test_list_gallery_runs_excludes_unpublished_domain(django_db):
 
 @pytest.mark.asyncio
 async def test_archive_domain_gallery_demotes_public_runs(django_db):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType
     from bench.models import Run as RunRow
     from bench.models import Visibility
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain("archive-domain")
     run = _sample_run(domain.id, run_id="archive-run")
@@ -122,9 +120,8 @@ async def test_list_domains_excludes_archived_by_default(django_db):
 
 @pytest.mark.asyncio
 async def test_gallery_runs_pagination(django_db, api_app):
-    from bench_common.storage import django_store as store
-
     from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
 
     domain = _sample_domain("gallery-page-domain")
     await store.save_domain(domain)
