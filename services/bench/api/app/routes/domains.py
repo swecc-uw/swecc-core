@@ -2,6 +2,7 @@ from app.auth.deps import get_principal, require_member
 from app.auth.principal import Guest, Member
 from app.auth.resolve import auth_disabled
 from app.schemas import (
+    DEFAULT_GALLERY_LIMIT,
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
     DomainEnvironmentListItem,
@@ -128,7 +129,7 @@ async def list_domain_mine_runs(
 @router.get("/{domain_id}/runs/gallery", response_model=RunListPageResponse)
 async def list_domain_gallery_runs(
     domain_id: str,
-    limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    limit: int = Query(DEFAULT_GALLERY_LIMIT, ge=1, le=MAX_LIST_LIMIT),
     cursor: str | None = Query(None, description="Id of the last run from the previous page"),
 ) -> RunListPageResponse:
     """Public gallery runs for one domain as RunListItem rows."""

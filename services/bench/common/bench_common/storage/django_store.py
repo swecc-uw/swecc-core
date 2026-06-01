@@ -273,12 +273,11 @@ async def episode_summaries_for_runs(run_ids: list[str]) -> dict[str, EpisodeSum
             avg_reward=float(avg) if avg is not None else None,
         )
 
-    # Top terminal_info reasons per run (small N+1; only for listed runs).
+    episodes_by_run = await get_episodes_for_runs([run_id for run_id in run_ids if run_id in out])
     for run_id in run_ids:
         if run_id not in out:
             continue
-        episodes = await get_episodes(run_id)
-        rich = summarize_episodes(episodes)
+        rich = summarize_episodes(episodes_by_run.get(run_id, []))
         base = out[run_id]
         out[run_id] = EpisodeSummary(
             completed_count=base.completed_count,
@@ -483,6 +482,64 @@ async def archive_domain_gallery(domain_id: str) -> None:
     ).aupdate(visibility=Visibility.PRIVATE)
 
 
+class ActivityRun(NamedTuple):
+    run: Run
+    row: RunRow
+    source: str  # "mine" | "gallery"
+
+
+def _activity_source(row: RunRow, *, actor_type: str | None, actor_id: str | None) -> str:
+    if actor_type and actor_id and row.actor_type == actor_type and row.actor_id == actor_id:
+        return "mine"
+    return "gallery"
+
+
+async def list_domain_activity_runs(
+    domain_id: str,
+    *,
+    actor_type: str | None = None,
+    actor_id: str | None = None,
+    limit: int = 20,
+    cursor: str | None = None,
+) -> list[ActivityRun]:
+    """Recent runs for a domain: caller-owned rows plus public gallery runs."""
+    gallery_q = Q(
+        visibility=Visibility.GALLERY_PUBLIC,
+        status="completed",
+        domain__published=True,
+    )
+    if actor_type and actor_id:
+        combined = Q(domain_id=domain_id) & (
+            Q(actor_type=actor_type, actor_id=actor_id) | gallery_q
+        )
+    else:
+        combined = Q(domain_id=domain_id) & gallery_q
+
+    qs = RunRow.objects.filter(combined)
+    if cursor:
+        try:
+            cur_row = await RunRow.objects.aget(id=cursor)
+            cur_created = _run_from_row(cur_row).created_at.isoformat()
+            qs = qs.filter(
+                Q(data__created_at__lt=cur_created)
+                | (Q(data__created_at=cur_created) & Q(id__lt=cursor))
+            )
+        except RunRow.DoesNotExist:
+            pass
+    qs = qs.order_by("-data__created_at", "-id")
+
+    out: list[ActivityRun] = []
+    async for row in qs[:limit]:
+        out.append(
+            ActivityRun(
+                run=_run_from_row(row),
+                row=row,
+                source=_activity_source(row, actor_type=actor_type, actor_id=actor_id),
+            )
+        )
+    return out
+
+
 async def list_gallery_runs(
     *,
     domain_id: str | None = None,
@@ -536,10 +593,17 @@ async def get_episode(episode_id: str) -> Episode | None:
 
 
 async def get_episodes(run_id: str) -> list[Episode]:
-    return [
-        _model_from_row_data(Episode, row.data)
-        async for row in EpisodeRow.objects.filter(run_id=run_id)
-    ]
+    grouped = await get_episodes_for_runs([run_id])
+    return grouped.get(run_id, [])
+
+
+async def get_episodes_for_runs(run_ids: list[str]) -> dict[str, list[Episode]]:
+    if not run_ids:
+        return {}
+    out: dict[str, list[Episode]] = {run_id: [] for run_id in run_ids}
+    async for row in EpisodeRow.objects.filter(run_id__in=run_ids):
+        out[row.run_id].append(_model_from_row_data(Episode, row.data))
+    return out
 
 
 # ── Developer Environments ────────────────────────────────────────────────────

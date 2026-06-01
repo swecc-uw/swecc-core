@@ -157,3 +157,97 @@ async def test_gallery_runs_pagination(django_db, api_app):
         page1_ids = {item["run_id"] for item in body1["items"]}
         page2_ids = {item["run_id"] for item in body2["items"]}
         assert page1_ids.isdisjoint(page2_ids)
+
+
+@pytest.mark.asyncio
+async def test_episode_summaries_for_runs_batched(django_db):
+    from bench.models import ActorType
+    from bench_common.core.run import Episode
+    from bench_common.storage import django_store as store
+
+    domain = _sample_domain("summary-batch-domain")
+    await store.save_domain(domain)
+    run_a = _sample_run(domain.id, "summary-run-a")
+    run_b = _sample_run(domain.id, "summary-run-b")
+    await store.save_run(
+        run_a,
+        actor_type=ActorType.GUEST,
+        actor_id="g1",
+        visibility="gallery_public",
+    )
+    await store.save_run(
+        run_b,
+        actor_type=ActorType.GUEST,
+        actor_id="g2",
+        visibility="gallery_public",
+    )
+    await store.save_episode(
+        Episode(
+            id="ep-a1",
+            run_id=run_a.id,
+            status="failed",
+            terminal_info={"reason": "episode_error", "error": "boom"},
+        )
+    )
+    await store.save_episode(
+        Episode(
+            id="ep-b1",
+            run_id=run_b.id,
+            status="truncated",
+            terminal_info={"reason": "step_limit"},
+        )
+    )
+
+    summaries = await store.episode_summaries_for_runs([run_a.id, run_b.id])
+    assert summaries[run_a.id].failed_count == 1
+    assert summaries[run_a.id].failure_reasons == ("episode_error",)
+    assert summaries[run_b.id].truncated_count == 1
+    assert summaries[run_b.id].truncation_reasons == ("step_limit",)
+
+
+@pytest.mark.asyncio
+async def test_gallery_activity_pagination(django_db, api_app, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from bench.models import ActorType, Visibility
+    from bench_common.storage import django_store as store
+
+    monkeypatch.setenv("BENCH_AUTH_DISABLED", "1")
+    domain = _sample_domain("activity-page-domain")
+    await store.save_domain(domain)
+    base = datetime(2026, 1, 1, 12, 0, 0)
+    for i in range(6):
+        run = _sample_run(domain.id, f"activity-run-{i}").model_copy(
+            update={"created_at": base + timedelta(minutes=i)}
+        )
+        await store.save_run(
+            run,
+            actor_type=ActorType.MEMBER if i % 2 == 0 else ActorType.GUEST,
+            actor_id="0" if i % 2 == 0 else f"g{i}",
+            visibility=Visibility.GALLERY_PUBLIC if i % 2 else Visibility.PRIVATE,
+        )
+
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        page1 = await client.get(
+            f"/v1/gallery/domains/{domain.id}/activity",
+            params={"limit": 5},
+        )
+        assert page1.status_code == 200
+        body1 = page1.json()
+        assert len(body1["items"]) == 5
+        assert body1["next_cursor"] is not None
+
+        page2 = await client.get(
+            f"/v1/gallery/domains/{domain.id}/activity",
+            params={"limit": 5, "cursor": body1["next_cursor"]},
+        )
+        assert page2.status_code == 200
+        body2 = page2.json()
+        assert len(body2["items"]) == 1
+        assert body2["next_cursor"] is None
+
+        page1_ids = {item["id"] for item in body1["items"]}
+        page2_ids = {item["id"] for item in body2["items"]}
+        assert page1_ids.isdisjoint(page2_ids)
+        assert page1_ids | page2_ids == {f"activity-run-{i}" for i in range(6)}
