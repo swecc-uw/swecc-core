@@ -12,7 +12,9 @@ def test_resolve_repo_file_accepts_nested_file_inside_repo(tmp_path: Path) -> No
     adapter.parent.mkdir()
     adapter.write_text("print('ok')", encoding="utf-8")
 
-    assert _resolve_repo_file(tmp_path, "src/adapter.py", "Adapter") == adapter.resolve()
+    assert (
+        _resolve_repo_file(tmp_path, "src/adapter.py", "Adapter") == adapter.resolve()
+    )
 
 
 def test_resolve_repo_file_rejects_path_traversal(tmp_path: Path) -> None:

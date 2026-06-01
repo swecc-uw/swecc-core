@@ -29,7 +29,11 @@ _HOP_BY_HOP_OR_SENSITIVE_HEADERS = {
 
 
 def _forward_headers(headers: dict[str, str]) -> dict[str, str]:
-    return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP_OR_SENSITIVE_HEADERS}
+    return {
+        k: v
+        for k, v in headers.items()
+        if k.lower() not in _HOP_BY_HOP_OR_SENSITIVE_HEADERS
+    }
 
 
 # ── Internal management routes ─────────────────────────────────────────────────
@@ -51,7 +55,11 @@ async def port_usage() -> dict[str, int]:
     on its admin status endpoint — running out of ports stalls all new envs."""
     in_use = len(manager._registry)
     total = (manager._PORT_RANGE_END - manager._PORT_RANGE_START) + 1
-    return {"in_use": in_use, "total": total, "available": len(manager._available_ports)}
+    return {
+        "in_use": in_use,
+        "total": total,
+        "available": len(manager._available_ports),
+    }
 
 
 @app.post("/clone")
@@ -83,7 +91,9 @@ async def stop_env(env_id: str) -> dict[str, str]:
 # ── Reverse-proxy to env subprocesses ─────────────────────────────────────────
 
 
-@app.api_route("/envs/{env_id}/{path:path}", methods=["GET", "POST", "DELETE", "PUT", "PATCH"])
+@app.api_route(
+    "/envs/{env_id}/{path:path}", methods=["GET", "POST", "DELETE", "PUT", "PATCH"]
+)
 async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
     """
     Proxy requests from the API container (which uses env_url = http://sandbox:8001/envs/{id})
@@ -109,7 +119,9 @@ async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
                 params=dict(request.query_params),
             )
         except httpx.TransportError as exc:
-            raise HTTPException(status_code=502, detail=f"Env server unreachable: {exc}")
+            raise HTTPException(
+                status_code=502, detail=f"Env server unreachable: {exc}"
+            )
 
     return Response(
         content=resp.content,

@@ -93,7 +93,9 @@ def _resolve_repo_file(base_dir: Path, relative_path: str, label: str) -> Path:
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ManifestError(f"{label} path must stay inside the manifest directory.") from exc
+        raise ManifestError(
+            f"{label} path must stay inside the manifest directory."
+        ) from exc
     if not resolved.is_file():
         raise ManifestError(
             f"{label} {relative_path!r} not found under {base_dir}. "
@@ -243,9 +245,15 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
             try:
                 manifest = json.loads(manifest_path.read_text())
             except json.JSONDecodeError as exc:
-                raise ManifestError(f"benchanything.json is not valid JSON: {exc}") from exc
+                raise ManifestError(
+                    f"benchanything.json is not valid JSON: {exc}"
+                ) from exc
 
-            missing = [k for k in ("adapter", "name", "binding_vow", "scoring") if k not in manifest]
+            missing = [
+                k
+                for k in ("adapter", "name", "binding_vow", "scoring")
+                if k not in manifest
+            ]
             if missing:
                 raise ManifestError(
                     f"benchanything.json is missing required key(s): "
@@ -256,10 +264,16 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
             try:
                 from bench_common.core.binding_vow import BindingVow
 
-                vow_raw = {**manifest["binding_vow"], "id": "validate", "domain_id": "validate"}
+                vow_raw = {
+                    **manifest["binding_vow"],
+                    "id": "validate",
+                    "domain_id": "validate",
+                }
                 BindingVow.model_validate(vow_raw).validate()
             except Exception as exc:
-                raise ManifestError(f"binding_vow in benchanything.json is invalid: {exc}") from exc
+                raise ManifestError(
+                    f"binding_vow in benchanything.json is invalid: {exc}"
+                ) from exc
 
             # Install dependencies — bounded so a hung `pip install` can't pin
             # the port slot forever.
@@ -278,7 +292,9 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
                     stderr=asyncio.subprocess.PIPE,
                 )
                 try:
-                    _, pip_stderr = await asyncio.wait_for(pip_proc.communicate(), timeout=300.0)
+                    _, pip_stderr = await asyncio.wait_for(
+                        pip_proc.communicate(), timeout=300.0
+                    )
                 except asyncio.TimeoutError:
                     pip_proc.kill()
                     # Bounded wait — without this, a pip process stuck in an
@@ -356,7 +372,11 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
                             _registry[env_id]["status"] = "running"
                             log.info("env_server_ready", env_id=env_id, url=env_url)
                             success = True
-                            return {"env_id": env_id, "url": env_url, "manifest": manifest}
+                            return {
+                                "env_id": env_id,
+                                "url": env_url,
+                                "manifest": manifest,
+                            }
                     except httpx.TransportError:
                         pass
                     # Bail early if process died — include stderr so student sees their traceback
