@@ -46,6 +46,8 @@ class DeveloperEnvironment(BaseModel):
     status: str
     domain_id: str | None
     env_url: str | None
+    external_ui: str | None = None
+    devpost_link: str | None = None
     error_message: str | None
     created_at: str
     scope: str = EnvScope.SOLO
@@ -53,6 +55,11 @@ class DeveloperEnvironment(BaseModel):
     submission_version: int = 1
     domain_history: list[dict[str, Any]] = []
     resubmitted_at: str | None = None
+
+
+class UpdateEnvironmentRequest(BaseModel):
+    external_ui: str | None = None
+    devpost_link: str | None = None
 
 
 class EnvironmentWithUsage(DeveloperEnvironment):
@@ -472,6 +479,25 @@ async def get_environment(
         raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
     usage = await db.get_environment_usage_stats(env_id)
     return {**env, "usage": usage}
+
+
+@router.patch("/environments/{env_id}", response_model=DeveloperEnvironment)
+async def update_environment(
+    env_id: str,
+    req: UpdateEnvironmentRequest,
+    member: Member = Depends(require_member),
+) -> dict[str, Any]:
+    """Update user-provided links (external UI, Devpost) for a submission."""
+    await assert_dev_env_access(env_id, member)
+    env = await db.get_developer_environment(env_id)
+    if env is None:
+        raise HTTPException(status_code=404, detail=f"Environment '{env_id}' not found")
+    if req.external_ui is not None:
+        env["external_ui"] = req.external_ui
+    if req.devpost_link is not None:
+        env["devpost_link"] = req.devpost_link
+    await db.save_developer_environment(env)
+    return env
 
 
 @router.get("/environments/{env_id}/usage")
