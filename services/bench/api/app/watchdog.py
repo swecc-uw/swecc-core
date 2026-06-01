@@ -41,8 +41,6 @@ async def tick_stale_run_watchdog() -> None:
             try:
                 await publish_run_if_mq(run_id)
                 log.info("stale_run_requeued", run_id=run_id)
-                rescued += 1
-                continue
             except Exception:
                 log.exception("stale_run_requeue_failed", run_id=run_id)
         asyncio.create_task(orchestrator.dispatch_run_execute(run_id))
