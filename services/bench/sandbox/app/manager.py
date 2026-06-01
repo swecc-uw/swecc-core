@@ -54,7 +54,34 @@ _PORT_RANGE_START = int(os.getenv("SANDBOX_PORT_START", "9000"))
 _PORT_RANGE_END = int(os.getenv("SANDBOX_PORT_END", "9999"))
 _available_ports: set[int] = set(range(_PORT_RANGE_START, _PORT_RANGE_END + 1))
 _registry: dict[str, dict[str, Any]] = {}  # env_id → {process, port, manifest, status}
-_lock = asyncio.Lock()
+_lock = asyncio.Lock()  # port-pool allocation
+_env_clone_locks: dict[str, asyncio.Lock] = {}
+_env_clone_locks_guard = asyncio.Lock()
+
+
+async def _env_clone_lock(env_id: str) -> asyncio.Lock:
+    """Per-env lock so parallel /clone requests don't git-clone into the same dir."""
+    async with _env_clone_locks_guard:
+        lock = _env_clone_locks.get(env_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _env_clone_locks[env_id] = lock
+        return lock
+
+
+def _running_clone_result(env_id: str) -> dict[str, Any] | None:
+    """Return clone payload when this env_id already has a live adapter subprocess."""
+    entry = _registry.get(env_id)
+    if entry is None or entry.get("status") != "running":
+        return None
+    proc = entry.get("process")
+    if proc is not None and proc.returncode is not None:
+        return None
+    return {
+        "env_id": env_id,
+        "url": f"http://{SANDBOX_HOST}:{entry['port']}",
+        "manifest": entry["manifest"],
+    }
 
 
 def _resolve_repo_file(base_dir: Path, relative_path: str, label: str) -> Path:
@@ -132,229 +159,236 @@ async def clone_and_start(env_id: str, github_url: str) -> dict[str, Any]:
     except InvalidGithubUrl as exc:
         raise EnvironmentStartupError(str(exc)) from exc
 
-    async with _lock:
-        if not _available_ports:
-            raise RuntimeError(
-                f"No available subprocess ports "
-                f"(pool {_PORT_RANGE_START}–{_PORT_RANGE_END} is exhausted). "
-                "Stop unused environments first."
-            )
-        port = min(_available_ports)
-        _available_ports.discard(port)
+    env_lock = await _env_clone_lock(env_id)
+    async with env_lock:
+        existing = _running_clone_result(env_id)
+        if existing is not None:
+            log.info("clone_skip_already_running", env_id=env_id)
+            return existing
 
-    env_dir = ENVS_DIR / env_id
-    proc: asyncio.subprocess.Process | None = None
-    stderr_task: asyncio.Task | None = None
-    success = False
-    try:
-        # Clean up any stale clone
-        if env_dir.exists():
-            shutil.rmtree(env_dir)
-
-        log.info("cloning_repo", env_id=env_id, github_url=github_url)
-        clone_proc = await asyncio.create_subprocess_exec(
-            "git",
-            "clone",
-            "--depth=1",
-            github_url,
-            str(env_dir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            _, stderr = await asyncio.wait_for(
-                clone_proc.communicate(),
-                timeout=GIT_CLONE_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            clone_proc.kill()
-            try:
-                await asyncio.wait_for(clone_proc.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                log.warning(
-                    "git_clone_unresponsive_after_kill",
-                    env_id=env_id,
-                    pid=clone_proc.pid,
+        async with _lock:
+            if not _available_ports:
+                raise RuntimeError(
+                    f"No available subprocess ports "
+                    f"(pool {_PORT_RANGE_START}–{_PORT_RANGE_END} is exhausted). "
+                    "Stop unused environments first."
                 )
-            log.warning(
-                "git_clone_timeout",
-                env_id=env_id,
-                github_url=github_url,
-                timeout_seconds=GIT_CLONE_TIMEOUT_SECONDS,
-            )
-            raise EnvironmentStartupError(
-                f"git clone exceeded {GIT_CLONE_TIMEOUT_SECONDS:.0f}s timeout"
-            ) from None
-        if clone_proc.returncode != 0:
-            log.warning(
-                "git_clone_failed",
-                env_id=env_id,
-                github_url=github_url,
-                returncode=clone_proc.returncode,
-            )
-            raise EnvironmentStartupError(
-                f"git clone failed for {github_url!r}:\n{stderr.decode().strip()}"
-            )
+            port = min(_available_ports)
+            _available_ports.discard(port)
 
-        # Validate manifest
-        from bench_common.env_sdk.manifest import find_manifest_path
-
-        manifest_path = find_manifest_path(env_dir)
-        if manifest_path is None:
-            raise ManifestError(
-                "Repository must contain benchanything.json at its root or under auxiliary/. "
-                "Copy the template from services/bench/template/ and fill it in."
-            )
-
+        env_dir = ENVS_DIR / env_id
+        proc: asyncio.subprocess.Process | None = None
+        stderr_task: asyncio.Task | None = None
+        success = False
         try:
-            manifest = json.loads(manifest_path.read_text())
-        except json.JSONDecodeError as exc:
-            raise ManifestError(f"benchanything.json is not valid JSON: {exc}") from exc
+            # Clean up any stale clone
+            if env_dir.exists():
+                shutil.rmtree(env_dir)
 
-        missing = [k for k in ("adapter", "name", "binding_vow", "scoring") if k not in manifest]
-        if missing:
-            raise ManifestError(
-                f"benchanything.json is missing required key(s): "
-                f"{', '.join(repr(k) for k in missing)}"
-            )
-
-        # Validate the binding vow schema before spinning up a subprocess
-        try:
-            from bench_common.core.binding_vow import BindingVow
-
-            vow_raw = {**manifest["binding_vow"], "id": "validate", "domain_id": "validate"}
-            BindingVow.model_validate(vow_raw).validate()
-        except Exception as exc:
-            raise ManifestError(f"binding_vow in benchanything.json is invalid: {exc}") from exc
-
-        # Install dependencies — bounded so a hung `pip install` can't pin
-        # the port slot forever.
-        req_file = env_dir / "requirements.txt"
-        if req_file.exists():
-            log.info("installing_deps", env_id=env_id)
-            pip_proc = await asyncio.create_subprocess_exec(
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-q",
-                "-r",
-                str(req_file),
+            log.info("cloning_repo", env_id=env_id, github_url=github_url)
+            clone_proc = await asyncio.create_subprocess_exec(
+                "git",
+                "clone",
+                "--depth=1",
+                github_url,
+                str(env_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                _, pip_stderr = await asyncio.wait_for(pip_proc.communicate(), timeout=300.0)
+                _, stderr = await asyncio.wait_for(
+                    clone_proc.communicate(),
+                    timeout=GIT_CLONE_TIMEOUT_SECONDS,
+                )
             except asyncio.TimeoutError:
-                pip_proc.kill()
-                # Bounded wait — without this, a pip process stuck in an
-                # uninterruptible D-state (slow network mount, NFS hang) would
-                # block here forever and starve the outer cleanup of the port
-                # we already allocated.
+                clone_proc.kill()
                 try:
-                    await asyncio.wait_for(pip_proc.wait(), timeout=5.0)
+                    await asyncio.wait_for(clone_proc.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
                     log.warning(
-                        "pip_proc_unresponsive_after_sigkill",
+                        "git_clone_unresponsive_after_kill",
                         env_id=env_id,
-                        pid=pip_proc.pid,
+                        pid=clone_proc.pid,
                     )
+                log.warning(
+                    "git_clone_timeout",
+                    env_id=env_id,
+                    github_url=github_url,
+                    timeout_seconds=GIT_CLONE_TIMEOUT_SECONDS,
+                )
                 raise EnvironmentStartupError(
-                    "pip install exceeded 300s timeout — your requirements.txt "
-                    "is either too large or one of the listed packages is "
-                    "downloading from a slow mirror."
+                    f"git clone exceeded {GIT_CLONE_TIMEOUT_SECONDS:.0f}s timeout"
                 ) from None
-            if pip_proc.returncode != 0:
+            if clone_proc.returncode != 0:
+                log.warning(
+                    "git_clone_failed",
+                    env_id=env_id,
+                    github_url=github_url,
+                    returncode=clone_proc.returncode,
+                )
                 raise EnvironmentStartupError(
-                    f"pip install failed (exit {pip_proc.returncode}):\n"
-                    f"{pip_stderr.decode(errors='replace').strip()[-2000:]}"
+                    f"git clone failed for {github_url!r}:\n{stderr.decode().strip()}"
                 )
 
-        # Start the adapter server
-        adapter = manifest.get("adapter", "adapter.py")
-        adapter_path = _resolve_repo_file(manifest_path.parent, adapter, "Adapter")
+            # Validate manifest
+            from bench_common.env_sdk.manifest import find_manifest_path
 
-        log.info("starting_env_server", env_id=env_id, port=port)
-        adapter_env = os.environ.copy()
-        adapter_env.setdefault("BENCH_ADAPTER_MAX_STEPS", "35")
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            str(adapter_path),
-            "--port",
-            str(port),
-            cwd=str(adapter_path.parent),
-            env=adapter_env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            # Put adapter + any children it spawns into their own process group
-            # so we can kill the whole tree on stop_env / failure. Without this
-            # an adapter that forks workers leaves zombies after proc.kill().
-            start_new_session=True,
-        )
+            manifest_path = find_manifest_path(env_dir)
+            if manifest_path is None:
+                raise ManifestError(
+                    "Repository must contain benchanything.json at its root or under auxiliary/. "
+                    "Copy the template from services/bench/template/ and fill it in."
+                )
 
-        _registry[env_id] = {
-            "process": proc,
-            "port": port,
-            "manifest": manifest,
-            "status": "starting",
-            "stderr_lines": [],
-        }
+            try:
+                manifest = json.loads(manifest_path.read_text())
+            except json.JSONDecodeError as exc:
+                raise ManifestError(f"benchanything.json is not valid JSON: {exc}") from exc
 
-        # Wait for health check (up to 30 seconds), collecting stderr in background
-        env_url = f"http://{SANDBOX_HOST}:{port}"
-        local_health_url = f"http://localhost:{port}/health"
+            missing = [k for k in ("adapter", "name", "binding_vow", "scoring") if k not in manifest]
+            if missing:
+                raise ManifestError(
+                    f"benchanything.json is missing required key(s): "
+                    f"{', '.join(repr(k) for k in missing)}"
+                )
 
-        async def _collect_stderr() -> None:
-            assert proc.stderr is not None
-            async for line in proc.stderr:
-                decoded = line.decode(errors="replace").rstrip()
-                _registry[env_id]["stderr_lines"].append(decoded)
-                log.debug("adapter_stderr", env_id=env_id, line=decoded)
+            # Validate the binding vow schema before spinning up a subprocess
+            try:
+                from bench_common.core.binding_vow import BindingVow
 
-        stderr_task = asyncio.create_task(_collect_stderr())
+                vow_raw = {**manifest["binding_vow"], "id": "validate", "domain_id": "validate"}
+                BindingVow.model_validate(vow_raw).validate()
+            except Exception as exc:
+                raise ManifestError(f"binding_vow in benchanything.json is invalid: {exc}") from exc
 
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            for _ in range(30):
-                await asyncio.sleep(1.0)
+            # Install dependencies — bounded so a hung `pip install` can't pin
+            # the port slot forever.
+            req_file = env_dir / "requirements.txt"
+            if req_file.exists():
+                log.info("installing_deps", env_id=env_id)
+                pip_proc = await asyncio.create_subprocess_exec(
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-q",
+                    "-r",
+                    str(req_file),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
                 try:
-                    r = await client.get(local_health_url)
-                    if r.status_code == 200:
-                        _registry[env_id]["status"] = "running"
-                        log.info("env_server_ready", env_id=env_id, url=env_url)
-                        success = True
-                        return {"env_id": env_id, "url": env_url, "manifest": manifest}
-                except httpx.TransportError:
-                    pass
-                # Bail early if process died — include stderr so student sees their traceback
-                if proc.returncode is not None:
-                    await asyncio.sleep(0.2)  # let stderr_task flush
-                    stderr_tail = _format_stderr(_registry[env_id]["stderr_lines"])
+                    _, pip_stderr = await asyncio.wait_for(pip_proc.communicate(), timeout=300.0)
+                except asyncio.TimeoutError:
+                    pip_proc.kill()
+                    # Bounded wait — without this, a pip process stuck in an
+                    # uninterruptible D-state (slow network mount, NFS hang) would
+                    # block here forever and starve the outer cleanup of the port
+                    # we already allocated.
+                    try:
+                        await asyncio.wait_for(pip_proc.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        log.warning(
+                            "pip_proc_unresponsive_after_sigkill",
+                            env_id=env_id,
+                            pid=pip_proc.pid,
+                        )
                     raise EnvironmentStartupError(
-                        f"Adapter exited with code {proc.returncode} before "
-                        f"GET /health responded.\n{stderr_tail}"
+                        "pip install exceeded 300s timeout — your requirements.txt "
+                        "is either too large or one of the listed packages is "
+                        "downloading from a slow mirror."
+                    ) from None
+                if pip_proc.returncode != 0:
+                    raise EnvironmentStartupError(
+                        f"pip install failed (exit {pip_proc.returncode}):\n"
+                        f"{pip_stderr.decode(errors='replace').strip()[-2000:]}"
                     )
 
-        await asyncio.sleep(0.2)
-        stderr_tail = _format_stderr(_registry[env_id]["stderr_lines"])
-        _registry[env_id]["status"] = "unhealthy"
-        raise EnvironmentStartupError(
-            f"Adapter did not respond to GET /health within 30 s.\n"
-            f"Make sure your adapter calls serve() and accepts --port.\n"
-            f"{stderr_tail}"
-        )
-    finally:
-        if stderr_task is not None:
-            stderr_task.cancel()
-        if not success:
-            # Tear down everything we allocated: kill the subprocess (whole
-            # process group, see _terminate_process_tree), return the port to
-            # the pool, drop the registry entry, rmtree the dir. Without this,
-            # broken submissions leak ports and disk forever.
-            if proc is not None:
-                await _terminate_process_tree(proc, grace_seconds=2.0)
-            _registry.pop(env_id, None)
-            _available_ports.add(port)
-            shutil.rmtree(env_dir, ignore_errors=True)
+            # Start the adapter server
+            adapter = manifest.get("adapter", "adapter.py")
+            adapter_path = _resolve_repo_file(manifest_path.parent, adapter, "Adapter")
+
+            log.info("starting_env_server", env_id=env_id, port=port)
+            adapter_env = os.environ.copy()
+            adapter_env.setdefault("BENCH_ADAPTER_MAX_STEPS", "35")
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable,
+                str(adapter_path),
+                "--port",
+                str(port),
+                cwd=str(adapter_path.parent),
+                env=adapter_env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                # Put adapter + any children it spawns into their own process group
+                # so we can kill the whole tree on stop_env / failure. Without this
+                # an adapter that forks workers leaves zombies after proc.kill().
+                start_new_session=True,
+            )
+
+            _registry[env_id] = {
+                "process": proc,
+                "port": port,
+                "manifest": manifest,
+                "status": "starting",
+                "stderr_lines": [],
+            }
+
+            # Wait for health check (up to 30 seconds), collecting stderr in background
+            env_url = f"http://{SANDBOX_HOST}:{port}"
+            local_health_url = f"http://localhost:{port}/health"
+
+            async def _collect_stderr() -> None:
+                assert proc.stderr is not None
+                async for line in proc.stderr:
+                    decoded = line.decode(errors="replace").rstrip()
+                    _registry[env_id]["stderr_lines"].append(decoded)
+                    log.debug("adapter_stderr", env_id=env_id, line=decoded)
+
+            stderr_task = asyncio.create_task(_collect_stderr())
+
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                for _ in range(30):
+                    await asyncio.sleep(1.0)
+                    try:
+                        r = await client.get(local_health_url)
+                        if r.status_code == 200:
+                            _registry[env_id]["status"] = "running"
+                            log.info("env_server_ready", env_id=env_id, url=env_url)
+                            success = True
+                            return {"env_id": env_id, "url": env_url, "manifest": manifest}
+                    except httpx.TransportError:
+                        pass
+                    # Bail early if process died — include stderr so student sees their traceback
+                    if proc.returncode is not None:
+                        await asyncio.sleep(0.2)  # let stderr_task flush
+                        stderr_tail = _format_stderr(_registry[env_id]["stderr_lines"])
+                        raise EnvironmentStartupError(
+                            f"Adapter exited with code {proc.returncode} before "
+                            f"GET /health responded.\n{stderr_tail}"
+                        )
+
+            await asyncio.sleep(0.2)
+            stderr_tail = _format_stderr(_registry[env_id]["stderr_lines"])
+            _registry[env_id]["status"] = "unhealthy"
+            raise EnvironmentStartupError(
+                f"Adapter did not respond to GET /health within 30 s.\n"
+                f"Make sure your adapter calls serve() and accepts --port.\n"
+                f"{stderr_tail}"
+            )
+        finally:
+            if stderr_task is not None:
+                stderr_task.cancel()
+            if not success:
+                # Tear down everything we allocated: kill the subprocess (whole
+                # process group, see _terminate_process_tree), return the port to
+                # the pool, drop the registry entry, rmtree the dir. Without this,
+                # broken submissions leak ports and disk forever.
+                if proc is not None:
+                    await _terminate_process_tree(proc, grace_seconds=2.0)
+                _registry.pop(env_id, None)
+                _available_ports.add(port)
+                shutil.rmtree(env_dir, ignore_errors=True)
 
 
 def _format_stderr(lines: list[str], tail: int = 20) -> str:
