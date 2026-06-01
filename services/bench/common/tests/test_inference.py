@@ -258,6 +258,15 @@ def test_resolve_structured_action_discrete_from_wrapped_payload() -> None:
     assert action == "B"
 
 
+def test_resolve_structured_action_discrete_from_double_wrapped_payload() -> None:
+    space = _vow_for_action_space(
+        {"type": "discrete", "enum_values": ["N", "S", "E", "W"]}
+    ).action_space
+
+    action, _ = _resolve_structured_action({"action": {"action": "E"}}, space)
+    assert action == "E"
+
+
 def test_image_content_preserves_data_url_for_openai() -> None:
     router = InferenceRouter(allow_any_model=True)
     content = router._build_user_content(

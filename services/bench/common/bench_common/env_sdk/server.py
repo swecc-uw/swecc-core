@@ -27,6 +27,7 @@ from typing import Any, Type
 
 import uvicorn
 from bench_common.env_sdk.base import BaseEnv
+from bench_common.runtime.action_envelope import unwrap_action_envelope
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
@@ -190,7 +191,7 @@ def create_env_app(
                 "system_prompt": None,
             }
         try:
-            action = env.parse_action(req.action)
+            action = env.parse_action(unwrap_action_envelope(req.action))
             result = env.step(action)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
