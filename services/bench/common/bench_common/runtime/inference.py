@@ -190,16 +190,167 @@ def _space_to_json_schema(space: SpaceSpec | CompositeSpace) -> dict[str, Any]:
 def _wrap_action_schema(inner: dict[str, Any]) -> dict[str, Any]:
     """Wrap the action schema in a top-level object.
 
-    All three providers (OpenAI, Anthropic, Gemini) require the outermost JSON
-    Schema type to be ``object``.  We consistently wrap the value under an
-    ``action`` key and unwrap it after parsing, so provider-specific extraction
-    logic is uniform.
+    Used for discrete / continuous / composite spaces.  JSON action spaces whose
+    ``schema_ref`` is already a complete object envelope are sent as-is instead
+    (see ``_provider_action_schema``).
     """
     return {
         "type": "object",
         "properties": {"action": inner},
         "required": ["action"],
     }
+
+
+# Keys models sometimes add alongside the action payload; stripped before matching.
+_STRUCTURED_META_KEYS = frozenset(
+    {
+        "reasoning",
+        "explanation",
+        "thought",
+        "rationale",
+        "analysis",
+        "comment",
+        "notes",
+    }
+)
+
+
+def _json_envelope_required_keys(space: SpaceSpec | CompositeSpace) -> frozenset[str] | None:
+    """Required top-level keys for a JSON ``schema_ref`` action envelope, if any."""
+    if not isinstance(space, SpaceSpec) or space.type != SpaceType.JSON:
+        return None
+    if not space.schema_ref:
+        return None
+    try:
+        schema = json.loads(space.schema_ref)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if schema.get("type") != "object":
+        return None
+    props = schema.get("properties")
+    if not isinstance(props, dict) or not props:
+        return None
+    required = schema.get("required")
+    if isinstance(required, list) and required:
+        return frozenset(str(k) for k in required)
+    return frozenset(str(k) for k in props)
+
+
+def _uses_action_envelope(space: SpaceSpec | CompositeSpace) -> bool:
+    """True when ``schema_ref`` already describes the full per-step JSON object."""
+    return _json_envelope_required_keys(space) is not None
+
+
+def _provider_action_schema(space: SpaceSpec | CompositeSpace) -> dict[str, Any]:
+    """JSON Schema sent to structured-output APIs for this action space."""
+    inner = _space_to_json_schema(space)
+    if _uses_action_envelope(space):
+        return inner
+    return _wrap_action_schema(inner)
+
+
+def _strip_structured_meta(payload: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in payload.items() if k not in _STRUCTURED_META_KEYS}
+
+
+def _reasoning_from_payload(payload: dict[str, Any]) -> str:
+    context = payload.get("context")
+    if isinstance(context, str) and context.strip():
+        return context.strip()
+    for key in ("reasoning", "explanation", "rationale"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _resolve_discrete_from_payload(payload: dict[str, Any], space: SpaceSpec) -> Any | None:
+    if not space.enum_values:
+        return None
+    body = _strip_structured_meta(payload)
+    for val in body.values():
+        if isinstance(val, str):
+            for allowed in space.enum_values:
+                if val.upper() == allowed.upper():
+                    return allowed
+    return None
+
+
+def _resolve_structured_action(
+    parsed: dict[str, Any],
+    space: SpaceSpec | CompositeSpace,
+) -> tuple[Any, str]:
+    """Normalise provider JSON into the env-ready action payload."""
+    envelope_keys = _json_envelope_required_keys(space)
+    body = _strip_structured_meta(parsed)
+
+    if envelope_keys:
+        if set(body.keys()) == {"action"} and isinstance(body["action"], dict):
+            inner = body["action"]
+            if envelope_keys.issubset(inner.keys()):
+                return inner, _reasoning_from_payload(inner)
+
+        if envelope_keys.issubset(body.keys()):
+            return body, _reasoning_from_payload(body)
+
+        present = envelope_keys & body.keys()
+        if present and present != envelope_keys:
+            missing = sorted(envelope_keys - body.keys())
+            raise StructuredOutputError(
+                "structured content missing required envelope fields: "
+                f"{missing}; keys={list(parsed.keys())}"
+            )
+
+    if set(body.keys()) == {"action"} and isinstance(body["action"], dict):
+        inner = body["action"]
+        if envelope_keys and envelope_keys.issubset(inner.keys()):
+            return inner, _reasoning_from_payload(inner)
+
+    if "action" in body:
+        inner = body["action"]
+        if isinstance(inner, dict) and envelope_keys and envelope_keys.issubset(inner.keys()):
+            return inner, _reasoning_from_payload(inner)
+        if isinstance(inner, dict) and isinstance(space, CompositeSpace):
+            field_keys = frozenset(space.fields.keys())
+            if field_keys & inner.keys():
+                return inner, _reasoning_from_payload(body)
+        return inner, _reasoning_from_payload(body)
+
+    if isinstance(space, CompositeSpace):
+        field_keys = frozenset(space.fields.keys())
+        if field_keys & body.keys():
+            return body, _reasoning_from_payload(body)
+
+    if isinstance(space, SpaceSpec) and space.type == SpaceType.DISCRETE:
+        found = _resolve_discrete_from_payload(body, space)
+        if found is not None:
+            return found, _reasoning_from_payload(body)
+
+    if isinstance(space, SpaceSpec) and space.type == SpaceType.JSON and body:
+        return body, _reasoning_from_payload(body)
+
+    if isinstance(space, SpaceSpec) and space.type == SpaceType.CONTINUOUS and len(body) == 1:
+        val = next(iter(body.values()))
+        if isinstance(val, (int, float)):
+            return float(val), ""
+
+    raise StructuredOutputError(
+        "structured content did not match the binding vow action space; "
+        f"keys={list(parsed.keys())}"
+    )
+
+
+def _loads_structured_json(raw: str) -> Any:
+    """Parse structured-output JSON, tolerating markdown fences."""
+    text = raw.strip()
+    for fence in ("```json", "```"):
+        if text.startswith(fence):
+            text = text.removeprefix(fence)
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+            break
+    return json.loads(text)
 
 
 class DecideResult(NamedTuple):
@@ -277,7 +428,7 @@ class InferenceRouter:
 
         # ── structured-output kwargs ──────────────────────────────────────────
         if use_structured:
-            action_schema = _wrap_action_schema(_space_to_json_schema(binding_vow.action_space))
+            action_schema = _provider_action_schema(binding_vow.action_space)
             if provider == "anthropic":
                 # Claude: force a single tool call so the response is always a
                 # validated JSON object — no free-text parsing needed.
@@ -312,7 +463,11 @@ class InferenceRouter:
         response = await _acompletion_with_retry(**kwargs)
 
         if use_structured:
-            action, reasoning_text = self._extract_structured_action(response, provider)
+            action, reasoning_text = self._extract_structured_action(
+                response,
+                provider,
+                binding_vow.action_space,
+            )
         else:
             raw = response.choices[0].message.content or ""
             reasoning_text = self._strip_thinking(raw)
@@ -361,7 +516,12 @@ class InferenceRouter:
             return True
         return space.type in _STRUCTURED_SPACE_TYPES
 
-    def _extract_structured_action(self, response: Any, provider: str) -> tuple[Any, str]:
+    def _extract_structured_action(
+        self,
+        response: Any,
+        provider: str,
+        action_space: SpaceSpec | CompositeSpace,
+    ) -> tuple[Any, str]:
         """Unpack the action value from a structured-output API response.
 
         Returns ``(action, reasoning_text)``.
@@ -369,7 +529,8 @@ class InferenceRouter:
         *   **Anthropic** responses carry a tool call; any text emitted before
             the call is captured as ``reasoning_text``.
         *   **OpenAI / Gemini** responses have the JSON object directly in
-            ``message.content``; ``reasoning_text`` is empty.
+            ``message.content``; envelope ``context`` fields are surfaced as
+            ``reasoning_text`` when present.
         """
         if provider == "anthropic":
             message = response.choices[0].message
@@ -409,13 +570,12 @@ class InferenceRouter:
                 if not isinstance(parsed, dict):
                     raise StructuredOutputError(
                         f"Anthropic tool args parsed to {type(parsed).__name__}, "
-                        f"expected an object with an 'action' field."
+                        "expected a JSON object."
                     )
-                if "action" not in parsed:
-                    raise StructuredOutputError(
-                        "Anthropic tool args did not contain required 'action' field."
-                    )
-                return parsed["action"], reasoning_text
+                action, envelope_reasoning = _resolve_structured_action(parsed, action_space)
+                if not reasoning_text and envelope_reasoning:
+                    reasoning_text = envelope_reasoning
+                return action, reasoning_text
 
             # Model did not call the tool (should not happen with tool_choice forced).
             raise StructuredOutputError(
@@ -432,7 +592,7 @@ class InferenceRouter:
                 f"refusal or max_tokens too small."
             )
         try:
-            parsed = json.loads(raw)
+            parsed = _loads_structured_json(raw)
         except json.JSONDecodeError as exc:
             raise StructuredOutputError(
                 f"{provider} returned non-JSON content despite response_format: "
@@ -441,13 +601,9 @@ class InferenceRouter:
         if not isinstance(parsed, dict):
             raise StructuredOutputError(
                 f"{provider} structured content parsed to {type(parsed).__name__}, "
-                "expected an object with an 'action' field."
+                "expected a JSON object."
             )
-        if "action" not in parsed:
-            raise StructuredOutputError(
-                f"{provider} structured content did not contain required 'action' field."
-            )
-        return parsed["action"], ""
+        return _resolve_structured_action(parsed, action_space)
 
     def _strip_thinking(self, text: str) -> str:
         """Remove <think>...</think> blocks that some reasoning models emit."""
@@ -512,13 +668,16 @@ class InferenceRouter:
                     "You may reason briefly before calling the tool; "
                     "the platform records your full reply."
                 )
-            else:
-                # OpenAI / Gemini — response_format enforces the JSON Schema
+            elif _uses_action_envelope(vow.action_space):
                 parts.append(
-                    "Respond with a JSON object containing your chosen action "
-                    "in the required schema. "
-                    "You may include a brief reasoning field if the schema allows it; "
-                    "the platform records your full reply."
+                    "Respond with one JSON object that matches the action-space schema "
+                    "exactly (all required fields). The platform records your full reply."
+                )
+            else:
+                parts.append(
+                    "Respond with a JSON object whose `action` field contains your "
+                    "chosen action in the required schema. "
+                    "The platform records your full reply."
                 )
         else:
             parts.append(
@@ -579,11 +738,11 @@ class InferenceRouter:
         step_prefix: str,
         provider: str,
     ) -> list[dict[str, Any]]:
-        """Build a provider-appropriate multipart content list for image observations.
+        """Build a multipart user content list for image observations.
 
-        Supports bytes (raw binary), str (base64), and dict{"url": ...} (remote URL).
-        Anthropic requires base64; OpenAI/Gemini accept either base64 data-URLs or
-        remote https:// URLs.
+        Always uses OpenAI-style ``image_url`` blocks — LiteLLM validates
+        messages in that format and translates per provider.  Supports bytes
+        (raw binary), str (base64 or data-URL), and dict{"url": ...} (remote URL).
         """
         import base64
 
@@ -606,36 +765,15 @@ class InferenceRouter:
             b64 = str(data)
             url = None
 
+        # LiteLLM validates user messages against the OpenAI chat-completion
+        # schema before routing to any provider — always use image_url blocks
+        # here; LiteLLM translates them to each provider's native wire format.
+        img_url = url if url is not None else f"data:{media_type};base64,{b64}"
         text_block: dict[str, Any] = {"type": "text", "text": step_prefix}
-
-        if provider == "anthropic":
-            # Anthropic requires base64; fall back gracefully if only a URL was given.
-            if b64 is None:
-                log.warning(
-                    "image_obs_url_not_supported_for_anthropic",
-                    hint="Return bytes or a base64 string from step(); URLs are not accepted.",
-                )
-                return [
-                    {
-                        "type": "text",
-                        "text": f"{step_prefix}\n[image — URL not supported for Anthropic provider]",
-                    }
-                ]
-            image_block: dict[str, Any] = {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": b64,
-                },
-            }
-        else:
-            # OpenAI / Gemini — data-URL for base64, plain URL otherwise.
-            img_url = url if url is not None else f"data:{media_type};base64,{b64}"
-            image_block = {
-                "type": "image_url",
-                "image_url": {"url": img_url, "detail": "auto"},
-            }
+        image_block: dict[str, Any] = {
+            "type": "image_url",
+            "image_url": {"url": img_url, "detail": "auto"},
+        }
 
         return [text_block, image_block]
 
