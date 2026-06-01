@@ -77,9 +77,7 @@ async def test_clone_and_start_skips_when_env_already_running() -> None:
         "status": "running",
     }
 
-    with patch(
-        "app.manager.asyncio.create_subprocess_exec", new=AsyncMock()
-    ) as mock_exec:
+    with patch("app.manager.asyncio.create_subprocess_exec", new=AsyncMock()) as mock_exec:
         result = await manager.clone_and_start("env-1", "https://github.com/o/r")
 
     assert result == {
@@ -118,12 +116,8 @@ async def test_clone_and_start_serializes_same_env_id() -> None:
         "app.manager.asyncio.create_subprocess_exec",
         side_effect=fake_create_subprocess_exec,
     ):
-        task_a = asyncio.create_task(
-            manager.clone_and_start("env-1", "https://github.com/o/r")
-        )
-        task_b = asyncio.create_task(
-            manager.clone_and_start("env-1", "https://github.com/o/r")
-        )
+        task_a = asyncio.create_task(manager.clone_and_start("env-1", "https://github.com/o/r"))
+        task_b = asyncio.create_task(manager.clone_and_start("env-1", "https://github.com/o/r"))
 
         await asyncio.wait_for(clone_started.wait(), timeout=1.0)
         await asyncio.sleep(0.05)

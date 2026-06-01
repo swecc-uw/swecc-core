@@ -29,11 +29,7 @@ _HOP_BY_HOP_OR_SENSITIVE_HEADERS = {
 
 
 def _forward_headers(headers: dict[str, str]) -> dict[str, str]:
-    return {
-        k: v
-        for k, v in headers.items()
-        if k.lower() not in _HOP_BY_HOP_OR_SENSITIVE_HEADERS
-    }
+    return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP_OR_SENSITIVE_HEADERS}
 
 
 # ── Internal management routes ─────────────────────────────────────────────────
@@ -91,9 +87,7 @@ async def stop_env(env_id: str) -> dict[str, str]:
 # ── Reverse-proxy to env subprocesses ─────────────────────────────────────────
 
 
-@app.api_route(
-    "/envs/{env_id}/{path:path}", methods=["GET", "POST", "DELETE", "PUT", "PATCH"]
-)
+@app.api_route("/envs/{env_id}/{path:path}", methods=["GET", "POST", "DELETE", "PUT", "PATCH"])
 async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
     """
     Proxy requests from the API container (which uses env_url = http://sandbox:8001/envs/{id})
@@ -119,9 +113,7 @@ async def proxy_to_env(env_id: str, path: str, request: Request) -> Response:
                 params=dict(request.query_params),
             )
         except httpx.TransportError as exc:
-            raise HTTPException(
-                status_code=502, detail=f"Env server unreachable: {exc}"
-            )
+            raise HTTPException(status_code=502, detail=f"Env server unreachable: {exc}")
 
     return Response(
         content=resp.content,
