@@ -153,9 +153,8 @@ deploy_service() {
 
     swarm_service_create_detached \
       --name "$svc" \
-      --network "$SWARM_NETWORK" \
-      --network-alias "$gateway_alias" \
-      --env-file /tmp/${svc}_env.tmp \
+      --network "name=${SWARM_NETWORK},alias=${gateway_alias}" \
+      --env-file "/tmp/${svc}_env.tmp" \
       --limit-cpu "$CPU_LIMIT" \
       --limit-memory "$MEMORY_LIMIT" \
       --reserve-cpu "$CPU_RESERVE" \
