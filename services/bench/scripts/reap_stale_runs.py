@@ -31,10 +31,12 @@ from pathlib import Path
 
 
 def _bootstrap_paths() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
+    script = Path(__file__).resolve()
+    if len(script.parents) < 4:
+        return
+    repo_root = script.parents[3]
     services_dir = repo_root / "services"
     if not services_dir.is_dir():
-        # bench-api image: deps on PYTHONPATH, script may live under /tmp.
         return
     api_dir = services_dir / "bench" / "api"
     server_dir = services_dir / "server" / "server"
