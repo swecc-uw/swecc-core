@@ -51,9 +51,7 @@ class ArithmeticEnv(BaseEnv):
     def reset(self, seed: int | None = None, **params: Any) -> dict[str, Any]:
         rng = random.Random(seed)
         # Ensure all 4 operations appear, distribute remainder randomly
-        ops = _OPS * (PROBLEMS_PER_EPISODE // 4) + rng.sample(
-            _OPS, PROBLEMS_PER_EPISODE % 4
-        )
+        ops = _OPS * (PROBLEMS_PER_EPISODE // 4) + rng.sample(_OPS, PROBLEMS_PER_EPISODE % 4)
         rng.shuffle(ops)
         self._problems = [_generate_problem(op, rng) for op in ops]
         self._step_idx = 0
