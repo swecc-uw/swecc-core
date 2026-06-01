@@ -139,6 +139,7 @@ def print_run_help(*, console: Console | None = None) -> None:
     c.print(
         _command_table(
             [
+                ("watch RUN_ID", "Poll until terminal; shows status_reason and episode outcomes"),
                 ("get RUN_ID", "Fetch run status and aggregate scores"),
                 ("episodes RUN_ID", "List episodes (--traces to include traces)"),
             ]

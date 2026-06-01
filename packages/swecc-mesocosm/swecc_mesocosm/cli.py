@@ -8,17 +8,28 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, cast
 
 import httpx
 import typer
 from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.text import Text
 from swecc_mesocosm import __version__, validation
 from swecc_mesocosm.bench_dispatch import try_dispatch_bench
 from swecc_mesocosm.client import BenchClient
 from swecc_mesocosm.help_text import print_root_help, print_run_help
+from swecc_mesocosm.run_status import (
+    EPISODE_FAILURE_STATUSES,
+    RUN_FAILURE_STATUSES,
+    is_run_terminal,
+    reason_label,
+    run_status_summary,
+)
 from swecc_mesocosm.settings import settings
 from swecc_mesocosm.urls import default_bench_api_url, default_env_adapter_url, mesocosm_local_mode
 
@@ -120,8 +131,34 @@ def _client(base_url: str | None) -> BenchClient:
     return BenchClient(base_url=base_url) if base_url else BenchClient()
 
 
-_EPISODE_FAILURE_STATUSES = frozenset({"failed", "cancelled", "error"})
-_RUN_FAILURE_STATUSES = frozenset({"failed", "cancelled", "error"})
+_EPISODE_FAILURE_STATUSES = EPISODE_FAILURE_STATUSES  # re-export for tests
+_RUN_FAILURE_STATUSES = RUN_FAILURE_STATUSES
+
+
+def _exit_if_episode_failed(episode: dict[str, Any]) -> None:
+    status = episode.get("status")
+    if status in _EPISODE_FAILURE_STATUSES:
+        reason = (episode.get("terminal_info") or {}).get("reason")
+        msg = f"episode {status}"
+        if reason:
+            msg += f" — {reason_label(str(reason))}"
+        info = episode.get("terminal_info") or {}
+        if info.get("error"):
+            msg += f": {info['error']}"
+        err_console.print(f"[red]{msg}[/red]")
+        raise typer.Exit(1)
+
+
+def _exit_if_run_unsuccessful(run: dict[str, Any], episodes: list[dict[str, Any]] | None) -> None:
+    status = run.get("status")
+    if status in _RUN_FAILURE_STATUSES:
+        for line in run_status_summary(run, episodes):
+            err_console.print(f"[red]{line}[/red]" if line.startswith("run") else line)
+        raise typer.Exit(1)
+    if episodes:
+        for ep in episodes:
+            if ep.get("status") in _EPISODE_FAILURE_STATUSES:
+                _exit_if_episode_failed(ep)
 
 
 def _effective_base_url(base_url: str | None) -> str:
@@ -146,25 +183,42 @@ async def _resolve_vow_version(
     return str(version)
 
 
-def _exit_if_episode_failed(episode: dict[str, Any]) -> None:
-    status = episode.get("status")
-    if status in _EPISODE_FAILURE_STATUSES:
-        err_console.print(
-            f"[red]episode {status}[/red]"
-            + (f": {episode.get('terminal_info')}" if episode.get("terminal_info") else "")
-        )
-        raise typer.Exit(1)
+def _watch_status_panel(run: dict[str, Any], episodes: list[dict[str, Any]] | None) -> Panel:
+    lines = run_status_summary(run, episodes)
+    body = Text("\n".join(lines))
+    status = str(run.get("status") or "unknown")
+    style = "green" if status == "completed" else "red" if status in _RUN_FAILURE_STATUSES else "yellow"
+    title = f"Run {run.get('id', '?')} — {status}"
+    if run.get("status_reason"):
+        title += f" ({reason_label(str(run['status_reason']))})"
+    return Panel(body, title=title, border_style=style)
 
 
-def _exit_if_run_unsuccessful(run: dict[str, Any], episodes: list[dict[str, Any]] | None) -> None:
-    status = run.get("status")
-    if status in _RUN_FAILURE_STATUSES:
-        err_console.print(f"[red]run {status}[/red]")
-        raise typer.Exit(1)
-    if episodes:
-        for ep in episodes:
-            if ep.get("status") in _EPISODE_FAILURE_STATUSES:
-                _exit_if_episode_failed(ep)
+async def _poll_run_until_terminal(
+    client: BenchClient,
+    run_id: str,
+    *,
+    interval_s: float,
+    timeout_s: float | None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    started = time.monotonic()
+    episodes: list[dict[str, Any]] = []
+    run: dict[str, Any] = {"id": run_id, "status": "pending"}
+
+    with Live(_watch_status_panel(run, None), refresh_per_second=4, console=console) as live:
+        while True:
+            batch = await client.batch_run_status([run_id])
+            row = batch.get(run_id)
+            if row:
+                run = {**row, "id": run_id}
+            if is_run_terminal(str(run.get("status"))):
+                episodes = await client.list_episodes(run_id)
+                live.update(_watch_status_panel(run, episodes))
+                return run, episodes
+            live.update(_watch_status_panel(run, episodes))
+            if timeout_s is not None and time.monotonic() - started > timeout_s:
+                _die(f"timed out after {timeout_s}s waiting for run {run_id}")
+            await asyncio.sleep(interval_s)
 
 
 def _probe_url(url: str, *, timeout_s: float = 10.0) -> tuple[int | None, str | None]:
@@ -434,6 +488,34 @@ def cmd_eval_run(
 
 
 # ── run inspection ──────────────────────────────────────────────────────
+
+
+@run_app.command("watch")
+def cmd_run_watch(
+    run_id: str = typer.Argument(..., help="Run id from mesocosm run create"),
+    interval: float = typer.Option(2.0, "--interval", "-i", help="Poll interval in seconds"),
+    timeout: float | None = typer.Option(None, "--timeout", help="Give up after N seconds"),
+    json_output: bool = typer.Option(False, "--json", help="Print final run JSON instead of live UI"),
+    base_url: str | None = BaseUrlOpt,
+) -> None:
+    """Poll run status until completed, failed, or cancelled."""
+
+    async def _go() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        c = _client(base_url)
+        try:
+            return await _poll_run_until_terminal(
+                c,
+                run_id,
+                interval_s=max(0.5, interval),
+                timeout_s=timeout,
+            )
+        finally:
+            await c.aclose()
+
+    run, episodes = _run_with_http_errors(_go())
+    if json_output:
+        _print_json({"run": run, "episodes": episodes, "aggregate_scores": run.get("scores", {})})
+    _exit_if_run_unsuccessful(run, episodes)
 
 
 @run_app.command("get")

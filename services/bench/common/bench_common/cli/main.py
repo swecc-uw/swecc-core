@@ -659,6 +659,9 @@ def _cmd_init(args: argparse.Namespace) -> None:
     for src, out in (
         ("showcase_README.md", "README.md"),
         ("replay.example.json", "replay.example.json"),
+        ("showcase/index.html", "index.html"),
+        ("showcase/status-ui.css", "status-ui.css"),
+        ("showcase/run-status.js", "run-status.js"),
     ):
         target = showcase / out
         if target.exists() and not args.force:

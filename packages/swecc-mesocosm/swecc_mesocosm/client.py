@@ -123,3 +123,13 @@ class BenchClient:
         r = await self._client.get(f"v1/runs/{run_id}/traces")
         r.raise_for_status()
         return _json_dict(r.json())
+
+    async def batch_run_status(self, run_ids: list[str]) -> dict[str, dict[str, Any]]:
+        if not run_ids:
+            return {}
+        ids = ",".join(run_ids)
+        r = await self._client.get("v1/runs/status", params={"ids": ids})
+        r.raise_for_status()
+        body = _json_dict(r.json())
+        runs = body.get("runs") or {}
+        return _json_dict(runs) if isinstance(runs, dict) else {}
