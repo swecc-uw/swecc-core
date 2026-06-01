@@ -34,16 +34,10 @@ def test_adapter_step_cap_truncates_without_calling_env() -> None:
 
     client.post("/reset", json={"episode_id": eid})
     assert (
-        client.post("/step", json={"episode_id": eid, "action": "a"}).json()[
-            "truncated"
-        ]
-        is False
+        client.post("/step", json={"episode_id": eid, "action": "a"}).json()["truncated"] is False
     )
     assert (
-        client.post("/step", json={"episode_id": eid, "action": "b"}).json()[
-            "truncated"
-        ]
-        is False
+        client.post("/step", json={"episode_id": eid, "action": "b"}).json()["truncated"] is False
     )
 
     capped = client.post("/step", json={"episode_id": eid, "action": "c"}).json()

@@ -45,15 +45,9 @@ async def test_execute_run_skips_when_no_pending_episodes() -> None:
 
     with (
         patch.object(orchestrator.db, "get_run", new_callable=AsyncMock) as get_run,
-        patch.object(
-            orchestrator.db, "get_episodes", new_callable=AsyncMock
-        ) as get_episodes,
-        patch.object(
-            orchestrator, "_run_all_episodes", new_callable=AsyncMock
-        ) as run_all,
-        patch.object(
-            orchestrator, "_finalize_run_if_ready", new_callable=AsyncMock
-        ) as finalize,
+        patch.object(orchestrator.db, "get_episodes", new_callable=AsyncMock) as get_episodes,
+        patch.object(orchestrator, "_run_all_episodes", new_callable=AsyncMock) as run_all,
+        patch.object(orchestrator, "_finalize_run_if_ready", new_callable=AsyncMock) as finalize,
     ):
         get_run.return_value = run
         get_episodes.return_value = episodes
@@ -75,9 +69,7 @@ async def test_create_run_publishes_when_mq_enabled(monkeypatch) -> None:
     domain.id = "d1"
 
     with (
-        patch.object(
-            orchestrator.db, "get_domain", new_callable=AsyncMock
-        ) as get_domain,
+        patch.object(orchestrator.db, "get_domain", new_callable=AsyncMock) as get_domain,
         patch.object(orchestrator.db, "save_run", new_callable=AsyncMock),
         patch.object(orchestrator.db, "save_episode", new_callable=AsyncMock),
         patch.object(orchestrator, "_schedule_run_execution") as schedule,
@@ -97,14 +89,10 @@ async def test_create_run_publishes_when_mq_enabled(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_execute_run_finalizes_when_episodes_already_done() -> None:
-    with patch.object(
-        orchestrator, "_finalize_run_if_ready", new_callable=AsyncMock
-    ) as finalize:
+    with patch.object(orchestrator, "_finalize_run_if_ready", new_callable=AsyncMock) as finalize:
         with (
             patch.object(orchestrator.db, "get_run", new_callable=AsyncMock) as get_run,
-            patch.object(
-                orchestrator.db, "get_episodes", new_callable=AsyncMock
-            ) as get_episodes,
+            patch.object(orchestrator.db, "get_episodes", new_callable=AsyncMock) as get_episodes,
         ):
             get_run.return_value = Run(
                 id="run-3",
@@ -116,9 +104,7 @@ async def test_execute_run_finalizes_when_episodes_already_done() -> None:
                 requester_id="u1",
                 status="running",
             )
-            get_episodes.return_value = [
-                Episode(id="ep-1", run_id="run-3", status="completed")
-            ]
+            get_episodes.return_value = [Episode(id="ep-1", run_id="run-3", status="completed")]
             await orchestrator.execute_run("run-3")
 
     finalize.assert_awaited_once_with("run-3")
