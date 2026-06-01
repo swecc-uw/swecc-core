@@ -21,7 +21,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 RECOVER=0
 REDEPLOY=0
-SERVICES=()
+TARGET_SVCS=()
 
 usage() {
   cat <<EOF
@@ -48,14 +48,14 @@ while [[ $# -gt 0 ]]; do
     -*) die "Unknown option: $1" ;;
     *)
       validate_service "$1"
-      SERVICES+=("$1")
+      TARGET_SVCS+=("$1")
       shift
       ;;
   esac
 done
 
-if [[ ${#SERVICES[@]} -eq 0 ]]; then
-  SERVICES=(server bench-api bench-sandbox bench-worker)
+if [[ ${#TARGET_SVCS[@]} -eq 0 ]]; then
+  TARGET_SVCS=(server bench-api bench-sandbox bench-worker)
 fi
 
 if [[ "$REDEPLOY" -eq 1 && "$RECOVER" -ne 1 ]]; then
@@ -179,27 +179,27 @@ redeploy_service() {
 
 main() {
   log INFO "Swarm deploy diagnose (recover=${RECOVER} redeploy=${REDEPLOY})"
-  log INFO "Services: ${SERVICES[*]}"
+  log INFO "Services: ${TARGET_SVCS[*]}"
 
   local blocked=0
   local svc
-  for svc in "${SERVICES[@]}"; do
+  for svc in "${TARGET_SVCS[@]}"; do
     diagnose_service "$svc" || blocked=$((blocked + 1)) || true
   done
 
   if [[ "$RECOVER" -eq 1 ]]; then
     log INFO "Beginning recovery pass"
-    for svc in "${SERVICES[@]}"; do
+    for svc in "${TARGET_SVCS[@]}"; do
       recover_service "$svc"
     done
     blocked=0
-    for svc in "${SERVICES[@]}"; do
+    for svc in "${TARGET_SVCS[@]}"; do
       diagnose_service "$svc" || blocked=$((blocked + 1)) || true
     done
   fi
 
   if [[ "$REDEPLOY" -eq 1 ]]; then
-    for svc in "${SERVICES[@]}"; do
+    for svc in "${TARGET_SVCS[@]}"; do
       redeploy_service "$svc"
     done
   fi
