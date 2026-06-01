@@ -51,7 +51,11 @@ async def port_usage() -> dict[str, int]:
     on its admin status endpoint — running out of ports stalls all new envs."""
     in_use = len(manager._registry)
     total = (manager._PORT_RANGE_END - manager._PORT_RANGE_START) + 1
-    return {"in_use": in_use, "total": total, "available": len(manager._available_ports)}
+    return {
+        "in_use": in_use,
+        "total": total,
+        "available": len(manager._available_ports),
+    }
 
 
 @app.post("/clone")
