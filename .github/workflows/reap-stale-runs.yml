@@ -1,0 +1,65 @@
+name: Reap Stale Bench Runs
+
+concurrency:
+  group: reap-stale-runs
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview only (no database writes)
+        required: true
+        type: boolean
+        default: true
+      stale_after_seconds:
+        description: Only fail rows older than N seconds (0 = all in-flight)
+        required: true
+        type: number
+        default: 0
+      confirm:
+        description: 'When dry_run is false, type "reap-stale" to confirm'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  validate:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require confirmation for live reap
+        if: inputs.dry_run == false && inputs.confirm != 'reap-stale'
+        run: |
+          echo "Live reap cancelled. Set dry_run=true to preview, or type reap-stale in confirm."
+          exit 1
+
+  reap:
+    name: Reap stale bench rows on swarm
+    needs: validate
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run reap_stale_runs.py in bench-api
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          STALE_AFTER_SECONDS: ${{ inputs.stale_after_seconds }}
+        run: |
+          set -euo pipefail
+          container_id="$(docker ps --filter "name=bench-api" --format "{{.ID}}" | head -1)"
+          if [[ -z "$container_id" ]]; then
+            echo "bench-api container not found"
+            docker ps --format '{{.Names}}' | grep -i bench || true
+            exit 1
+          fi
+          echo "container=$container_id"
+          docker cp services/bench/scripts/reap_stale_runs.py "$container_id:/tmp/reap_stale_runs.py"
+          args=(--stale-after-seconds "$STALE_AFTER_SECONDS" --yes)
+          if [[ "$DRY_RUN" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          docker exec "$container_id" python /tmp/reap_stale_runs.py "${args[@]}"
