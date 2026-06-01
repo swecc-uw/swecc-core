@@ -1,0 +1,27 @@
+name: Inspect RabbitMQ Queues
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    name: Inspect bench queues on swarm
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: List bench queue depths
+        run: |
+          set -euo pipefail
+          container_id=$(docker ps --filter "name=rabbitmq-host" --format "{{.ID}}" | head -1)
+          if [[ -z "$container_id" ]]; then
+            echo "RabbitMQ container not found (filter: rabbitmq-host)"
+            docker ps --format '{{.Names}}' | grep -i rabbit || true
+            exit 1
+          fi
+          echo "container=$container_id"
+          docker exec "$container_id" rabbitmqctl list_queues name messages messages_ready messages_unacknowledged consumers
+          echo "--- bench.run-queue payloads (requeue after peek) ---"
+          docker exec "$container_id" rabbitmqadmin get queue=bench.run-queue ackmode=ack_requeue_true count=20 2>/dev/null || true
+          echo "--- bench.job-queue payloads (requeue after peek) ---"
+          docker exec "$container_id" rabbitmqadmin get queue=bench.job-queue ackmode=ack_requeue_true count=20 2>/dev/null || true
