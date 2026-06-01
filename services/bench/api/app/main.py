@@ -3,6 +3,7 @@ FastAPI application entry point.
 """
 
 import asyncio
+import contextlib
 import json
 import os
 from contextlib import asynccontextmanager
@@ -45,10 +46,16 @@ from bench_common.config import settings as bench_settings  # noqa: E402
 from bench_common.storage.database import init_db  # noqa: E402
 
 try:  # noqa: E402
-    from bench_common.storage.database import reap_orphan_work  # type: ignore[attr-defined]
+    from bench_common.storage.database import (  # type: ignore[attr-defined]
+        reap_orphan_work,
+        reap_stale_work,
+    )
 except ImportError:  # pragma: no cover - compatibility with older bench_common builds
 
     async def reap_orphan_work() -> dict[str, int]:
+        return {}
+
+    async def reap_stale_work(**_kwargs) -> dict[str, int]:
         return {}
 
 
@@ -94,8 +101,11 @@ def _public_path(path: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.watchdog import stale_run_watchdog_loop
+
     await init_db()
     log.info("database_ready")
+    watchdog_task: asyncio.Task | None = None
     if bench_settings.mq_enabled:
         from app.mq import initialize_rabbitmq, producers, shutdown_rabbitmq
         from bench_common.mq_dispatch import register_run_publisher
@@ -113,12 +123,29 @@ async def lifespan(app: FastAPI):
         )
 
     if bench_settings.enable_orphan_reaper:
-        reaped = await reap_orphan_work()
+        reaped = await reap_stale_work(
+            stale_after_seconds=bench_settings.orphan_reaper_min_age_seconds,
+            reason="bench_api_startup",
+        )
         if any(reaped.values()):
             log.warning("orphan_work_reaped", **reaped)
     else:
         log.info("orphan_reaper_disabled", hint="set ORCH_ENABLE_ORPHAN_REAPER=true")
+
+    if bench_settings.enable_stale_watchdog:
+        watchdog_task = asyncio.create_task(stale_run_watchdog_loop())
+        log.info(
+            "stale_run_watchdog_started",
+            interval_seconds=bench_settings.watchdog_interval_seconds,
+            rescue_after_seconds=bench_settings.stale_run_rescue_seconds,
+        )
+
     yield
+
+    if watchdog_task is not None:
+        watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watchdog_task
     if bench_settings.mq_enabled:
         await shutdown_rabbitmq()
 

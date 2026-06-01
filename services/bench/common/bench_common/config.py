@@ -47,10 +47,19 @@ class Settings(BaseSettings):
     max_tokens_per_episode: int = 100_000
 
     # Mark stranded "running"/"pending"/"cloning" rows as failed on bench-api
-    # startup. With multiple bench-api replicas and rolling restarts, a new
-    # replica could mark another replica's live work as failed — set
-    # ORCH_ENABLE_ORPHAN_REAPER=false when horizontally scaling bench-api.
+    # startup. With multiple bench-api replicas, startup only reaps rows older
+    # than orphan_reaper_min_age_seconds so a peer's brand-new run is not failed.
+    # Set ORCH_ENABLE_ORPHAN_REAPER=false to disable startup + periodic fail sweeps.
     enable_orphan_reaper: bool = True
+    orphan_reaper_min_age_seconds: int = 120
+
+    # Background watchdog: reclaim runs stuck without in-process work (lost MQ
+    # message, auto-ack before execute, etc.). Uses Redis SET NX so only one
+    # replica dispatches rescue for a given run_id.
+    enable_stale_watchdog: bool = True
+    watchdog_interval_seconds: int = 60
+    stale_run_rescue_seconds: int = 90
+    stale_run_fail_seconds: int = 1800
 
     # RabbitMQ — enqueue runs/jobs for horizontal workers (see services/bench/README.md).
     mq_enabled: bool = False

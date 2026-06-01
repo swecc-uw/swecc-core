@@ -128,7 +128,7 @@ class AsyncRabbitConsumer:
         LOGGER.info(f"Starting to consume messages for {self._queue}")
         if self._channel:
             self._consumer_tag = self._channel.basic_consume(
-                self._queue, on_message_callback=self.on_message, auto_ack=True
+                self._queue, on_message_callback=self.on_message, auto_ack=False
             )
         else:
             LOGGER.warning(f"Channel is not open for consuming messages: {self._queue}")
@@ -137,8 +137,20 @@ class AsyncRabbitConsumer:
         LOGGER.info(f"Received message # {basic_deliver.delivery_tag} on {self._queue}")
 
         if self.message_callback:
-            # process in event loop
-            asyncio.create_task(self.message_callback(body, properties))
+            asyncio.create_task(
+                self._process_message(body, properties, basic_deliver.delivery_tag)
+            )
+
+    async def _process_message(self, body, properties, delivery_tag: int) -> None:
+        try:
+            await self.message_callback(body, properties)
+            if self._channel:
+                self._channel.basic_ack(delivery_tag)
+        except Exception:
+            LOGGER.exception("Failed to process message on %s", self._queue)
+            if self._channel:
+                # Do not requeue forever — the stale-run watchdog will rescue or fail.
+                self._channel.basic_nack(delivery_tag, requeue=False)
 
     def stop_consuming(self):
         if self._channel:

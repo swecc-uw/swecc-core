@@ -23,3 +23,10 @@ def test_bench_mq_prefetch_override(monkeypatch):
     monkeypatch.setenv("BENCH_MQ_PREFETCH", "5")
     s = Settings()
     assert s.mq_prefetch == 5
+
+
+def test_stale_watchdog_defaults_enabled(monkeypatch):
+    monkeypatch.delenv("ORCH_ENABLE_STALE_WATCHDOG", raising=False)
+    s = Settings()
+    assert s.enable_stale_watchdog is True
+    assert s.stale_run_rescue_seconds == 90

@@ -47,12 +47,14 @@ async def test_execute_run_skips_when_no_pending_episodes() -> None:
         patch.object(orchestrator.db, "get_run", new_callable=AsyncMock) as get_run,
         patch.object(orchestrator.db, "get_episodes", new_callable=AsyncMock) as get_episodes,
         patch.object(orchestrator, "_run_all_episodes", new_callable=AsyncMock) as run_all,
+        patch.object(orchestrator, "_finalize_run_if_ready", new_callable=AsyncMock) as finalize,
     ):
         get_run.return_value = run
         get_episodes.return_value = episodes
         await orchestrator.execute_run("run-2")
 
     run_all.assert_not_called()
+    finalize.assert_awaited_once_with("run-2")
 
 
 @pytest.mark.asyncio
@@ -83,3 +85,30 @@ async def test_create_run_publishes_when_mq_enabled(monkeypatch) -> None:
 
     publish.assert_awaited_once()
     schedule.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_run_finalizes_when_episodes_already_done() -> None:
+    with patch.object(
+        orchestrator, "_finalize_run_if_ready", new_callable=AsyncMock
+    ) as finalize:
+        with (
+            patch.object(orchestrator.db, "get_run", new_callable=AsyncMock) as get_run,
+            patch.object(orchestrator.db, "get_episodes", new_callable=AsyncMock) as get_episodes,
+        ):
+            get_run.return_value = Run(
+                id="run-3",
+                config=RunConfig(
+                    domain_id="d1",
+                    binding_vow_version="1.0.0",
+                    agent_config={"model": "openai/gpt-4o"},
+                ),
+                requester_id="u1",
+                status="running",
+            )
+            get_episodes.return_value = [
+                Episode(id="ep-1", run_id="run-3", status="completed")
+            ]
+            await orchestrator.execute_run("run-3")
+
+    finalize.assert_awaited_once_with("run-3")

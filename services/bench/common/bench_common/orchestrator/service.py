@@ -17,6 +17,20 @@ import httpx
 import structlog
 from bench_common.config import settings
 from bench_common.core.run import AgentConfig, Episode, Run, RunConfig, TechniqueConfig
+from bench_common.core.status import (
+    EPISODE_CANCELLED_RUN,
+    EPISODE_CANCELLED_TASK,
+    EPISODE_ERROR,
+    EPISODE_NO_ENV_URL,
+    RUN_CANCELLED_TASK,
+    RUN_CANCELLED_USER,
+    RUN_FAILED_DOMAIN_MISSING,
+    RUN_FAILED_EXECUTE_ERROR,
+    RUN_FAILED_INSUFFICIENT_SCOREABLE,
+    RUN_FAILED_NO_EPISODES,
+    apply_run_terminal,
+    summarize_episodes,
+)
 from bench_common.eval.metrics import _SCOREABLE_STATUSES, compute_scores
 from bench_common.mq_dispatch import publish_run_if_mq
 from bench_common.runtime.agent_loop import AgentLoop
@@ -174,14 +188,13 @@ async def execute_run(run_id: str) -> None:
     work_eps = [ep for ep in episodes if ep.status in ("pending", "running")]
     if not work_eps:
         log.info("execute_run_skip_no_work", run_id=run_id, run_status=run.status)
+        await _finalize_run_if_ready(run_id)
         return
 
     domain = await db.get_domain(run.config.domain_id)
     if domain is None:
         log.error("execute_run_domain_missing", run_id=run_id, domain_id=run.config.domain_id)
-        run.status = "failed"
-        run.completed_at = datetime.utcnow()
-        await db.save_run(run, env_id=run.env_id)
+        await _fail_run(run_id, RUN_FAILED_DOMAIN_MISSING)
         return
 
     if run_id in _active_run_tasks and not _active_run_tasks[run_id].done():
@@ -195,6 +208,97 @@ async def execute_run(run_id: str) -> None:
         await task
     finally:
         _active_run_tasks.pop(run_id, None)
+
+
+async def dispatch_run_execute(run_id: str) -> None:
+    """MQ consumer / watchdog entry — never leave a run stuck on dispatch failure."""
+    try:
+        await execute_run(run_id)
+    except Exception as exc:
+        log.exception("execute_run_failed", run_id=run_id, error=str(exc))
+        await _fail_run(run_id, RUN_FAILED_EXECUTE_ERROR, detail=str(exc))
+
+
+async def _fail_run(run_id: str, reason: str, *, detail: str | None = None) -> None:
+    run = await db.get_run(run_id)
+    if run is None or run.status in _TERMINAL_RUN_STATUSES:
+        return
+    status_detail: dict[str, Any] = {}
+    if detail:
+        status_detail["detail"] = detail
+    run = apply_run_terminal(run, status="failed", reason=reason, detail=status_detail)
+    run.completed_at = datetime.utcnow()
+    await db.save_run(run, env_id=run.env_id)
+    ep_terminal: dict[str, Any] = {"reason": reason}
+    if detail:
+        ep_terminal["detail"] = detail
+    for ep in await db.get_episodes(run_id):
+        if ep.status in ("pending", "running"):
+            ep.status = "failed"
+            ep.ended_at = datetime.utcnow()
+            ep.terminal_info = ep_terminal
+            await db.save_episode(ep)
+    log.warning("run_failed", run_id=run_id, reason=reason)
+
+
+async def _finalize_run_if_ready(run_id: str) -> None:
+    """Score and close a run when all episodes are already terminal."""
+    run = await db.get_run(run_id)
+    if run is None or run.status in _TERMINAL_RUN_STATUSES:
+        return
+
+    all_eps = await db.get_episodes(run_id)
+    if any(ep.status in ("pending", "running") for ep in all_eps):
+        return
+
+    domain = await db.get_domain(run.config.domain_id)
+    if domain is None:
+        await _fail_run(run_id, "domain_missing")
+        return
+
+    if not all_eps:
+        run = apply_run_terminal(run, status="failed", reason=RUN_FAILED_NO_EPISODES)
+        run.completed_at = datetime.utcnow()
+        await db.save_run(run, env_id=run.env_id)
+        return
+
+    scoreable_eps = [ep for ep in all_eps if ep.status in _SCOREABLE_STATUSES]
+    scoreable_ratio = len(scoreable_eps) / len(all_eps)
+    if scoreable_ratio < settings.min_scoreable_episode_ratio:
+        summary = summarize_episodes(all_eps)
+        run = apply_run_terminal(
+            run,
+            status="failed",
+            reason=RUN_FAILED_INSUFFICIENT_SCOREABLE,
+            detail={
+                "num_episodes": len(all_eps),
+                "scoreable": len(scoreable_eps),
+                "required_ratio": settings.min_scoreable_episode_ratio,
+                "episode_outcomes": {
+                    "completed": summary.completed_count,
+                    "failed": summary.failed_count,
+                    "truncated": summary.truncated_count,
+                    "cancelled": summary.cancelled_count,
+                    "timeout": summary.timeout_count,
+                },
+                "failure_reasons": list(summary.failure_reasons),
+                "truncation_reasons": list(summary.truncation_reasons),
+            },
+        )
+        run.completed_at = datetime.utcnow()
+        await db.save_run(run, env_id=run.env_id)
+        return
+
+    run.scores = compute_scores(domain.scoring, all_eps)
+    run.status = "completed"
+    run.completed_at = datetime.utcnow()
+    await db.save_run(run, env_id=run.env_id)
+    log.info("run_finalized", run_id=run_id, scores=run.scores)
+
+
+def run_is_active_locally(run_id: str) -> bool:
+    task = _active_run_tasks.get(run_id)
+    return task is not None and not task.done()
 
 
 async def _run_is_cancelled(run_id: str) -> bool:
@@ -211,6 +315,8 @@ async def cancel_run(run_id: str) -> Run:
         return run
 
     run.status = "cancelled"
+    run.status_reason = RUN_CANCELLED_USER
+    run.status_detail = {}
     run.completed_at = datetime.utcnow()
     await db.save_run(run)
 
@@ -231,7 +337,7 @@ async def cancel_run(run_id: str) -> Run:
         if ep.status in ("pending", "running"):
             ep.status = "cancelled"
             ep.ended_at = datetime.utcnow()
-            ep.terminal_info = {"cancelled": True, "reason": "run_cancelled"}
+            ep.terminal_info = {"cancelled": True, "reason": EPISODE_CANCELLED_RUN}
             await db.save_episode(ep)
 
     log.info("run_cancelled", run_id=run_id)
@@ -261,7 +367,7 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
             await asyncio.gather(*ep_tasks, return_exceptions=True)
             run = await db.get_run(run_id)
             if run is not None and run.status == "running":
-                run.status = "cancelled"
+                run = apply_run_terminal(run, status="cancelled", reason=RUN_CANCELLED_TASK)
                 run.completed_at = datetime.utcnow()
                 await db.save_run(run)
             raise
@@ -283,7 +389,7 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
     if not all_eps:
         # Defence-in-depth: RunConfig.num_episodes >= 1 should prevent this,
         # but if episode creation failed silently we'd otherwise score [] = 0.0.
-        run.status = "failed"
+        run = apply_run_terminal(run, status="failed", reason=RUN_FAILED_NO_EPISODES)
         run.completed_at = datetime.utcnow()
         await db.save_run(run, env_id=run.env_id)
         log.warning("run_no_episodes_recorded", run_id=run_id)
@@ -292,7 +398,26 @@ async def _run_all_episodes(run: Run, episodes: list[Episode], domain: Any) -> N
     scoreable_eps = [ep for ep in all_eps if ep.status in _SCOREABLE_STATUSES]
     scoreable_ratio = len(scoreable_eps) / len(all_eps)
     if scoreable_ratio < settings.min_scoreable_episode_ratio:
-        run.status = "failed"
+        summary = summarize_episodes(all_eps)
+        run = apply_run_terminal(
+            run,
+            status="failed",
+            reason=RUN_FAILED_INSUFFICIENT_SCOREABLE,
+            detail={
+                "num_episodes": len(all_eps),
+                "scoreable": len(scoreable_eps),
+                "required_ratio": settings.min_scoreable_episode_ratio,
+                "episode_outcomes": {
+                    "completed": summary.completed_count,
+                    "failed": summary.failed_count,
+                    "truncated": summary.truncated_count,
+                    "cancelled": summary.cancelled_count,
+                    "timeout": summary.timeout_count,
+                },
+                "failure_reasons": list(summary.failure_reasons),
+                "truncation_reasons": list(summary.truncation_reasons),
+            },
+        )
         run.completed_at = datetime.utcnow()
         await db.save_run(run, env_id=run.env_id)
         log.warning(
@@ -330,7 +455,10 @@ async def _run_episode(
         env_url, github_url = await _resolve_episode_env_url(domain, env_id)
         if not env_url:
             episode.status = "failed"
-            episode.terminal_info = {"error": "No environment URL configured"}
+            episode.terminal_info = {
+                "reason": EPISODE_NO_ENV_URL,
+                "error": "No environment URL configured",
+            }
             await db.save_episode(episode)
             return episode
 
@@ -361,14 +489,14 @@ async def _run_episode(
 
         except asyncio.CancelledError:
             episode.status = "cancelled"
-            episode.terminal_info = {"cancelled": True, "reason": "run_cancelled"}
+            episode.terminal_info = {"cancelled": True, "reason": EPISODE_CANCELLED_RUN}
             episode.ended_at = datetime.utcnow()
             await db.save_episode(episode)
             raise
         except Exception as exc:
             log.exception("episode_failed", episode_id=episode.id, error=str(exc))
             episode.status = "failed"
-            episode.terminal_info = {"error": str(exc)}
+            episode.terminal_info = {"reason": EPISODE_ERROR, "error": str(exc)}
             episode.ended_at = datetime.utcnow()
 
         await db.save_episode(episode)
@@ -450,10 +578,10 @@ async def run_test_episode(
         # Task was cancelled externally — persist terminal state before re-raising
         # so the episode and run don't stay stuck in "running" forever.
         episode.status = "cancelled"
-        episode.terminal_info = {"cancelled": True, "reason": "task_cancelled"}
+        episode.terminal_info = {"cancelled": True, "reason": EPISODE_CANCELLED_TASK}
         episode.ended_at = datetime.utcnow()
         await db.save_episode(episode)
-        run.status = "cancelled"
+        run = apply_run_terminal(run, status="cancelled", reason=RUN_CANCELLED_TASK)
         run.completed_at = datetime.utcnow()
         await db.save_run(run, env_id=env_id)
         raise
@@ -461,7 +589,7 @@ async def run_test_episode(
     except Exception as exc:
         log.exception("test_episode_failed", episode_id=episode.id, error=str(exc))
         episode.status = "failed"
-        episode.terminal_info = {"error": str(exc)}
+        episode.terminal_info = {"reason": EPISODE_ERROR, "error": str(exc)}
         episode.ended_at = datetime.utcnow()
 
     await db.save_episode(episode)
