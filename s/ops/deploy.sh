@@ -106,8 +106,7 @@ deploy_service() {
       --update-failure-action rollback
       --with-registry-auth
     )
-    swarm_service_update_with_env "$svc" "/tmp/${svc}_env.tmp" "${update_args[@]}" \
-      || die "Failed to update service $svc"
+    swarm_service_update_with_env "$svc" "/tmp/${svc}_env.tmp" "${update_args[@]}"
 
     if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]]; then
       local llm_key llm_line llm_val

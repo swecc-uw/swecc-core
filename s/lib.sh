@@ -482,7 +482,9 @@ swarm_service_update_flags_in_batches() {
   local batch_size="${SWARM_UPDATE_ENV_BATCH_SIZE:-48}"
   local i
 
-  (( ${#flags[@]} == 0 )) && return 0
+  if (( ${#flags[@]} == 0 )); then
+    return 0
+  fi
 
   for ((i = 0; i < ${#flags[@]}; i += batch_size)); do
     swarm_service_update_detached "$svc" "${flags[@]:i:batch_size}"
