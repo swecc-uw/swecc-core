@@ -106,8 +106,7 @@ deploy_service() {
       --update-failure-action rollback
       --with-registry-auth
     )
-    swarm_service_update_with_env "$svc" "/tmp/${svc}_env.tmp" "${update_args[@]}" \
-      || die "Failed to update service $svc"
+    swarm_service_update_with_env "$svc" "/tmp/${svc}_env.tmp" "${update_args[@]}"
 
     if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]]; then
       local llm_key llm_line llm_val
@@ -134,6 +133,10 @@ deploy_service() {
       fi
       log INFO "Refreshing BENCH_CORS_ORIGINS on ${svc} (strip duplicates, set for Mesocosm CORS)"
       swarm_force_env_var "$svc" "BENCH_CORS_ORIGINS" "$cors_val"
+    fi
+
+    if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]]; then
+      swarm_apply_bench_mq_if_configured "$svc" "/tmp/${svc}_env.tmp"
     fi
 
     wait_for_service_rollout "$svc"
@@ -165,6 +168,21 @@ deploy_service() {
       --with-registry-auth \
       "${extra_args[@]}" \
       "$image"
+    if [[ "$svc" == "bench-api" ]]; then
+      local cors_line cors_val
+      cors_line="$(grep -E '^BENCH_CORS_ORIGINS=' "/tmp/${svc}_env.tmp" | tail -1 || true)"
+      cors_val=""
+      if [[ -n "$cors_line" ]]; then
+        cors_val="${cors_line#BENCH_CORS_ORIGINS=}"
+      fi
+      if [[ -z "$cors_val" ]]; then
+        cors_val="https://mesocosm.swecc.org,https://swecc-uw.github.io"
+      fi
+      swarm_force_env_var "$svc" "BENCH_CORS_ORIGINS" "$cors_val"
+    fi
+    if [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]]; then
+      swarm_apply_bench_mq_if_configured "$svc" "/tmp/${svc}_env.tmp"
+    fi
   fi
 
   rm -f /tmp/${svc}_env.tmp

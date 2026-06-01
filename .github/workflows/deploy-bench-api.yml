@@ -15,10 +15,40 @@ on:
       - '.github/workflows/deploy-bench-api.yml'
       - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
+    inputs:
+      redeploy_from_scratch:
+        description: 'TEMP — rm bench-api/worker/sandbox Swarm services and recreate (see s/ops/redeploy-bench-from-scratch.sh)'
+        type: boolean
+        default: false
 
 jobs:
+  # TEMP recovery: only when manually dispatched with redeploy_from_scratch=true on this ref.
+  redeploy-from-scratch:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.redeploy_from_scratch }}
+    name: Redeploy bench stack from scratch
+    timeout-minutes: 45
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Redeploy bench services from scratch
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          BENCH_REDEPLOY_YES: '1'
+          DEPLOY_ROLLOUT_TIMEOUT_SEC: 600
+        run: |
+          chmod +x ./s/ops/redeploy-bench-from-scratch.sh ./s/ops/deploy.sh ./s/lib.sh
+          ./s/ops/redeploy-bench-from-scratch.sh --yes
+
   # bench schema lives in server; deploy server first so migrate runs before bench-api.
   deploy-server:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.redeploy_from_scratch }}
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       service: server
@@ -27,6 +57,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   deploy:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.redeploy_from_scratch }}
     needs: deploy-server
     uses: ./.github/workflows/reusable-deploy.yml
     with:

@@ -12,6 +12,8 @@ on:
           - bot
           - ai
           - sockets
+          - bench-api
+          - bench-worker
           - all
 
 jobs:
@@ -29,7 +31,7 @@ jobs:
           chmod +x ./s/ops/rabbitmq.sh ./s/lib.sh
 
           if [ "${{ inputs.service }}" == "all" ]; then
-            for svc in server bot ai sockets; do
+            for svc in server bot ai sockets bench-api bench-worker; do
               echo "Creating user for $svc"
               ./s/ops/rabbitmq.sh create-user $svc || true
             done

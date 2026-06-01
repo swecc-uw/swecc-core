@@ -59,7 +59,26 @@ swarm_config_to_env_file() {
   [[ -s "$out_file" ]] || die "Docker config $config_name is empty"
 }
 
+# [[ ... ]] && cmd under set -e exits when the test is false — use if/fi instead.
+_SWARM_XTRACE_SUSPENDED=0
+
+swarm_suspend_xtrace() {
+  _SWARM_XTRACE_SUSPENDED=0
+  if [[ $- == *x* ]]; then
+    _SWARM_XTRACE_SUSPENDED=1
+    set +x
+  fi
+}
+
+swarm_resume_xtrace() {
+  if [[ "${_SWARM_XTRACE_SUSPENDED}" -eq 1 ]]; then
+    set -x
+    _SWARM_XTRACE_SUSPENDED=0
+  fi
+}
+
 # docker service update --env-file is unreliable on existing services; use --env-rm/--env-add.
+# Swarm services accumulate duplicate env keys across deploys; strip before re-adding.
 swarm_service_update_with_env() {
   local svc="$1"
   local env_file="$2"
@@ -67,7 +86,7 @@ swarm_service_update_with_env() {
   local -a update_args=("$@")
   local -a env_rm=()
   local -a env_add=()
-  local deduped line key dup_count i
+  local deduped line key dup_count i current_env
 
   [[ -f "$env_file" ]] || die "env file not found: $env_file"
 
@@ -91,13 +110,13 @@ Path(sys.argv[2]).write_text(
 )
 PY
 
-  local trace_was_on=0
-  [[ $- == *x* ]] && trace_was_on=1 && set +x
+  current_env="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || true)"
+
+  swarm_suspend_xtrace
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" != *"="* ]] && continue
     key="${line%%=*}"
-    dup_count="$(docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
-      | grep -c "^${key}=" || true)"
+    dup_count="$(printf '%s\n' "$current_env" | grep -c "^${key}=" || true)"
     for ((i = 0; i < dup_count; i++)); do
       env_rm+=(--env-rm "$key")
     done
@@ -106,12 +125,83 @@ PY
   rm -f "$deduped"
 
   if [[ ${#env_add[@]} -eq 0 ]]; then
-    [[ $trace_was_on -eq 1 ]] && set -x
+    swarm_resume_xtrace
     die "no env entries in $env_file"
   fi
 
-  swarm_service_update_detached "$svc" "${update_args[@]}" "${env_rm[@]}" "${env_add[@]}"
-  [[ $trace_was_on -eq 1 ]] && set -x
+  # Image/resources first so a failed env sync does not block the rollout entirely.
+  if ((${#update_args[@]} > 0)); then
+    swarm_service_update_detached "$svc" "${update_args[@]}"
+  fi
+  if ((${#env_rm[@]} > 0)); then
+    swarm_service_update_flags_in_batches "$svc" "${env_rm[@]}"
+  fi
+  if ((${#env_add[@]} > 0)); then
+    swarm_service_update_flags_in_batches "$svc" "${env_add[@]}"
+  fi
+  swarm_resume_xtrace
+}
+
+# When bench-api_env / bench-worker_env include Rabbit creds, turn on ORCH MQ (config
+# often has BENCH_RABBIT_* but omits ORCH_MQ_ENABLED=1).
+swarm_apply_bench_mq_if_configured() {
+  local svc="$1"
+  local env_file="$2"
+  local rabbit_user rabbit_pass mq_val
+
+  [[ "$svc" == "bench-api" || "$svc" == "bench-worker" ]] || return 0
+  [[ -f "$env_file" ]] || return 0
+
+  rabbit_user="$(grep -E '^BENCH_RABBIT_USER=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+  rabbit_pass="$(grep -E '^BENCH_RABBIT_PASS=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+  if [[ -z "$rabbit_user" || -z "$rabbit_pass" ]]; then
+    log WARN "BENCH_RABBIT_* missing in env file for ${svc}; ORCH MQ stays off"
+    return 0
+  fi
+
+  mq_val="$(grep -E '^ORCH_MQ_ENABLED=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+  case "${mq_val,,}" in
+    1|true|yes|on) ;;
+    *)
+      log INFO "Enabling ORCH MQ on ${svc} (BENCH_RABBIT_* present; ORCH_MQ_ENABLED was '${mq_val:-unset}')"
+      swarm_force_env_var "$svc" "ORCH_MQ_ENABLED" "1"
+      ;;
+  esac
+
+  if [[ "$svc" == "bench-worker" ]]; then
+    local consume_val
+    consume_val="$(grep -E '^ORCH_MQ_CONSUME_RUNS=' "$env_file" | tail -1 | cut -d= -f2- || true)"
+    case "${consume_val,,}" in
+      1|true|yes|on) ;;
+      *)
+        log INFO "Enabling run consumption on bench-worker (ORCH_MQ_CONSUME_RUNS=1)"
+        swarm_force_env_var "$svc" "ORCH_MQ_CONSUME_RUNS" "1"
+        ;;
+    esac
+  fi
+}
+
+# Optional diagnostic: curl /health via overlay DNS from a one-shot container.
+# Not used as a deploy gate — swecc_stack_* may be unreachable until infra/SWAG
+# wiring is done, and start-first rollouts are not ready in ~3s.
+swarm_curl_bench_health() {
+  local host url body attempt
+  docker pull curlimages/curl:8.5.0 -q >/dev/null 2>&1 || true
+  for host in "$(swarm_gateway_dns bench-api)" "bench-api"; do
+    url="http://${host}:8000/health"
+    log INFO "Probing ${url} on ${SWARM_NETWORK} (up to 60s)"
+    for attempt in $(seq 1 12); do
+      if body="$(docker run --rm --network "$SWARM_NETWORK" curlimages/curl:8.5.0 \
+        -fsS --max-time 10 "$url" 2>/dev/null)"; then
+        log INFO "Bench health OK (${host}, attempt ${attempt}): ${body}"
+        return 0
+      fi
+      sleep 5
+    done
+    log WARN "No response from ${url} after 60s"
+  done
+  log ERROR "Bench health probe failed on ${SWARM_NETWORK}"
+  return 1
 }
 
 # Remove every duplicate KEY entry, then set KEY=value (separate updates per key).
@@ -119,9 +209,7 @@ swarm_force_env_var() {
   local svc="$1"
   local key="$2"
   local value="$3"
-  local trace_was_on=0
-
-  [[ $- == *x* ]] && trace_was_on=1 && set +x
+  swarm_suspend_xtrace
   while docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
     | grep -q "^${key}="; do
     docker service update --detach --env-rm "$key" "$svc" \
@@ -130,7 +218,7 @@ swarm_force_env_var() {
 
   docker service update --detach --env-add "${key}=${value}" "$svc" \
     || die "Failed to --env-add ${key} on ${svc}"
-  [[ $trace_was_on -eq 1 ]] && set -x
+  swarm_resume_xtrace
 }
 
 # Apply Django migrations before rolling the server service. Uses the same
@@ -443,5 +531,41 @@ swarm_service_create_detached() {
 swarm_service_update_detached() {
   local svc="$1"
   shift
-  docker service update --detach "$@" "$svc"
+  local attempt=1 max_attempts=6 out
+
+  while [[ $attempt -le $max_attempts ]]; do
+    if out="$(docker service update --detach "$@" "$svc" 2>&1)"; then
+      if [[ "${DEBUG:-}" == "1" && -n "$out" ]]; then
+        log DEBUG "$out"
+      fi
+      return 0
+    fi
+    if [[ "$out" == *"update is in progress"* ]] \
+      || [[ "$out" == *"already being updated"* ]] \
+      || [[ "$out" == *"is already being updated"* ]]; then
+      log WARN "Service ${svc} update in progress (attempt ${attempt}/${max_attempts}); retrying in 10s"
+      sleep 10
+      attempt=$((attempt + 1))
+      continue
+    fi
+    die "docker service update failed for ${svc}: ${out}"
+  done
+  die "docker service update failed for ${svc} after ${max_attempts} attempts: ${out}"
+}
+
+# docker service update rejects very large flag lists (duplicate --env-rm from past deploys).
+swarm_service_update_flags_in_batches() {
+  local svc="$1"
+  shift
+  local -a flags=("$@")
+  local batch_size="${SWARM_UPDATE_ENV_BATCH_SIZE:-48}"
+  local i
+
+  if (( ${#flags[@]} == 0 )); then
+    return 0
+  fi
+
+  for ((i = 0; i < ${#flags[@]}; i += batch_size)); do
+    swarm_service_update_detached "$svc" "${flags[@]:i:batch_size}"
+  done
 }

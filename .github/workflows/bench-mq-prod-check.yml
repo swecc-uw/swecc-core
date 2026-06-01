@@ -1,0 +1,46 @@
+# TEMP: Rabbit user + live bench-api MQ env + queue inspection (no redeploy).
+name: Bench MQ Prod Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Bench MQ setup check
+    timeout-minutes: 15
+    runs-on:
+      group: EC2
+      labels: [self-hosted, deploy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create RabbitMQ users for bench services
+        run: |
+          chmod +x ./s/ops/rabbitmq.sh ./s/lib.sh
+          ./s/ops/rabbitmq.sh create-user bench-api
+          ./s/ops/rabbitmq.sh create-user bench-worker || true
+
+      - name: Show ORCH_MQ / BENCH_RABBIT env on running bench-api task
+        run: |
+          set -euo pipefail
+          echo "=== bench-api task env (MQ-related) ==="
+          docker service inspect bench-api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
+            | grep -E '^(ORCH_MQ_|BENCH_RABBIT|RABBIT_HOST|RABBIT_PORT|RABBIT_VHOST)=' || echo "(no MQ vars or service missing)"
+          echo "=== bench-worker task env (MQ-related) ==="
+          docker service inspect bench-worker --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
+            | grep -E '^(ORCH_MQ_|BENCH_RABBIT|RABBIT_HOST|RABBIT_PORT|RABBIT_VHOST)=' || echo "(no MQ vars or service missing)"
+          echo "=== bench-api logs (rabbit, last 80 lines) ==="
+          docker service logs bench-api --tail 80 2>&1 | grep -iE 'rabbit|mq_enabled|rabbitmq_ready|Error initializing RabbitMQ' || echo "(no rabbit log lines)"
+
+      - name: Inspect RabbitMQ bench queues
+        run: |
+          set -euo pipefail
+          container_id=$(docker ps --filter "name=rabbitmq-host" --format "{{.ID}}" | head -1)
+          [[ -n "$container_id" ]] || { echo "rabbitmq-host not found"; exit 1; }
+          echo "container=$container_id"
+          docker exec "$container_id" rabbitmqctl list_queues name messages messages_ready messages_unacknowledged consumers
+          echo "--- exchanges (bench) ---"
+          docker exec "$container_id" rabbitmqctl list_exchanges name type | grep -E 'bench|swecc-bench' || true
+          echo "--- consumers (bench) ---"
+          docker exec "$container_id" rabbitmqctl list_consumers | grep bench || true
