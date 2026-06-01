@@ -252,9 +252,7 @@ def test_structured_openai_accepts_composite_fields_at_top_level() -> None:
 
 
 def test_resolve_structured_action_discrete_from_wrapped_payload() -> None:
-    space = _vow_for_action_space(
-        {"type": "discrete", "enum_values": ["A", "B", "C"]}
-    ).action_space
+    space = _vow_for_action_space({"type": "discrete", "enum_values": ["A", "B", "C"]}).action_space
 
     action, _ = _resolve_structured_action({"action": "B"}, space)
     assert action == "B"
