@@ -113,6 +113,7 @@ class RunStatusBatchResponse(BaseModel):
 
 # Pagination caps (documented on OpenAPI query params)
 DEFAULT_LIST_LIMIT = 20
+DEFAULT_GALLERY_LIMIT = 9
 MAX_LIST_LIMIT = 100
 DEFAULT_DEV_ENV_RUNS_LIMIT = 10
 MAX_DEV_ENV_RUNS_LIMIT = 50

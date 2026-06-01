@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from app.auth.deps import get_optional_principal
 from app.schemas import (
-    DEFAULT_LIST_LIMIT,
+    DEFAULT_GALLERY_LIMIT,
     MAX_LIST_LIMIT,
     DomainActivityItem,
     DomainActivityResponse,
     GalleryRunEntry,
     GalleryRunsResponse,
 )
-from app.services.domain_runs import list_gallery_runs_for_domain, list_mine_runs_for_domain
+from app.services.domain_runs import list_domain_activity_runs_for_domain
 from app.services.run_list import runs_to_list_items
 from bench.models import ActorType
 from bench_common.core.domain import Domain
@@ -53,10 +53,10 @@ def _next_cursor(items: list[GalleryRunEntry], *, limit: int) -> str | None:
 async def list_gallery_runs(
     domain_id: str | None = None,
     limit: int = Query(
-        DEFAULT_LIST_LIMIT,
+        DEFAULT_GALLERY_LIMIT,
         ge=1,
         le=MAX_LIST_LIMIT,
-        description=f"Max runs per page (default {DEFAULT_LIST_LIMIT}, max {MAX_LIST_LIMIT})",
+        description=f"Max runs per page (default {DEFAULT_GALLERY_LIMIT}, max {MAX_LIST_LIMIT})",
     ),
     cursor: str | None = Query(
         None,
@@ -76,38 +76,14 @@ async def list_gallery_runs(
     return GalleryRunsResponse(items=entries, next_cursor=_next_cursor(entries, limit=limit))
 
 
-def _merge_activity(
-    mine: list[DomainActivityItem],
-    gallery: list[DomainActivityItem],
-    *,
-    limit: int,
-) -> list[DomainActivityItem]:
-    seen: set[str] = set()
-    merged: list[DomainActivityItem] = []
-    for item in sorted(
-        mine + gallery,
-        key=lambda x: x.created_at,
-        reverse=True,
-    ):
-        if item.id in seen:
-            continue
-        seen.add(item.id)
-        merged.append(item)
-        if len(merged) >= limit:
-            break
-    return merged
-
-
 @router.get("/domains/{domain_id}/activity", response_model=DomainActivityResponse)
 async def domain_activity_feed(
     domain_id: str,
-    limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    limit: int = Query(DEFAULT_GALLERY_LIMIT, ge=1, le=MAX_LIST_LIMIT),
     cursor: str | None = Query(
         None,
         description="Pagination cursor: run id of the last item from the previous page",
     ),
-    mine_limit: int | None = Query(None, ge=1, le=MAX_LIST_LIMIT),
-    gallery_limit: int | None = Query(None, ge=1, le=MAX_LIST_LIMIT),
     principal=Depends(get_optional_principal),
 ) -> DomainActivityResponse:
     """
@@ -119,21 +95,19 @@ async def domain_activity_feed(
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
 
-    m_cap = mine_limit if mine_limit is not None else max(1, limit // 2)
-    g_cap = gallery_limit if gallery_limit is not None else max(1, limit - m_cap)
-
-    mine_runs = await list_mine_runs_for_domain(domain_id, principal, limit=m_cap, cursor=cursor)
-    gallery_runs = await list_gallery_runs_for_domain(domain_id, limit=g_cap, cursor=cursor)
-
-    mine_items = [
-        DomainActivityItem(**item.model_dump(), source="mine")
-        for item in await runs_to_list_items(mine_runs, include_episode_summary=True)
+    activity_rows = await list_domain_activity_runs_for_domain(
+        domain_id,
+        principal,
+        limit=limit,
+        cursor=cursor,
+    )
+    sources = {row.run.id: row.source for row in activity_rows}
+    list_items = await runs_to_list_items(
+        [row.run for row in activity_rows],
+        include_episode_summary=True,
+    )
+    items = [
+        DomainActivityItem(**item.model_dump(), source=sources[item.id]) for item in list_items
     ]
-    gallery_items = [
-        DomainActivityItem(**item.model_dump(), source="gallery")
-        for item in await runs_to_list_items(gallery_runs, include_episode_summary=True)
-    ]
-
-    items = _merge_activity(mine_items, gallery_items, limit=limit)
     next_cursor = items[-1].id if len(items) >= limit else None
     return DomainActivityResponse(items=items, next_cursor=next_cursor)
