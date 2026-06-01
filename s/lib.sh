@@ -158,6 +158,36 @@ swarm_service_update_with_env() {
   swarm_sync_env_from_file "$svc" "$env_file"
 }
 
+# docker service update with retries for transient Swarm conflicts.
+swarm_docker_service_update() {
+  local svc="$1"
+  shift
+  local attempt max_attempts=8 out rc wait_sec
+
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    swarm_wait_for_update_idle "$svc" 90
+    set +e
+    out="$(docker service update --detach "$@" "$svc" 2>&1)"
+    rc=$?
+    set -e
+    if [[ $rc -eq 0 ]]; then
+      [[ -n "$out" ]] && log INFO "$out"
+      return 0
+    fi
+    if [[ "$out" == *"update out of sequence"* || "$out" == *"update paused"* ]]; then
+      wait_sec=$((attempt * 3))
+      log WARN "docker service update conflict on $svc (attempt ${attempt}/${max_attempts}); retry in ${wait_sec}s"
+      sleep "$wait_sec"
+      continue
+    fi
+    log ERROR "docker service update failed for $svc: ${out:-<no output>}"
+    return 1
+  done
+
+  log ERROR "docker service update failed for $svc after ${max_attempts} attempts (out of sequence)"
+  return 1
+}
+
 # Remove every duplicate KEY entry, then set KEY=value (separate updates per key).
 swarm_force_env_var() {
   local svc="$1"
@@ -168,11 +198,11 @@ swarm_force_env_var() {
   [[ $- == *x* ]] && trace_was_on=1 && set +x
   while docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' \
     | grep -q "^${key}="; do
-    docker service update --detach --env-rm "$key" "$svc" \
+    swarm_docker_service_update "$svc" --env-rm "$key" \
       || die "Failed to --env-rm ${key} on ${svc}"
   done
 
-  docker service update --detach --env-add "${key}=${value}" "$svc" \
+  swarm_docker_service_update "$svc" --env-add "${key}=${value}" \
     || die "Failed to --env-add ${key} on ${svc}"
   [[ $trace_was_on -eq 1 ]] && set -x
 }
@@ -487,16 +517,5 @@ swarm_service_create_detached() {
 swarm_service_update_detached() {
   local svc="$1"
   shift
-  local out rc=0
-
-  set +e
-  out="$(docker service update --detach "$@" "$svc" 2>&1)"
-  rc=$?
-  set -e
-
-  if [[ $rc -ne 0 ]]; then
-    log ERROR "docker service update failed for $svc: ${out:-<no output>}"
-    return 1
-  fi
-  [[ -n "$out" ]] && log INFO "$out"
+  swarm_docker_service_update "$svc" "$@"
 }
