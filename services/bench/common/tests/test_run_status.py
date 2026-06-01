@@ -31,9 +31,24 @@ def _run(*, status: str = "failed", reason: str | None = None) -> Run:
 
 def test_summarize_episodes_collects_reasons() -> None:
     episodes = [
-        Episode(id="e1", run_id="run-1", status="truncated", terminal_info={"reason": "step_limit"}),
-        Episode(id="e2", run_id="run-1", status="failed", terminal_info={"reason": "episode_error", "error": "boom"}),
-        Episode(id="e3", run_id="run-1", status="cancelled", terminal_info={"reason": EPISODE_CANCELLED_RUN}),
+        Episode(
+            id="e1",
+            run_id="run-1",
+            status="truncated",
+            terminal_info={"reason": "step_limit"},
+        ),
+        Episode(
+            id="e2",
+            run_id="run-1",
+            status="failed",
+            terminal_info={"reason": "episode_error", "error": "boom"},
+        ),
+        Episode(
+            id="e3",
+            run_id="run-1",
+            status="cancelled",
+            terminal_info={"reason": EPISODE_CANCELLED_RUN},
+        ),
     ]
     summary = summarize_episodes(episodes)
     assert summary.truncated_count == 1
@@ -45,7 +60,12 @@ def test_summarize_episodes_collects_reasons() -> None:
 
 
 def test_apply_run_terminal_persists_reason() -> None:
-    run = apply_run_terminal(_run(status="running"), status="failed", reason="stale_run_timeout", detail={"detail": "x"})
+    run = apply_run_terminal(
+        _run(status="running"),
+        status="failed",
+        reason="stale_run_timeout",
+        detail={"detail": "x"},
+    )
     assert run.status == "failed"
     assert run.status_reason == "stale_run_timeout"
     assert run.status_detail == {"detail": "x"}
@@ -53,9 +73,16 @@ def test_apply_run_terminal_persists_reason() -> None:
 
 def test_resolve_run_status_from_summary_cancelled() -> None:
     run = _run(status="cancelled")
-    summary = summarize_episodes([
-        Episode(id="e1", run_id="run-1", status="cancelled", terminal_info={"reason": EPISODE_CANCELLED_RUN}),
-    ])
+    summary = summarize_episodes(
+        [
+            Episode(
+                id="e1",
+                run_id="run-1",
+                status="cancelled",
+                terminal_info={"reason": EPISODE_CANCELLED_RUN},
+            ),
+        ]
+    )
     reason, detail = resolve_run_status_from_summary(run, summary)
     assert reason == RUN_CANCELLED_USER
     assert detail["episode_outcomes"]["cancelled"] == 1
@@ -64,7 +91,12 @@ def test_resolve_run_status_from_summary_cancelled() -> None:
 def test_resolve_run_status_infers_insufficient_scoreable() -> None:
     run = _run(status="failed")
     episodes = [
-        Episode(id="e1", run_id="run-1", status="failed", terminal_info={"reason": EPISODE_ERROR, "error": "x"}),
+        Episode(
+            id="e1",
+            run_id="run-1",
+            status="failed",
+            terminal_info={"reason": EPISODE_ERROR, "error": "x"},
+        ),
     ]
     reason, detail = resolve_run_status(run, episodes=episodes)
     assert reason == RUN_FAILED_INSUFFICIENT_SCOREABLE

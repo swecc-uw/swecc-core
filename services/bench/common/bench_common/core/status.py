@@ -37,6 +37,7 @@ class EpisodeOutcomeSummary(NamedTuple):
     truncation_reasons: tuple[str, ...] = ()
     cancellation_reasons: tuple[str, ...] = ()
 
+
 def _terminal_reason(ep: Episode) -> str | None:
     info = ep.terminal_info or {}
     reason = info.get("reason")
