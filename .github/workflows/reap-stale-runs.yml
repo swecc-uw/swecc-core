@@ -22,10 +22,15 @@ on:
         required: false
         type: string
         default: ''
+  # workflow_dispatch only works from the default branch; push here to test from a PR branch.
+  push:
+    branches:
+      - ops/reap-stale-runs-workflow
 
 jobs:
   validate:
     name: Validate inputs
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Require confirmation for live reap
@@ -37,6 +42,7 @@ jobs:
   reap:
     name: Reap stale bench rows on swarm
     needs: validate
+    if: always() && (needs.validate.result == 'success' || needs.validate.result == 'skipped')
     runs-on:
       group: EC2
       labels: [self-hosted, deploy]
@@ -46,8 +52,8 @@ jobs:
 
       - name: Run reap_stale_runs.py in bench-api
         env:
-          DRY_RUN: ${{ inputs.dry_run }}
-          STALE_AFTER_SECONDS: ${{ inputs.stale_after_seconds }}
+          DRY_RUN: ${{ github.event_name == 'push' && 'true' || inputs.dry_run }}
+          STALE_AFTER_SECONDS: ${{ github.event_name == 'push' && 0 || inputs.stale_after_seconds }}
         run: |
           set -euo pipefail
           container_id="$(docker ps --filter "name=bench-api" --format "{{.ID}}" | head -1)"
