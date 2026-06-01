@@ -181,7 +181,9 @@ swarm_apply_bench_mq_if_configured() {
   fi
 }
 
-# Curl bench-api /health from inside prod_swecc-network (after start-first rollouts).
+# Optional diagnostic: curl /health via overlay DNS from a one-shot container.
+# Not used as a deploy gate — swecc_stack_* may be unreachable until infra/SWAG
+# wiring is done, and start-first rollouts are not ready in ~3s.
 swarm_curl_bench_health() {
   local host url body attempt
   docker pull curlimages/curl:8.5.0 -q >/dev/null 2>&1 || true

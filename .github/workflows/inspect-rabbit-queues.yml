@@ -40,13 +40,13 @@ jobs:
             swarm_ensure_gateway_alias "$svc"
           done
 
-      - name: Internal bench-api health (swarm DNS)
+      - name: Internal bench-api health (optional overlay probe)
         run: |
           set -euo pipefail
           chmod +x ./s/lib.sh
           # shellcheck source=s/lib.sh
           . ./s/lib.sh
-          swarm_curl_bench_health
+          swarm_curl_bench_health || echo "WARN: overlay probe failed (check https://api.swecc.org/bench/health after infra)"
 
       - name: List RabbitMQ queues
         run: |

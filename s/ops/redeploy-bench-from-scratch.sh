@@ -131,12 +131,10 @@ main() {
   pull_bench_images
   deploy_bench_stack
 
-  log INFO "Ensuring gateway aliases and probing bench-api /health"
+  log INFO "Ensuring gateway aliases (public /bench/* health is via swecc-infra SWAG)"
   for svc in "${BENCH_SERVICES[@]}"; do
     swarm_ensure_gateway_alias "$svc"
   done
-  sleep 5
-  swarm_curl_bench_health || die "bench-api not healthy on ${SWARM_NETWORK} after scratch redeploy"
 
   log INFO "Done. Check tasks:"
   for svc in "${BENCH_SERVICES[@]}"; do

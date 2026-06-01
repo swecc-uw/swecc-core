@@ -188,9 +188,6 @@ deploy_service() {
   rm -f /tmp/${svc}_env.tmp
   wait_for_service "$svc"
   swarm_ensure_gateway_alias "$svc"
-  if [[ "$svc" == "bench-api" ]]; then
-    swarm_curl_bench_health || die "bench-api is not reachable on the swarm network after deploy"
-  fi
 
   log INFO "Successfully deployed $svc"
 }
