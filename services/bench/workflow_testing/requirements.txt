@@ -1,0 +1,3 @@
+﻿# Extra packages your env imports beyond what swecc-mesocosm installs.
+# This file is installed by the platform sandbox on env submit.
+# The arithmetic env uses only Python stdlib -- nothing extra needed here.

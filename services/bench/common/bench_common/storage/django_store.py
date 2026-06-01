@@ -551,6 +551,8 @@ async def save_developer_environment(env: dict[str, Any]) -> None:
         "submission_version": env.get("submission_version", 1),
         "domain_history": env.get("domain_history") or [],
         "resubmitted_at": _dt_or_none(env.get("resubmitted_at")),
+        "external_ui": env.get("external_ui"),
+        "devpost_link": env.get("devpost_link"),
     }
     await DeveloperEnvironmentRow.objects.aupdate_or_create(id=env["id"], defaults=defaults)
 
@@ -670,6 +672,8 @@ def _dev_env_to_dict(row: DeveloperEnvironmentRow) -> dict[str, Any]:
         "submission_version": row.submission_version,
         "domain_history": row.domain_history or [],
         "resubmitted_at": _iso_dt(row.resubmitted_at),
+        "external_ui": row.external_ui,
+        "devpost_link": row.devpost_link,
     }
 
 

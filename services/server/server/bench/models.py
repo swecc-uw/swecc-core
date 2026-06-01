@@ -247,6 +247,8 @@ class DeveloperEnvironment(models.Model):
         related_name="developer_environments",
     )
     env_url = models.URLField(max_length=512, null=True, blank=True)
+    external_ui = models.URLField(max_length=512, null=True, blank=True)
+    devpost_link = models.URLField(max_length=512, null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)
     submission_version = models.IntegerField(default=1)
     domain_history = models.JSONField(default=list, blank=True)

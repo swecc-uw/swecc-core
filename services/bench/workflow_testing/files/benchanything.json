@@ -1,0 +1,53 @@
+﻿{
+  "id": "math-arithmetic",
+  "adapter": "adapter.py",
+  "name": "Arithmetic Problems",
+  "description": "Solve 10 arithmetic problems (addition, subtraction, multiplication, integer division) per episode. Tests basic reasoning accuracy across all four operations.",
+
+  "binding_vow": {
+    "version": "1.0.0",
+    "tier": "tier1",
+    "description": "The agent is shown 10 arithmetic problems one at a time and must provide the numeric answer to each. Problems cover all four operations. Division problems always yield whole-number answers.",
+
+    "observation_space": {
+      "type": "json",
+      "description": "{ \"problem\": \"12 + 7\", \"problem_num\": 1, \"total_problems\": 10 }"
+    },
+
+    "action_space": {
+      "type": "json",
+      "schema_ref": "{\"type\": \"object\", \"properties\": {\"answer\": {\"type\": \"number\"}}, \"required\": [\"answer\"]}",
+      "description": "Your numeric answer to the arithmetic problem shown in the observation."
+    },
+
+    "reward": {
+      "type": "binary",
+      "range": { "low": 0.0, "high": 1.0 },
+      "description": "1.0 if the answer matches the expected value exactly, 0.0 otherwise."
+    },
+
+    "episode": {
+      "max_steps": 10,
+      "deterministic_reset": true,
+      "supports_seed": true,
+      "parallel_episodes": 1,
+      "observability": "full"
+    },
+
+    "techniques": []
+  },
+
+  "scoring": {
+    "primary_metric": "accuracy",
+    "higher_is_better": true,
+    "metrics": [
+      {
+        "name": "accuracy",
+        "type": "episode_reward",
+        "aggregation": "mean"
+      }
+    ]
+  },
+
+  "tags": ["math", "arithmetic", "reasoning", "tier1"]
+}
