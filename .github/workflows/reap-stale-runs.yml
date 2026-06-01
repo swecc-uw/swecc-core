@@ -56,16 +56,26 @@ jobs:
           STALE_AFTER_SECONDS: ${{ github.event_name == 'push' && '0' || inputs.stale_after_seconds }}
         run: |
           set -euo pipefail
+          chmod +x ./s/lib.sh
+          # shellcheck disable=SC1091
+          . ./s/lib.sh
           container_id="$(docker ps --filter "name=bench-api" --format "{{.ID}}" | head -1)"
           if [[ -z "$container_id" ]]; then
             echo "bench-api container not found"
             docker ps --format '{{.Names}}' | grep -i bench || true
             exit 1
           fi
-          echo "container=$container_id"
-          docker cp services/bench/scripts/reap_stale_runs.py "$container_id:/tmp/reap_stale_runs.py"
+          image="$(docker inspect "$container_id" --format '{{.Config.Image}}')"
+          config_name="$(swarm_env_config bench-api)"
+          swarm_config_to_env_file "$config_name" "/tmp/bench-api_env.tmp"
+          echo "container=$container_id image=$image"
           args=(--stale-after-seconds "$STALE_AFTER_SECONDS" --yes)
           if [[ "$DRY_RUN" == "true" ]]; then
             args+=(--dry-run)
           fi
-          docker exec "$container_id" python /tmp/reap_stale_runs.py "${args[@]}"
+          docker run --rm \
+            --network "$SWARM_NETWORK" \
+            --env-file "/tmp/bench-api_env.tmp" \
+            -v "$PWD/services/bench/scripts/reap_stale_runs.py:/tmp/reap_stale_runs.py:ro" \
+            "$image" \
+            python /tmp/reap_stale_runs.py "${args[@]}"
