@@ -53,7 +53,7 @@ jobs:
       - name: Run reap_stale_runs.py in bench-api
         env:
           DRY_RUN: ${{ github.event_name == 'push' && 'true' || inputs.dry_run }}
-          STALE_AFTER_SECONDS: ${{ github.event_name == 'push' && 0 || inputs.stale_after_seconds }}
+          STALE_AFTER_SECONDS: ${{ github.event_name == 'push' && '0' || inputs.stale_after_seconds }}
         run: |
           set -euo pipefail
           container_id="$(docker ps --filter "name=bench-api" --format "{{.ID}}" | head -1)"
