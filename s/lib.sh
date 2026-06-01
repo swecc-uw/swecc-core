@@ -181,20 +181,25 @@ swarm_apply_bench_mq_if_configured() {
   fi
 }
 
-# Curl bench-api /health from inside prod_swecc-network (gateway DNS name).
+# Curl bench-api /health from inside prod_swecc-network (after start-first rollouts).
 swarm_curl_bench_health() {
-  local alias url code body
-  alias="$(swarm_gateway_dns bench-api)"
-  url="http://${alias}:8000/health"
-  log INFO "Probing ${url} from a one-shot container on ${SWARM_NETWORK}"
+  local host url body attempt
   docker pull curlimages/curl:8.5.0 -q >/dev/null 2>&1 || true
-  body="$(docker run --rm --network "$SWARM_NETWORK" curlimages/curl:8.5.0 \
-    -fsS --max-time 15 "$url")" || {
-    log ERROR "Bench health probe failed for ${url}"
-    return 1
-  }
-  log INFO "Bench health OK: ${body}"
-  return 0
+  for host in "$(swarm_gateway_dns bench-api)" "bench-api"; do
+    url="http://${host}:8000/health"
+    log INFO "Probing ${url} on ${SWARM_NETWORK} (up to 60s)"
+    for attempt in $(seq 1 12); do
+      if body="$(docker run --rm --network "$SWARM_NETWORK" curlimages/curl:8.5.0 \
+        -fsS --max-time 10 "$url" 2>/dev/null)"; then
+        log INFO "Bench health OK (${host}, attempt ${attempt}): ${body}"
+        return 0
+      fi
+      sleep 5
+    done
+    log WARN "No response from ${url} after 60s"
+  done
+  log ERROR "Bench health probe failed on ${SWARM_NETWORK}"
+  return 1
 }
 
 # Remove every duplicate KEY entry, then set KEY=value (separate updates per key).

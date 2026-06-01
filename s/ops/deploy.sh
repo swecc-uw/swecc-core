@@ -189,7 +189,6 @@ deploy_service() {
   wait_for_service "$svc"
   swarm_ensure_gateway_alias "$svc"
   if [[ "$svc" == "bench-api" ]]; then
-    sleep 3
     swarm_curl_bench_health || die "bench-api is not reachable on the swarm network after deploy"
   fi
 
