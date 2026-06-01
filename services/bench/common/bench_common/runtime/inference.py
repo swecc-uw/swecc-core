@@ -18,6 +18,7 @@ import structlog
 from bench_common.config import settings
 from bench_common.core.binding_vow import BindingVow, CompositeSpace, SpaceSpec, SpaceType
 from bench_common.core.run import AgentConfig
+from bench_common.runtime.action_envelope import finalize_resolved_action
 from bench_common.runtime.env_client import Observation
 
 log = structlog.get_logger()
@@ -281,6 +282,10 @@ def _resolve_structured_action(
     space: SpaceSpec | CompositeSpace,
 ) -> tuple[Any, str]:
     """Normalise provider JSON into the env-ready action payload."""
+
+    def _resolved(action: Any, reasoning: str) -> tuple[Any, str]:
+        return finalize_resolved_action(action, space), reasoning
+
     envelope_keys = _json_envelope_required_keys(space)
     body = _strip_structured_meta(parsed)
 
@@ -288,10 +293,10 @@ def _resolve_structured_action(
         if set(body.keys()) == {"action"} and isinstance(body["action"], dict):
             inner = body["action"]
             if envelope_keys.issubset(inner.keys()):
-                return inner, _reasoning_from_payload(inner)
+                return _resolved(inner, _reasoning_from_payload(inner))
 
         if envelope_keys.issubset(body.keys()):
-            return body, _reasoning_from_payload(body)
+            return _resolved(body, _reasoning_from_payload(body))
 
         present = envelope_keys & body.keys()
         if present and present != envelope_keys:
@@ -304,35 +309,35 @@ def _resolve_structured_action(
     if set(body.keys()) == {"action"} and isinstance(body["action"], dict):
         inner = body["action"]
         if envelope_keys and envelope_keys.issubset(inner.keys()):
-            return inner, _reasoning_from_payload(inner)
+            return _resolved(inner, _reasoning_from_payload(inner))
 
     if "action" in body:
         inner = body["action"]
         if isinstance(inner, dict) and envelope_keys and envelope_keys.issubset(inner.keys()):
-            return inner, _reasoning_from_payload(inner)
+            return _resolved(inner, _reasoning_from_payload(inner))
         if isinstance(inner, dict) and isinstance(space, CompositeSpace):
             field_keys = frozenset(space.fields.keys())
             if field_keys & inner.keys():
-                return inner, _reasoning_from_payload(body)
-        return inner, _reasoning_from_payload(body)
+                return _resolved(inner, _reasoning_from_payload(body))
+        return _resolved(inner, _reasoning_from_payload(body))
 
     if isinstance(space, CompositeSpace):
         field_keys = frozenset(space.fields.keys())
         if field_keys & body.keys():
-            return body, _reasoning_from_payload(body)
+            return _resolved(body, _reasoning_from_payload(body))
 
     if isinstance(space, SpaceSpec) and space.type == SpaceType.DISCRETE:
         found = _resolve_discrete_from_payload(body, space)
         if found is not None:
-            return found, _reasoning_from_payload(body)
+            return _resolved(found, _reasoning_from_payload(body))
 
     if isinstance(space, SpaceSpec) and space.type == SpaceType.JSON and body:
-        return body, _reasoning_from_payload(body)
+        return _resolved(body, _reasoning_from_payload(body))
 
     if isinstance(space, SpaceSpec) and space.type == SpaceType.CONTINUOUS and len(body) == 1:
         val = next(iter(body.values()))
         if isinstance(val, (int, float)):
-            return float(val), ""
+            return _resolved(float(val), "")
 
     raise StructuredOutputError(
         "structured content did not match the binding vow action space; "

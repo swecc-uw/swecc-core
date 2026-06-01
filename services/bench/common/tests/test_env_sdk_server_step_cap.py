@@ -17,14 +17,30 @@ class _CountingEnv(BaseEnv):
         return {"ok": "reset"}
 
     def step(self, action: Any) -> StepResult:
+        if isinstance(action, dict):
+            raise TypeError(f"{type(action).__name__} object has no attribute 'strip'")
         self.steps += 1
         return StepResult(
-            observation={"step": self.steps},
+            observation={"step": self.steps, "action": action},
             reward=0.0,
             terminated=False,
             truncated=False,
             info={"step": str(self.steps)},
         )
+
+
+def test_adapter_step_unwraps_nested_action_envelope() -> None:
+    app = create_env_app(_CountingEnv)
+    client = TestClient(app)
+    eid = "ep-wrap"
+
+    client.post("/reset", json={"episode_id": eid})
+    resp = client.post(
+        "/step",
+        json={"episode_id": eid, "action": {"action": {"action": "E"}}},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["observation"]["data"]["action"] == "E"
 
 
 def test_adapter_step_cap_truncates_without_calling_env() -> None:
