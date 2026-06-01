@@ -1,5 +1,8 @@
 # TEMPORARY — delete after bench/server deploys are healthy again.
 # Diagnose (and optionally recover) stuck Docker Swarm service updates on EC2.
+#
+# workflow_dispatch only appears in the Actions UI after this file is on main.
+# Until then, open PRs that touch this workflow trigger diagnose-only runs here.
 name: Debug Swarm Deploy
 
 on:
@@ -19,6 +22,11 @@ on:
         required: false
         type: boolean
         default: false
+  pull_request:
+    branches: [main, master]
+    paths:
+      - ".github/workflows/debug-swarm-deploy.yml"
+      - "s/ops/swarm-deploy-diagnose.sh"
 
 # Do not overlap with production deploy jobs on the same service.
 concurrency:
@@ -40,16 +48,24 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SERVICES: ${{ github.event_name == 'workflow_dispatch' && inputs.services || 'server,bench-api,bench-sandbox,bench-worker' }}
+          INPUT_RECOVER: ${{ github.event_name == 'workflow_dispatch' && inputs.recover || false }}
+          INPUT_REDEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.redeploy || false }}
         run: |
           chmod +x ./s/ops/swarm-deploy-diagnose.sh ./s/lib.sh
           args=()
-          if [[ "${{ inputs.recover }}" == "true" ]]; then
+          if [[ "$INPUT_RECOVER" == "true" ]]; then
             args+=(--recover)
           fi
-          if [[ "${{ inputs.redeploy }}" == "true" ]]; then
+          if [[ "$INPUT_REDEPLOY" == "true" ]]; then
             args+=(--redeploy)
           fi
-          IFS=',' read -ra svc_list <<< "${{ inputs.services }}"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            echo "pull_request trigger: diagnose-only (no --recover/--redeploy)"
+            args=()
+          fi
+          IFS=',' read -ra svc_list <<< "$INPUT_SERVICES"
           for s in "${svc_list[@]}"; do
             s="${s// /}"
             [[ -n "$s" ]] && args+=("$s")
