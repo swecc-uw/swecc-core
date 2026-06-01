@@ -27,6 +27,20 @@ jobs:
           echo "========== bench-api logs (last 60) =========="
           docker service logs bench-api --tail 60 2>&1 || true
 
+      - name: Fix SWAG network aliases + Rabbit users
+        run: |
+          set -euo pipefail
+          chmod +x ./s/lib.sh ./s/ops/rabbitmq.sh
+          # shellcheck source=s/lib.sh
+          . ./s/lib.sh
+          for svc in bench-api bench-worker; do
+            ./s/ops/rabbitmq.sh create-user "$svc" || true
+          done
+          for svc in bench-api bench-worker bench-sandbox; do
+            swarm_ensure_gateway_alias "$svc"
+            swarm_ensure_swag_network_alias "$svc"
+          done
+
       - name: Internal bench-api health (swarm DNS)
         run: |
           set -euo pipefail

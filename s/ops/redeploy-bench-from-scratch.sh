@@ -134,6 +134,7 @@ main() {
   log INFO "Ensuring gateway aliases and probing bench-api /health"
   for svc in "${BENCH_SERVICES[@]}"; do
     swarm_ensure_gateway_alias "$svc"
+    swarm_ensure_swag_network_alias "$svc"
   done
   sleep 5
   swarm_curl_bench_health || die "bench-api not healthy on ${SWARM_NETWORK} after scratch redeploy"

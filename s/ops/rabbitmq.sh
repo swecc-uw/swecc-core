@@ -51,24 +51,24 @@ create_user() {
 
   case "$svc" in
     bot)
-      rabbit_user=$(grep "BOT_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
-      rabbit_pass=$(grep "BOT_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
+      rabbit_user=$(grep "BOT_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2-)
+      rabbit_pass=$(grep "BOT_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2-)
       ;;
     server)
-      rabbit_user=$(grep "SERVER_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
-      rabbit_pass=$(grep "SERVER_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
+      rabbit_user=$(grep "SERVER_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2-)
+      rabbit_pass=$(grep "SERVER_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2-)
       ;;
     ai)
-      rabbit_user=$(grep "AI_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
-      rabbit_pass=$(grep "AI_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
+      rabbit_user=$(grep "AI_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2-)
+      rabbit_pass=$(grep "AI_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2-)
       ;;
     sockets)
-      rabbit_user=$(grep "SOCKET_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
-      rabbit_pass=$(grep "SOCKET_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
+      rabbit_user=$(grep "SOCKET_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2-)
+      rabbit_pass=$(grep "SOCKET_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2-)
       ;;
     bench-api|bench-worker)
-      rabbit_user=$(grep "BENCH_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2)
-      rabbit_pass=$(grep "BENCH_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2)
+      rabbit_user=$(grep "BENCH_RABBIT_USER" /tmp/${svc}_env.tmp | cut -d= -f2-)
+      rabbit_pass=$(grep "BENCH_RABBIT_PASS" /tmp/${svc}_env.tmp | cut -d= -f2-)
       ;;
     *)
       rm -f /tmp/${svc}_env.tmp
@@ -76,7 +76,7 @@ create_user() {
       ;;
   esac
 
-  rabbit_vhost=$(grep "RABBIT_VHOST" /tmp/${svc}_env.tmp | cut -d= -f2)
+  rabbit_vhost=$(grep "RABBIT_VHOST" /tmp/${svc}_env.tmp | cut -d= -f2-)
   rabbit_vhost="${rabbit_vhost:-/}"
 
   rm -f /tmp/${svc}_env.tmp
