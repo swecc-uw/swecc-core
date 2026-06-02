@@ -22,6 +22,10 @@ EXTRA_MODEL_ALIASES: tuple[str, ...] = (
     "gemini/gemini-3.5-flash",
     "gemini/gemini-flash-latest",
     "gemini/gemini-flash-lite-latest",
+    # Frontier models benched ad hoc via scripts/run_benchmark_matrix.py. Kept
+    # out of FULL_BENCH_MODELS so the canonical full-bench set stays at five.
+    "anthropic/claude-opus-4-8",
+    "openai/gpt-5.5",
 )
 
 ALLOWED_MODELS: tuple[str, ...] = FULL_BENCH_MODELS + EXTRA_MODEL_ALIASES
@@ -37,4 +41,6 @@ MODEL_LABELS: dict[str, str] = {
     "gemini/gemini-3.5-flash": "Gemini 3.5 Flash",
     "gemini/gemini-flash-latest": "Gemini Flash (latest)",
     "gemini/gemini-flash-lite-latest": "Gemini Flash Lite (latest)",
+    "anthropic/claude-opus-4-8": "Claude Opus 4.8",
+    "openai/gpt-5.5": "GPT-5.5",
 }
