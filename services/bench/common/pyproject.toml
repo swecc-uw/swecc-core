@@ -25,9 +25,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bench_common"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"bench_common/cli/templates" = "bench_common/cli/templates"
+# NOTE: do not add a force-include for bench_common/cli/templates — `packages`
+# already ships every file under bench_common/ (including non-.py template
+# files), so force-including the same paths makes hatchling add each file
+# twice and fail the build ("A second file is being added ... at the same
+# path"). See git history for the duplicate-inclusion regression.
 
 [tool.ruff]
 target-version = "py311"
