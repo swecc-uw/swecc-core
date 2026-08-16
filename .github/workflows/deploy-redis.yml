@@ -5,7 +5,6 @@ on:
     branches: [main, master]
     paths:
       - 'infra/redis/**'
-      - '.github/workflows/deploy-redis.yml'
   workflow_dispatch:
 
 env:

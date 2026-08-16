@@ -7,8 +7,6 @@ on:
       - 'services/bot/**'
       - 's/ops/**'
       - 's/lib.sh'
-      - '.github/workflows/deploy-bot.yml'
-      - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
 
 jobs:
