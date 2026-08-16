@@ -8,8 +8,6 @@ on:
       - 'services/server/server/bench/**'
       - 's/ops/**'
       - 's/lib.sh'
-      - '.github/workflows/deploy-bench-worker.yml'
-      - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
 
 jobs:

@@ -7,8 +7,6 @@ on:
       - 'services/scheduler/**'
       - 's/ops/**'
       - 's/lib.sh'
-      - '.github/workflows/deploy-scheduler.yml'
-      - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
 
 jobs:

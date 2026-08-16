@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PUSH=false
 TAG="latest"
 SERVICE=""
+PLATFORMS=""
 
 usage() {
   cat <<EOF
@@ -17,6 +18,8 @@ Services: ${SERVICES[*]}
 Options:
   --push        Push images to Docker Hub after building
   --tag <tag>   Tag for the image (default: latest)
+  --platforms <list>
+                Target platforms (default: host for local builds, amd64+arm64 with --push)
   -h, --help    Show this help message
 
 Examples:
@@ -48,13 +51,37 @@ build_service() {
   log INFO "Build context: $context"
   log INFO "Dockerfile: $dockerfile"
 
-  docker build -t "$image" -t "$image_sha" -f "${context}/${dockerfile}" "$context"
+  local target_platforms="$PLATFORMS"
+  if [[ -z "$target_platforms" ]]; then
+    if [[ "$PUSH" == "true" ]]; then
+      target_platforms="linux/amd64,linux/arm64"
+    else
+      target_platforms="$(docker info --format '{{.OSType}}/{{.Architecture}}')" \
+        || die "Unable to determine the local Docker platform; pass --platforms explicitly"
+    fi
+  fi
+
+  local -a build_args=(
+    buildx build
+    --platform "$target_platforms"
+    -t "$image"
+    -t "$image_sha"
+    -f "${context}/${dockerfile}"
+  )
 
   if [[ "$PUSH" == "true" ]]; then
-    log INFO "Pushing $image to Docker Hub"
-    docker push "$image"
-    docker push "$image_sha"
+    build_args+=(--push)
+  else
+    # A multi-platform image cannot be loaded into the local Docker image
+    # store.
+    if [[ "$target_platforms" == *,* ]]; then
+      die "Local multi-platform builds require --push; use --platforms linux/amd64 (or linux/arm64) for --load"
+    fi
+    build_args+=(--load)
   fi
+
+  build_args+=("${context}")
+  docker "${build_args[@]}"
 
   log INFO "Successfully built $svc"
 }
@@ -67,6 +94,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --tag)
       TAG="$2"
+      shift 2
+      ;;
+    --platforms)
+      PLATFORMS="$2"
       shift 2
       ;;
     -h|--help)

@@ -7,8 +7,6 @@ on:
       - 'services/ai/**'
       - 's/ops/**'
       - 's/lib.sh'
-      - '.github/workflows/deploy-ai.yml'
-      - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
 
 jobs:

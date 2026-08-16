@@ -7,8 +7,6 @@ on:
       - 'services/sockets/**'
       - 's/ops/**'
       - 's/lib.sh'
-      - '.github/workflows/deploy-sockets.yml'
-      - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
 
 jobs:

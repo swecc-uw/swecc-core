@@ -12,8 +12,6 @@ on:
       - 'services/server/server/bench/**'
       - 's/ops/**'
       - 's/lib.sh'
-      - '.github/workflows/deploy-bench-api.yml'
-      - '.github/workflows/reusable-deploy.yml'
   workflow_dispatch:
     inputs:
       redeploy_from_scratch:
