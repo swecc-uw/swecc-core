@@ -1,3 +1,4 @@
+import time
 from dataclasses import replace
 from datetime import timedelta
 from unittest.mock import patch
@@ -20,6 +21,7 @@ from .run import (
     LEASE_TIMEOUT_SECONDS,
     MAX_DELIVERY_ATTEMPTS,
     MAX_MESSAGES_PER_RUN,
+    RUN_DEADLINE_SECONDS,
     RunResult,
     _claim_message_for_sending,
     deliver_pending,
@@ -395,6 +397,20 @@ class StaleLeaseRecoveryTests(TestCase):
         self.assertIsNone(msg.claimed_at)
         self.assertIn("stale lease", msg.last_error)
 
+    def test_logs_a_warning_for_each_recovered_message(self):
+        stale_time = timezone.now() - timedelta(seconds=LEASE_TIMEOUT_SECONDS + 60)
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            status=OutboxMessage.Status.SENDING,
+            claimed_at=stale_time,
+        )
+        with patch("job_postings.run.logger") as logger:
+            recover_stale_leases()
+        logger.warning.assert_called_once()
+        self.assertEqual(logger.warning.call_args[0][1], msg.id)
+
     def test_does_not_recover_fresh_sending_messages(self):
         # Message in SENDING but not past the lease timeout
         msg = OutboxMessage.objects.create(
@@ -568,6 +584,42 @@ class DeliverPendingTests(TestCase):
         self.assertIn("not an attempt", msg.last_error)
         # Should be deferred, not dead-lettered
         self.assertIsNotNone(msg.next_attempt_at)
+
+    def test_missing_webhook_does_not_hold_back_the_messages_behind_it(self):
+        blocked = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="MISSING_WEBHOOK",
+            payload={"embeds": []},
+        )
+        behind = OutboxMessage.objects.create(
+            source_id=NEW_GRAD.id,
+            webhook_env_var="DISCORD_WEBHOOK_NEW_GRAD",
+            payload={"embeds": []},
+        )
+        with patch("job_postings.run.try_send_payload", return_value=SendSuccess()) as mock_send:
+            sent, _, _, _ = deliver_pending(WEBHOOKS)
+
+        self.assertEqual(sent, 1)
+        mock_send.assert_called_once_with(GRAD_HOOK, behind.payload)
+        blocked.refresh_from_db()
+        behind.refresh_from_db()
+        self.assertEqual(blocked.status, OutboxMessage.Status.PENDING)
+        self.assertEqual(behind.status, OutboxMessage.Status.SENT)
+
+    def test_deadline_counts_from_the_start_of_the_run(self):
+        OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+        )
+        # The run started long enough ago that fetching used up the whole deadline.
+        run_start = time.monotonic() - RUN_DEADLINE_SECONDS
+        with patch("job_postings.run.try_send_payload") as mock_send:
+            sent, _, _, _ = deliver_pending(WEBHOOKS, run_start)
+
+        mock_send.assert_not_called()
+        self.assertEqual(sent, 0)
+        self.assertEqual(OutboxMessage.objects.get().status, OutboxMessage.Status.PENDING)
 
     def test_max_messages_per_run_limit(self):
         # Create more messages than the per-run limit

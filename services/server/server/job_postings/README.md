@@ -31,7 +31,7 @@ Queued messages live in the `OutboxMessage` table. Each run sends the ones that 
 2. Post it to Discord, outside any database transaction.
 3. Record the outcome: `sent`, or back to `pending` with a time for the next attempt.
 
-A run sends at most 5 messages and stops claiming new ones 20 seconds after sending starts. The rest wait for the next run. These limits exist because the scheduler triggers the command through a gunicorn request, which is cut off after 30 seconds. The 20 seconds do not include the time spent fetching the listing files first.
+A run sends at most 5 messages and stops claiming new ones 20 seconds after the run started, fetching the listing files included. The rest wait for the next run. These limits exist because the scheduler triggers the command through a gunicorn request, which is cut off after 30 seconds.
 
 What happens when a send does not succeed:
 
@@ -40,8 +40,8 @@ What happens when a send does not succeed:
 | Discord returns 429 | Back to `pending`, due again after Discord's `retry_after`. Counts as an attempt. |
 | Any other error, including a network failure | Back to `pending` with a backoff of 1, 2, 4, 8, 16 and 32 minutes, then 60 minutes. Counts as an attempt. |
 | 10th failed attempt | Marked `dead` and never retried on its own. |
-| The message's webhook variable is no longer set | Stays `pending` and is due again in 30 minutes. Does not count as an attempt. The run stops sending at that point, so messages behind it wait for the next run. |
-| The run dies between claiming and recording the outcome | Stays `sending`. A run that starts more than 3 minutes later puts it back to `pending`. |
+| The message's webhook variable is no longer set | Stays `pending` and is due again in 30 minutes. Does not count as an attempt. The messages behind it are still sent. |
+| The run dies between claiming and recording the outcome | Stays `sending`. A run that starts more than 3 minutes later puts it back to `pending` and logs a warning. |
 
 Two consequences:
 

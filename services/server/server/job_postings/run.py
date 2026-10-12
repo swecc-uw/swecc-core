@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 MAX_DELIVERY_ATTEMPTS = 10
 LEASE_TIMEOUT_SECONDS = 180  # 3 minutes - if a message is stuck in SENDING longer, re-queue it
 MAX_MESSAGES_PER_RUN = 5  # Limit messages per run to stay under gunicorn timeout
-RUN_DEADLINE_SECONDS = 20  # Stop claiming new messages after this many seconds
+RUN_DEADLINE_SECONDS = 20  # Stop claiming new messages this long after the run started
 
 
 @dataclass
@@ -110,16 +110,17 @@ def recover_stale_leases() -> int:
         status=OutboxMessage.Status.SENDING,
         claimed_at__lt=cutoff,
     )
-    count = stale.count()
-    if count > 0:
-        stale.update(
+    # Read the ids first: once updated, the rows no longer match the filter.
+    stale_ids = list(stale.values_list("id", flat=True))
+    if stale_ids:
+        stale.filter(id__in=stale_ids).update(
             status=OutboxMessage.Status.PENDING,
             claimed_at=None,
             last_error="Re-queued after stale lease (possible duplicate)",
         )
-        for msg_id in stale.values_list("id", flat=True):
+        for msg_id in stale_ids:
             logger.warning("Outbox %d re-queued after stale lease (at-least-once delivery)", msg_id)
-    return count
+    return len(stale_ids)
 
 
 def _claim_message_for_sending(webhooks: Mapping[str, str]) -> Optional[OutboxMessage]:
@@ -128,41 +129,46 @@ def _claim_message_for_sending(webhooks: Mapping[str, str]) -> Optional[OutboxMe
 
     Returns the claimed message (with webhook_url attached as an attribute for convenience),
     or None if no eligible messages exist. Messages with missing webhook config are skipped
-    (not claimed, not counted toward attempts) - they stay pending until config is restored.
+    (not claimed, not counted toward attempts) - they stay pending until config is restored,
+    and the next eligible message is tried instead.
     """
     now = timezone.now()
 
-    with transaction.atomic():
-        msg = (
-            OutboxMessage.objects.select_for_update(skip_locked=True)
-            .filter(
-                Q(next_attempt_at__lte=now) | Q(next_attempt_at__isnull=True),
-                status=OutboxMessage.Status.PENDING,
+    while True:
+        with transaction.atomic():
+            msg = (
+                OutboxMessage.objects.select_for_update(skip_locked=True)
+                .filter(
+                    Q(next_attempt_at__lte=now) | Q(next_attempt_at__isnull=True),
+                    status=OutboxMessage.Status.PENDING,
+                )
+                .order_by("created_at")
+                .first()
             )
-            .order_by("created_at")
-            .first()
-        )
-        if msg is None:
-            return None
+            if msg is None:
+                return None
 
-        webhook_url = webhooks.get(msg.webhook_env_var)
-        if not webhook_url:
-            # Missing config: defer without counting as an attempt
-            # Message stays pending until config is restored
-            msg.next_attempt_at = now + timedelta(minutes=30)
-            msg.last_error = f"{msg.webhook_env_var} is not set (config missing, not an attempt)"
+            webhook_url = webhooks.get(msg.webhook_env_var)
+            if not webhook_url:
+                # Missing config: defer without counting as an attempt
+                # Message stays pending until config is restored. Deferring it takes it out of
+                # the filter above, so the loop moves on to the message behind it.
+                msg.next_attempt_at = now + timedelta(minutes=30)
+                msg.last_error = (
+                    f"{msg.webhook_env_var} is not set (config missing, not an attempt)"
+                )
+                msg.save()
+                logger.warning("Outbox %d skipped: %s not configured", msg.id, msg.webhook_env_var)
+                continue
+
+            # Claim the message
+            msg.status = OutboxMessage.Status.SENDING
+            msg.claimed_at = now
             msg.save()
-            logger.warning("Outbox %d skipped: %s not configured", msg.id, msg.webhook_env_var)
-            return None
 
-        # Claim the message
-        msg.status = OutboxMessage.Status.SENDING
-        msg.claimed_at = now
-        msg.save()
-
-    # Attach webhook_url for caller convenience (not persisted)
-    msg._webhook_url = webhook_url
-    return msg
+        # Attach webhook_url for caller convenience (not persisted)
+        msg._webhook_url = webhook_url
+        return msg
 
 
 def _complete_send(msg: OutboxMessage, result) -> Tuple[int, int, int]:
@@ -216,13 +222,17 @@ def _complete_send(msg: OutboxMessage, result) -> Tuple[int, int, int]:
     return sent, deferred, dead
 
 
-def deliver_pending(webhooks: Mapping[str, str]) -> Tuple[int, int, int, int]:
+def deliver_pending(
+    webhooks: Mapping[str, str], run_start: Optional[float] = None
+) -> Tuple[int, int, int, int]:
     """
     Delivers pending outbox messages to Discord.
 
     Returns (sent, deferred, dead, stale_recovered). Enforces per-run limits:
     - MAX_MESSAGES_PER_RUN: stop after this many messages
-    - RUN_DEADLINE_SECONDS: stop claiming new messages after this time
+    - RUN_DEADLINE_SECONDS: stop claiming new messages this long after `run_start`, a
+      time.monotonic() reading that defaults to now. run() passes the time it started, so
+      the time spent fetching listings counts toward the deadline.
 
     Uses at-least-once delivery semantics:
     1. Claim: set status=SENDING with claimed_at timestamp (short transaction)
@@ -239,7 +249,8 @@ def deliver_pending(webhooks: Mapping[str, str]) -> Tuple[int, int, int, int]:
     deferred = 0
     dead = 0
     messages_processed = 0
-    run_start = time.monotonic()
+    if run_start is None:
+        run_start = time.monotonic()
 
     while messages_processed < MAX_MESSAGES_PER_RUN:
         # Check deadline before claiming another message
@@ -274,6 +285,7 @@ def run(webhooks: Mapping[str, str], now: Optional[int] = None) -> RunResult:
     Returns a RunResult with counts and error information. The caller should check
     result.failed to determine exit code.
     """
+    run_start = time.monotonic()
     now_ts = int(time.time()) if now is None else now
     errors: List[Exception] = []
 
@@ -291,7 +303,7 @@ def run(webhooks: Mapping[str, str], now: Optional[int] = None) -> RunResult:
             logger.exception("%s failed to enqueue", source.id)
             errors.append(err)
 
-    sent, deferred, dead, stale_recovered = deliver_pending(webhooks)
+    sent, deferred, dead, stale_recovered = deliver_pending(webhooks, run_start)
     if sent > 0 or deferred > 0 or dead > 0 or stale_recovered > 0:
         logger.info(
             "Delivery: %d sent, %d deferred, %d dead, %d stale recovered",
