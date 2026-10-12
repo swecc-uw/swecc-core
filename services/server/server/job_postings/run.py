@@ -73,6 +73,27 @@ def enqueue_source(source: Source, now: int) -> Tuple[int, bool]:
     return len(payloads), is_seed
 
 
+def _claim_pending_message() -> Optional[OutboxMessage]:
+    """
+    Atomically claim one pending message for delivery.
+
+    Uses select_for_update(skip_locked=True) so concurrent workers skip messages that are
+    already being processed by another worker. Returns None if no claimable messages exist.
+    """
+    from django.db.models import Q
+
+    now = timezone.now()
+    return (
+        OutboxMessage.objects.select_for_update(skip_locked=True)
+        .filter(
+            Q(next_attempt_at__lte=now) | Q(next_attempt_at__isnull=True),
+            status=OutboxMessage.Status.PENDING,
+        )
+        .order_by("created_at")
+        .first()
+    )
+
+
 def deliver_pending(webhooks: Mapping[str, str]) -> Tuple[int, int, int]:
     """
     Delivers pending outbox messages to Discord.
@@ -82,61 +103,67 @@ def deliver_pending(webhooks: Mapping[str, str]) -> Tuple[int, int, int]:
     - Rate limited (429): deferred with next_attempt_at set to now + retry_after
     - Error: attempt_count incremented; dead-lettered after MAX_DELIVERY_ATTEMPTS
 
-    Does not sleep or retry in-process, staying within the gunicorn timeout.
+    Concurrency-safe: uses select_for_update(skip_locked=True) to claim one message at a time.
+    Concurrent workers will skip messages that are already being processed, preventing duplicate
+    sends. Does not sleep or retry in-process, staying within the gunicorn timeout.
     """
-    from django.db.models import Q
-
-    now = timezone.now()
-    pending = OutboxMessage.objects.filter(
-        Q(next_attempt_at__lte=now) | Q(next_attempt_at__isnull=True),
-        status=OutboxMessage.Status.PENDING,
-    ).order_by("created_at")
-
     sent = 0
     deferred = 0
     dead = 0
 
-    for msg in pending:
-        webhook_url = webhooks.get(msg.webhook_env_var)
-        if not webhook_url:
-            msg.attempt_count += 1
-            msg.last_error = f"{msg.webhook_env_var} is not set"
-            if msg.attempt_count >= MAX_DELIVERY_ATTEMPTS:
-                msg.status = OutboxMessage.Status.DEAD
-                dead += 1
-                logger.warning("Outbox %d dead-lettered: %s", msg.id, msg.last_error)
-            msg.save()
-            continue
+    while True:
+        with transaction.atomic():
+            msg = _claim_pending_message()
+            if msg is None:
+                break
 
-        result = try_send_payload(webhook_url, msg.payload)
+            webhook_url = webhooks.get(msg.webhook_env_var)
+            if not webhook_url:
+                msg.attempt_count += 1
+                msg.last_error = f"{msg.webhook_env_var} is not set"
+                if msg.attempt_count >= MAX_DELIVERY_ATTEMPTS:
+                    msg.status = OutboxMessage.Status.DEAD
+                    dead += 1
+                    logger.warning("Outbox %d dead-lettered: %s", msg.id, msg.last_error)
+                else:
+                    # Defer retry - config issue unlikely to resolve within same run
+                    msg.next_attempt_at = timezone.now() + timedelta(minutes=30)
+                msg.save()
+                continue
 
-        if isinstance(result, SendSuccess):
-            msg.status = OutboxMessage.Status.SENT
-            msg.sent_at = timezone.now()
-            msg.save()
-            sent += 1
-        elif isinstance(result, SendRateLimited):
-            msg.attempt_count += 1
-            msg.next_attempt_at = now + timedelta(seconds=result.retry_after)
-            msg.last_error = f"Rate limited, retry after {result.retry_after}s"
-            msg.save()
-            deferred += 1
-            logger.info("Outbox %d rate-limited, deferred %.1fs", msg.id, result.retry_after)
-        else:
-            msg.attempt_count += 1
-            msg.last_error = f"HTTP {result.status_code}: {result.message}"
-            if msg.attempt_count >= MAX_DELIVERY_ATTEMPTS:
-                msg.status = OutboxMessage.Status.DEAD
-                dead += 1
-                logger.warning("Outbox %d dead-lettered: %s", msg.id, msg.last_error)
+            result = try_send_payload(webhook_url, msg.payload)
+
+            if isinstance(result, SendSuccess):
+                msg.status = OutboxMessage.Status.SENT
+                msg.sent_at = timezone.now()
+                msg.save()
+                sent += 1
+            elif isinstance(result, SendRateLimited):
+                msg.attempt_count += 1
+                msg.next_attempt_at = timezone.now() + timedelta(seconds=result.retry_after)
+                msg.last_error = f"Rate limited, retry after {result.retry_after}s"
+                msg.save()
+                deferred += 1
+                logger.info("Outbox %d rate-limited, deferred %.1fs", msg.id, result.retry_after)
             else:
-                logger.warning(
-                    "Outbox %d failed (attempt %d): %s",
-                    msg.id,
-                    msg.attempt_count,
-                    msg.last_error,
-                )
-            msg.save()
+                msg.attempt_count += 1
+                msg.last_error = f"HTTP {result.status_code}: {result.message}"
+                if msg.attempt_count >= MAX_DELIVERY_ATTEMPTS:
+                    msg.status = OutboxMessage.Status.DEAD
+                    dead += 1
+                    logger.warning("Outbox %d dead-lettered: %s", msg.id, msg.last_error)
+                else:
+                    # Defer retry with exponential backoff (1min, 2min, 4min, ...)
+                    backoff = min(2 ** (msg.attempt_count - 1), 60)  # Cap at 60 minutes
+                    msg.next_attempt_at = timezone.now() + timedelta(minutes=backoff)
+                    logger.warning(
+                        "Outbox %d failed (attempt %d), retry in %dm: %s",
+                        msg.id,
+                        msg.attempt_count,
+                        backoff,
+                        msg.last_error,
+                    )
+                msg.save()
 
     return sent, deferred, dead
 

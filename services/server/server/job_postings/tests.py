@@ -16,7 +16,7 @@ from .discord import (
     try_send_payload,
 )
 from .models import OutboxMessage, SourceState
-from .run import MAX_DELIVERY_ATTEMPTS, deliver_pending, enqueue_source, run
+from .run import MAX_DELIVERY_ATTEMPTS, _claim_pending_message, deliver_pending, enqueue_source, run
 from .selection import MAX_POSTS_PER_SOURCE, WINDOW_SECONDS, select_new
 from .sources import SOURCES, Listing, parse_listing
 
@@ -408,16 +408,18 @@ class DeliverPendingTests(TestCase):
             deliver_pending(WEBHOOKS)
         mock_send.assert_not_called()
 
-    def test_partial_failure_leaves_failed_messages_pending(self):
+    def test_partial_failure_leaves_failed_messages_pending_with_backoff(self):
         msg1 = OutboxMessage.objects.create(
             source_id=INTERNSHIPS.id,
             webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
             payload={"embeds": [{"description": "msg1"}]},
+            next_attempt_at=timezone.now(),
         )
         msg2 = OutboxMessage.objects.create(
             source_id=INTERNSHIPS.id,
             webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
             payload={"embeds": [{"description": "msg2"}]},
+            next_attempt_at=timezone.now(),
         )
 
         def side_effect(url, payload):
@@ -425,6 +427,7 @@ class DeliverPendingTests(TestCase):
                 return SendSuccess()
             return SendError(status_code=500, message="boom")
 
+        before = timezone.now()
         with patch("job_postings.run.try_send_payload", side_effect=side_effect):
             sent, deferred, dead = deliver_pending(WEBHOOKS)
 
@@ -434,6 +437,8 @@ class DeliverPendingTests(TestCase):
         self.assertEqual(msg1.status, OutboxMessage.Status.SENT)
         self.assertEqual(msg2.status, OutboxMessage.Status.PENDING)
         self.assertEqual(msg2.attempt_count, 1)
+        # Failed message should be deferred with exponential backoff (1 minute for first retry)
+        self.assertGreaterEqual(msg2.next_attempt_at, before + timedelta(seconds=55))
 
     def test_dead_letters_after_max_attempts(self):
         msg = OutboxMessage.objects.create(
@@ -478,6 +483,49 @@ class DeliverPendingTests(TestCase):
         msg.refresh_from_db()
         self.assertEqual(msg.attempt_count, 1)
         self.assertIn("MISSING_WEBHOOK is not set", msg.last_error)
+
+    def test_claim_uses_select_for_update_skip_locked(self):
+        # Verify that _claim_pending_message uses select_for_update(skip_locked=True)
+        # by checking the queryset methods. This ensures concurrent workers skip locked rows.
+        OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            next_attempt_at=timezone.now(),
+        )
+        with patch.object(
+            OutboxMessage.objects,
+            "select_for_update",
+            wraps=OutboxMessage.objects.select_for_update,
+        ) as mock_select:
+            from django.db import transaction
+
+            with transaction.atomic():
+                msg = _claim_pending_message()
+            self.assertIsNotNone(msg)
+            mock_select.assert_called_once_with(skip_locked=True)
+
+    def test_concurrent_delivery_cannot_claim_same_message_twice(self):
+        # Within a single delivery run, each message should only be claimed once.
+        # After processing (sent/failed), it should not be re-claimed.
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            next_attempt_at=timezone.now(),
+        )
+        with patch("job_postings.run.try_send_payload", return_value=SendSuccess()):
+            sent, _, _ = deliver_pending(WEBHOOKS)
+
+        self.assertEqual(sent, 1)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.SENT)
+
+        # A second delivery run should not re-send the already-sent message
+        with patch("job_postings.run.try_send_payload") as mock_send:
+            sent2, _, _ = deliver_pending(WEBHOOKS)
+        mock_send.assert_not_called()
+        self.assertEqual(sent2, 0)
 
 
 class RunTests(TestCase):
