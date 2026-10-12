@@ -10,7 +10,8 @@ MAX_ENTRIES = 10
 MAX_DESCRIPTION = 4096
 MAX_LINK_TEXT = 200
 SHOWN_LOCATIONS = 3
-MAX_RATE_LIMIT_RETRIES = 5
+MAX_RATE_LIMIT_RETRIES = 2
+MAX_RETRY_AFTER_SECONDS = 3
 ENTRY_SEPARATOR = "\n\n"
 REQUEST_TIMEOUT = 10
 
@@ -71,7 +72,7 @@ def post_payload(webhook_url: str, payload: dict) -> None:
         return requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
 
     # A full run sends several messages per webhook in quick succession, which can trip Discord's
-    # rate limit.
+    # rate limit. Cap retries and wait time to stay within gunicorn's 30s timeout.
     res = send()
     retries = 0
     while res.status_code == 429 and retries < MAX_RATE_LIMIT_RETRIES:
@@ -79,7 +80,7 @@ def post_payload(webhook_url: str, payload: dict) -> None:
             retry_after = res.json().get("retry_after", 1)
         except ValueError:
             retry_after = 1
-        time.sleep(retry_after)
+        time.sleep(min(retry_after, MAX_RETRY_AFTER_SECONDS))
         res = send()
         retries += 1
     if not res.ok:

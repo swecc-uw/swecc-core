@@ -289,6 +289,29 @@ class PostPayloadTests(SimpleTestCase):
         self.assertEqual(post.call_count, 2)
         sleep.assert_called_once_with(0.5)
 
+    def test_caps_retry_after_to_stay_within_gunicorn_timeout(self):
+        # Discord can return retry_after up to 60s, but we cap it to avoid exceeding gunicorn's
+        # 30s timeout.
+        from job_postings.discord import MAX_RETRY_AFTER_SECONDS
+
+        limited = FakeResponse(status_code=429, body={"retry_after": 60})
+        with patch("job_postings.discord.requests.post", side_effect=[limited, ACCEPTED]) as post:
+            with patch("job_postings.discord.time.sleep") as sleep:
+                post_payload(INTERN_HOOK, {"embeds": []})
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(MAX_RETRY_AFTER_SECONDS)
+
+    def test_gives_up_after_max_retries(self):
+        from job_postings.discord import MAX_RATE_LIMIT_RETRIES
+
+        limited = FakeResponse(status_code=429, body={"retry_after": 1})
+        with patch("job_postings.discord.requests.post", return_value=limited) as post:
+            with patch("job_postings.discord.time.sleep"):
+                with self.assertRaisesMessage(RuntimeError, "Discord webhook failed: 429"):
+                    post_payload(INTERN_HOOK, {"embeds": []})
+        # Initial request + MAX_RATE_LIMIT_RETRIES retries
+        self.assertEqual(post.call_count, 1 + MAX_RATE_LIMIT_RETRIES)
+
     def test_raises_when_discord_rejects_the_message(self):
         rejected = FakeResponse(status_code=400, body="bad embed")
         with patch("job_postings.discord.requests.post", return_value=rejected):
@@ -375,7 +398,10 @@ class RunTests(TestCase):
             },
         )
 
-    def test_leaves_a_source_unposted_when_discord_rejects_its_message(self):
+    def test_marks_listings_seen_even_when_discord_fails_to_prevent_duplicates(self):
+        # When Discord fails, the DB should already be updated to prevent duplicate posts on retry.
+        # This is a deliberate trade-off: some listings may never be posted, but duplicates are
+        # worse than missing posts.
         self.seed()
         _, errors = self.run_with(
             {
@@ -385,7 +411,10 @@ class RunTests(TestCase):
             }
         )
         self.assertEqual([str(err) for err in errors], ["Discord webhook failed: 500 boom"])
-        self.assertEqual(self.state()["simplify-internships"], {"etag": '"v1"', "seen": {}})
+        # The listing is marked as seen despite the Discord failure:
+        self.assertEqual(
+            self.state()["simplify-internships"], {"etag": '"v2"', "seen": {"i": NOW - 60}}
+        )
 
     def test_fails_a_source_whose_webhook_is_missing_and_still_runs_the_other(self):
         self.seed()
