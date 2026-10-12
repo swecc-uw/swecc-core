@@ -1,6 +1,6 @@
 import re
-import time
-from typing import List
+from dataclasses import dataclass
+from typing import List, Optional, Union
 
 import requests
 
@@ -10,10 +10,33 @@ MAX_ENTRIES = 10
 MAX_DESCRIPTION = 4096
 MAX_LINK_TEXT = 200
 SHOWN_LOCATIONS = 3
-MAX_RATE_LIMIT_RETRIES = 2
-MAX_RETRY_AFTER_SECONDS = 3
 ENTRY_SEPARATOR = "\n\n"
 REQUEST_TIMEOUT = 10
+
+
+@dataclass
+class SendSuccess:
+    """Discord accepted the message."""
+
+    pass
+
+
+@dataclass
+class SendRateLimited:
+    """Discord returned 429. retry_after is in seconds."""
+
+    retry_after: float
+
+
+@dataclass
+class SendError:
+    """Discord rejected the message with a non-retryable error."""
+
+    status_code: int
+    message: str
+
+
+SendResult = Union[SendSuccess, SendRateLimited, SendError]
 
 
 def _truncate(s: str, max_length: int) -> str:
@@ -65,23 +88,27 @@ def build_payloads(listings: List[Listing], source: Source) -> List[dict]:
     ]
 
 
-def post_payload(webhook_url: str, payload: dict) -> None:
+def try_send_payload(webhook_url: str, payload: dict) -> SendResult:
+    """
+    Attempt to send a payload to Discord once, returning the result.
+
+    Returns SendSuccess if Discord accepted it, SendRateLimited if we hit a 429 (with retry_after),
+    or SendError for other failures. Does not retry or sleep.
+    """
     url = f"{webhook_url}{'&' if '?' in webhook_url else '?'}wait=true"
+    try:
+        res = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException as e:
+        return SendError(status_code=0, message=str(e))
 
-    def send():
-        return requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+    if res.ok:
+        return SendSuccess()
 
-    # A full run sends several messages per webhook in quick succession, which can trip Discord's
-    # rate limit. Cap retries and wait time to stay within gunicorn's 30s timeout.
-    res = send()
-    retries = 0
-    while res.status_code == 429 and retries < MAX_RATE_LIMIT_RETRIES:
+    if res.status_code == 429:
         try:
-            retry_after = res.json().get("retry_after", 1)
+            retry_after = res.json().get("retry_after", 60)
         except ValueError:
-            retry_after = 1
-        time.sleep(min(retry_after, MAX_RETRY_AFTER_SECONDS))
-        res = send()
-        retries += 1
-    if not res.ok:
-        raise RuntimeError(f"Discord webhook failed: {res.status_code} {res.text}")
+            retry_after = 60
+        return SendRateLimited(retry_after=float(retry_after))
+
+    return SendError(status_code=res.status_code, message=res.text[:500])

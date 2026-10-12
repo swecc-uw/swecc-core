@@ -1,13 +1,22 @@
 from dataclasses import replace
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 
-from .discord import build_entry, build_payloads, post_payload
-from .models import SourceState
-from .run import run
+from .discord import (
+    SendError,
+    SendRateLimited,
+    SendSuccess,
+    build_entry,
+    build_payloads,
+    try_send_payload,
+)
+from .models import OutboxMessage, SourceState
+from .run import MAX_DELIVERY_ATTEMPTS, deliver_pending, enqueue_source, run
 from .selection import MAX_POSTS_PER_SOURCE, WINDOW_SECONDS, select_new
 from .sources import SOURCES, Listing, parse_listing
 
@@ -280,43 +289,195 @@ class BuildPayloadsTests(SimpleTestCase):
         self.assertEqual(build_payloads([], INTERNSHIPS), [])
 
 
-class PostPayloadTests(SimpleTestCase):
-    def test_waits_out_a_rate_limit_then_retries(self):
-        limited = FakeResponse(status_code=429, body={"retry_after": 0.5})
-        with patch("job_postings.discord.requests.post", side_effect=[limited, ACCEPTED]) as post:
-            with patch("job_postings.discord.time.sleep") as sleep:
-                post_payload(INTERN_HOOK, {"embeds": []})
-        self.assertEqual(post.call_count, 2)
-        sleep.assert_called_once_with(0.5)
+class TrySendPayloadTests(SimpleTestCase):
+    def test_returns_success_when_discord_accepts(self):
+        with patch("job_postings.discord.requests.post", return_value=ACCEPTED):
+            result = try_send_payload(INTERN_HOOK, {"embeds": []})
+        self.assertIsInstance(result, SendSuccess)
 
-    def test_caps_retry_after_to_stay_within_gunicorn_timeout(self):
-        # Discord can return retry_after up to 60s, but we cap it to avoid exceeding gunicorn's
-        # 30s timeout.
-        from job_postings.discord import MAX_RETRY_AFTER_SECONDS
+    def test_returns_rate_limited_with_retry_after(self):
+        limited = FakeResponse(status_code=429, body={"retry_after": 42.5})
+        with patch("job_postings.discord.requests.post", return_value=limited):
+            result = try_send_payload(INTERN_HOOK, {"embeds": []})
+        self.assertIsInstance(result, SendRateLimited)
+        self.assertEqual(result.retry_after, 42.5)
 
-        limited = FakeResponse(status_code=429, body={"retry_after": 60})
-        with patch("job_postings.discord.requests.post", side_effect=[limited, ACCEPTED]) as post:
-            with patch("job_postings.discord.time.sleep") as sleep:
-                post_payload(INTERN_HOOK, {"embeds": []})
-        self.assertEqual(post.call_count, 2)
-        sleep.assert_called_once_with(MAX_RETRY_AFTER_SECONDS)
-
-    def test_gives_up_after_max_retries(self):
-        from job_postings.discord import MAX_RATE_LIMIT_RETRIES
-
-        limited = FakeResponse(status_code=429, body={"retry_after": 1})
-        with patch("job_postings.discord.requests.post", return_value=limited) as post:
-            with patch("job_postings.discord.time.sleep"):
-                with self.assertRaisesMessage(RuntimeError, "Discord webhook failed: 429"):
-                    post_payload(INTERN_HOOK, {"embeds": []})
-        # Initial request + MAX_RATE_LIMIT_RETRIES retries
-        self.assertEqual(post.call_count, 1 + MAX_RATE_LIMIT_RETRIES)
-
-    def test_raises_when_discord_rejects_the_message(self):
+    def test_returns_error_when_discord_rejects(self):
         rejected = FakeResponse(status_code=400, body="bad embed")
         with patch("job_postings.discord.requests.post", return_value=rejected):
-            with self.assertRaisesMessage(RuntimeError, "Discord webhook failed: 400 bad embed"):
-                post_payload(INTERN_HOOK, {"embeds": []})
+            result = try_send_payload(INTERN_HOOK, {"embeds": []})
+        self.assertIsInstance(result, SendError)
+        self.assertEqual(result.status_code, 400)
+        self.assertIn("bad embed", result.message)
+
+    def test_returns_error_on_network_exception(self):
+        import requests
+
+        with patch("job_postings.discord.requests.post", side_effect=requests.Timeout("timed out")):
+            result = try_send_payload(INTERN_HOOK, {"embeds": []})
+        self.assertIsInstance(result, SendError)
+        self.assertEqual(result.status_code, 0)
+        self.assertIn("timed out", result.message)
+
+
+class EnqueueSourceTests(TestCase):
+    def setUp(self):
+        logging_patcher = patch("job_postings.run.logger")
+        logging_patcher.start()
+        self.addCleanup(logging_patcher.stop)
+
+    def enqueue_with(self, source, responses):
+        http = FakeHttp(responses)
+        with patch("job_postings.run.requests", http):
+            return enqueue_source(source, NOW)
+
+    def test_enqueues_messages_atomically_with_state_update(self):
+        # Enqueue creates OutboxMessages in the same transaction as SourceState update
+        http = FakeHttp({INTERNSHIPS.url: listings_file("a", "b")})
+        with patch("job_postings.run.requests", http):
+            enqueued, is_seed = enqueue_source(INTERNSHIPS, NOW)
+
+        self.assertEqual(enqueued, 0)  # Seed run enqueues nothing
+        self.assertTrue(is_seed)
+        self.assertEqual(OutboxMessage.objects.count(), 0)
+        state = SourceState.objects.get(pk=INTERNSHIPS.id)
+        self.assertEqual(state.seen, {"a": NOW - 60, "b": NOW - 60})
+
+    def test_second_run_enqueues_new_listings(self):
+        SourceState.objects.create(source_id=INTERNSHIPS.id, etag='"v1"', seen={"a": NOW - 60})
+        http = FakeHttp({INTERNSHIPS.url: listings_file("a", "b", "c")})
+        with patch("job_postings.run.requests", http):
+            enqueued, is_seed = enqueue_source(INTERNSHIPS, NOW)
+
+        self.assertEqual(enqueued, 1)  # One message with 2 listings
+        self.assertFalse(is_seed)
+        msg = OutboxMessage.objects.get()
+        self.assertEqual(msg.source_id, INTERNSHIPS.id)
+        self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
+        self.assertIn("example.com/b", msg.payload["embeds"][0]["description"])
+        self.assertIn("example.com/c", msg.payload["embeds"][0]["description"])
+
+
+class DeliverPendingTests(TestCase):
+    def setUp(self):
+        logging_patcher = patch("job_postings.run.logger")
+        logging_patcher.start()
+        self.addCleanup(logging_patcher.stop)
+
+    def test_delivers_pending_messages_and_marks_sent(self):
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": [{"description": "test"}]},
+        )
+        with patch("job_postings.run.try_send_payload", return_value=SendSuccess()):
+            sent, deferred, dead = deliver_pending(WEBHOOKS)
+
+        self.assertEqual((sent, deferred, dead), (1, 0, 0))
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.SENT)
+        self.assertIsNotNone(msg.sent_at)
+
+    def test_defers_rate_limited_messages_with_retry_after(self):
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+        )
+        before = timezone.now()
+        with patch(
+            "job_postings.run.try_send_payload", return_value=SendRateLimited(retry_after=120)
+        ):
+            sent, deferred, dead = deliver_pending(WEBHOOKS)
+
+        self.assertEqual((sent, deferred, dead), (0, 1, 0))
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
+        self.assertEqual(msg.attempt_count, 1)
+        # next_attempt_at should be ~120 seconds in the future
+        self.assertGreaterEqual(msg.next_attempt_at, before + timedelta(seconds=119))
+
+    def test_does_not_pick_up_deferred_messages_until_next_attempt_at(self):
+        OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            next_attempt_at=timezone.now() + timedelta(hours=1),
+        )
+        with patch("job_postings.run.try_send_payload") as mock_send:
+            deliver_pending(WEBHOOKS)
+        mock_send.assert_not_called()
+
+    def test_partial_failure_leaves_failed_messages_pending(self):
+        msg1 = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": [{"description": "msg1"}]},
+        )
+        msg2 = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": [{"description": "msg2"}]},
+        )
+
+        def side_effect(url, payload):
+            if "msg1" in payload["embeds"][0]["description"]:
+                return SendSuccess()
+            return SendError(status_code=500, message="boom")
+
+        with patch("job_postings.run.try_send_payload", side_effect=side_effect):
+            sent, deferred, dead = deliver_pending(WEBHOOKS)
+
+        self.assertEqual((sent, deferred, dead), (1, 0, 0))
+        msg1.refresh_from_db()
+        msg2.refresh_from_db()
+        self.assertEqual(msg1.status, OutboxMessage.Status.SENT)
+        self.assertEqual(msg2.status, OutboxMessage.Status.PENDING)
+        self.assertEqual(msg2.attempt_count, 1)
+
+    def test_dead_letters_after_max_attempts(self):
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            attempt_count=MAX_DELIVERY_ATTEMPTS - 1,
+        )
+        with patch(
+            "job_postings.run.try_send_payload",
+            return_value=SendError(status_code=500, message="persistent failure"),
+        ):
+            sent, deferred, dead = deliver_pending(WEBHOOKS)
+
+        self.assertEqual((sent, deferred, dead), (0, 0, 1))
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.DEAD)
+        self.assertIn("persistent failure", msg.last_error)
+
+    def test_no_duplicate_sends_on_rerun(self):
+        # Already-sent messages should not be re-sent
+        OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            status=OutboxMessage.Status.SENT,
+            sent_at=timezone.now(),
+        )
+        with patch("job_postings.run.try_send_payload") as mock_send:
+            sent, deferred, dead = deliver_pending(WEBHOOKS)
+        mock_send.assert_not_called()
+        self.assertEqual((sent, deferred, dead), (0, 0, 0))
+
+    def test_missing_webhook_increments_attempts(self):
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="MISSING_WEBHOOK",
+            payload={"embeds": []},
+        )
+        sent, deferred, dead = deliver_pending(WEBHOOKS)
+        self.assertEqual((sent, deferred, dead), (0, 0, 0))
+        msg.refresh_from_db()
+        self.assertEqual(msg.attempt_count, 1)
+        self.assertIn("MISSING_WEBHOOK is not set", msg.last_error)
 
 
 class RunTests(TestCase):
@@ -398,33 +559,42 @@ class RunTests(TestCase):
             },
         )
 
-    def test_marks_listings_seen_even_when_discord_fails_to_prevent_duplicates(self):
-        # When Discord fails, the DB should already be updated to prevent duplicate posts on retry.
-        # This is a deliberate trade-off: some listings may never be posted, but duplicates are
-        # worse than missing posts.
+    def test_outbox_enqueue_and_delivery_are_atomic(self):
+        # Listings are marked seen in the same transaction as outbox enqueue
         self.seed()
-        _, errors = self.run_with(
+        http, errors = self.run_with(
+            {
+                INTERNSHIPS.url: listings_file("i"),
+                NEW_GRAD.url: UNCHANGED,
+                INTERN_HOOK: ACCEPTED,
+            }
+        )
+        self.assertEqual(errors, [])
+        # Listing is marked as seen
+        self.assertEqual(
+            self.state()["simplify-internships"], {"etag": '"v2"', "seen": {"i": NOW - 60}}
+        )
+        # Message was delivered (not just enqueued)
+        self.assertEqual(OutboxMessage.objects.filter(status=OutboxMessage.Status.SENT).count(), 1)
+
+    def test_discord_failure_leaves_message_pending_for_retry(self):
+        self.seed()
+        http, errors = self.run_with(
             {
                 INTERNSHIPS.url: listings_file("i"),
                 NEW_GRAD.url: UNCHANGED,
                 INTERN_HOOK: FakeResponse(500, "boom"),
             }
         )
-        self.assertEqual([str(err) for err in errors], ["Discord webhook failed: 500 boom"])
-        # The listing is marked as seen despite the Discord failure:
+        self.assertEqual(errors, [])  # Delivery errors don't propagate
+        # Listing is still marked as seen (no duplicates on source re-fetch)
         self.assertEqual(
             self.state()["simplify-internships"], {"etag": '"v2"', "seen": {"i": NOW - 60}}
         )
-
-    def test_fails_a_source_whose_webhook_is_missing_and_still_runs_the_other(self):
-        self.seed()
-        _, errors = self.run_with(
-            {INTERNSHIPS.url: listings_file("i"), INTERN_HOOK: ACCEPTED},
-            webhooks={"DISCORD_WEBHOOK_INTERNSHIPS": INTERN_HOOK},
-        )
-        self.assertEqual([str(err) for err in errors], ["DISCORD_WEBHOOK_NEW_GRAD is not set"])
-        self.assertEqual(self.state()["simplify-internships"]["seen"], {"i": NOW - 60})
-        self.assertEqual(self.state()["simplify-new-grad"], {"etag": '"v1"', "seen": {}})
+        # Message remains pending for retry
+        msg = OutboxMessage.objects.get(source_id=INTERNSHIPS.id)
+        self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
+        self.assertEqual(msg.attempt_count, 1)
 
     def test_gives_each_source_its_own_cap(self):
         self.seed()

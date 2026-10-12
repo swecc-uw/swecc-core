@@ -1,16 +1,27 @@
 import logging
 import time
-from typing import List, Mapping, Optional
+from datetime import timedelta
+from typing import List, Mapping, Optional, Tuple
 
 import requests
 from django.db import transaction
+from django.utils import timezone
 
-from .discord import REQUEST_TIMEOUT, build_payloads, post_payload
-from .models import SourceState
+from .discord import (
+    REQUEST_TIMEOUT,
+    SendError,
+    SendRateLimited,
+    SendSuccess,
+    build_payloads,
+    try_send_payload,
+)
+from .models import OutboxMessage, SourceState
 from .selection import select_new
 from .sources import SOURCES, Source, parse_listing
 
 logger = logging.getLogger(__name__)
+
+MAX_DELIVERY_ATTEMPTS = 10
 
 
 def fetch_listings(source: Source, etag: Optional[str]):
@@ -27,52 +38,137 @@ def fetch_listings(source: Source, etag: Optional[str]):
     return res.headers.get("etag", ""), listings
 
 
-def run_source(source: Source, webhooks: Mapping[str, str], now: int) -> None:
+def enqueue_source(source: Source, now: int) -> Tuple[int, bool]:
     """
-    Fetches new listings and posts them to Discord.
+    Fetches new listings and enqueues Discord messages in the outbox.
 
-    The DB update happens before Discord posts to prevent duplicates: if Discord fails mid-batch,
-    the listings are already marked as seen, so they won't be re-posted on the next run. The
-    trade-off is that a Discord failure may cause some listings to never be posted, but this is
-    preferable to spamming the channel with duplicates.
+    Returns (enqueued_count, is_seed). The outbox messages and the SourceState update are in the
+    same transaction, ensuring atomicity: if the transaction fails, neither the messages nor the
+    seen-IDs update are persisted.
     """
-    webhook_url = webhooks.get(source.webhook)
-    if not webhook_url:
-        raise RuntimeError(f"{source.webhook} is not set")
-
-    # Phase 1: Inside a transaction, determine what to post and update the DB.
-    # Holding the row lock makes an overlapping run wait here instead of racing.
     with transaction.atomic():
         before = SourceState.objects.select_for_update().filter(pk=source.id).first()
         result = fetch_listings(source, before.etag if before else None)
         if result is None:
-            return
+            return 0, False
         etag, listings = result
         fresh, seen, deferred = select_new(listings, source, before.seen if before else None, now)
         is_seed = before is None
-        # Keeping the old etag forces a refetch next run, so listings held back by the cap are not
-        # stuck behind a 304.
+
+        payloads = build_payloads(fresh, source)
+        enqueue_time = timezone.now()
+        for payload in payloads:
+            OutboxMessage.objects.create(
+                source_id=source.id,
+                webhook_env_var=source.webhook,
+                payload=payload,
+                next_attempt_at=enqueue_time,
+            )
+
         kept_etag = (before.etag if before else "") if deferred else etag
         SourceState.objects.update_or_create(
             source_id=source.id, defaults={"etag": kept_etag, "seen": seen}
         )
 
-    # Phase 2: Post to Discord outside the transaction. If this fails, the listings are already
-    # marked as seen, preventing duplicates on retry.
-    payloads = build_payloads(fresh, source)
-    for payload in payloads:
-        post_payload(webhook_url, payload)
-    logger.info("%s: posted %d%s", source.id, len(fresh), " (seed run)" if is_seed else "")
+    return len(payloads), is_seed
+
+
+def deliver_pending(webhooks: Mapping[str, str]) -> Tuple[int, int, int]:
+    """
+    Delivers pending outbox messages to Discord.
+
+    Returns (sent_count, deferred_count, dead_count). Each message is processed independently:
+    - Success: marked as sent
+    - Rate limited (429): deferred with next_attempt_at set to now + retry_after
+    - Error: attempt_count incremented; dead-lettered after MAX_DELIVERY_ATTEMPTS
+
+    Does not sleep or retry in-process, staying within the gunicorn timeout.
+    """
+    from django.db.models import Q
+
+    now = timezone.now()
+    pending = OutboxMessage.objects.filter(
+        Q(next_attempt_at__lte=now) | Q(next_attempt_at__isnull=True),
+        status=OutboxMessage.Status.PENDING,
+    ).order_by("created_at")
+
+    sent = 0
+    deferred = 0
+    dead = 0
+
+    for msg in pending:
+        webhook_url = webhooks.get(msg.webhook_env_var)
+        if not webhook_url:
+            msg.attempt_count += 1
+            msg.last_error = f"{msg.webhook_env_var} is not set"
+            if msg.attempt_count >= MAX_DELIVERY_ATTEMPTS:
+                msg.status = OutboxMessage.Status.DEAD
+                dead += 1
+                logger.warning("Outbox %d dead-lettered: %s", msg.id, msg.last_error)
+            msg.save()
+            continue
+
+        result = try_send_payload(webhook_url, msg.payload)
+
+        if isinstance(result, SendSuccess):
+            msg.status = OutboxMessage.Status.SENT
+            msg.sent_at = timezone.now()
+            msg.save()
+            sent += 1
+        elif isinstance(result, SendRateLimited):
+            msg.attempt_count += 1
+            msg.next_attempt_at = now + timedelta(seconds=result.retry_after)
+            msg.last_error = f"Rate limited, retry after {result.retry_after}s"
+            msg.save()
+            deferred += 1
+            logger.info("Outbox %d rate-limited, deferred %.1fs", msg.id, result.retry_after)
+        else:
+            msg.attempt_count += 1
+            msg.last_error = f"HTTP {result.status_code}: {result.message}"
+            if msg.attempt_count >= MAX_DELIVERY_ATTEMPTS:
+                msg.status = OutboxMessage.Status.DEAD
+                dead += 1
+                logger.warning("Outbox %d dead-lettered: %s", msg.id, msg.last_error)
+            else:
+                logger.warning(
+                    "Outbox %d failed (attempt %d): %s",
+                    msg.id,
+                    msg.attempt_count,
+                    msg.last_error,
+                )
+            msg.save()
+
+    return sent, deferred, dead
 
 
 def run(webhooks: Mapping[str, str], now: Optional[int] = None) -> List[Exception]:
-    """Posts each source's new listings and returns the errors of the sources that failed."""
-    now = int(time.time()) if now is None else now
+    """
+    Enqueues new listings from each source and delivers pending outbox messages.
+
+    Returns the errors from sources that failed to enqueue. Delivery errors are logged but not
+    returned (they leave messages pending for the next run).
+    """
+    now_ts = int(time.time()) if now is None else now
     errors: List[Exception] = []
+    total_enqueued = 0
+
     for source in SOURCES:
         try:
-            run_source(source, webhooks, now)
+            enqueued, is_seed = enqueue_source(source, now_ts)
+            total_enqueued += enqueued
+            if enqueued > 0 or is_seed:
+                logger.info(
+                    "%s: enqueued %d%s",
+                    source.id,
+                    enqueued,
+                    " (seed run)" if is_seed else "",
+                )
         except Exception as err:
-            logger.exception("%s failed", source.id)
+            logger.exception("%s failed to enqueue", source.id)
             errors.append(err)
+
+    sent, deferred, dead = deliver_pending(webhooks)
+    if sent > 0 or deferred > 0 or dead > 0:
+        logger.info("Delivery: %d sent, %d deferred, %d dead", sent, deferred, dead)
+
     return errors
