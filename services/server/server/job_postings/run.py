@@ -28,25 +28,41 @@ def fetch_listings(source: Source, etag: Optional[str]):
 
 
 def run_source(source: Source, webhooks: Mapping[str, str], now: int) -> None:
+    """
+    Fetches new listings and posts them to Discord.
+
+    The DB update happens before Discord posts to prevent duplicates: if Discord fails mid-batch,
+    the listings are already marked as seen, so they won't be re-posted on the next run. The
+    trade-off is that a Discord failure may cause some listings to never be posted, but this is
+    preferable to spamming the channel with duplicates.
+    """
     webhook_url = webhooks.get(source.webhook)
     if not webhook_url:
         raise RuntimeError(f"{source.webhook} is not set")
-    # Holding the row lock makes an overlapping run wait here instead of posting the same listings.
-    before = SourceState.objects.select_for_update().filter(pk=source.id).first()
-    result = fetch_listings(source, before.etag if before else None)
-    if result is None:
-        return
-    etag, listings = result
-    fresh, seen, deferred = select_new(listings, source, before.seen if before else None, now)
-    for payload in build_payloads(fresh, source):
+
+    # Phase 1: Inside a transaction, determine what to post and update the DB.
+    # Holding the row lock makes an overlapping run wait here instead of racing.
+    with transaction.atomic():
+        before = SourceState.objects.select_for_update().filter(pk=source.id).first()
+        result = fetch_listings(source, before.etag if before else None)
+        if result is None:
+            return
+        etag, listings = result
+        fresh, seen, deferred = select_new(listings, source, before.seen if before else None, now)
+        is_seed = before is None
+        # Keeping the old etag forces a refetch next run, so listings held back by the cap are not
+        # stuck behind a 304.
+        kept_etag = (before.etag if before else "") if deferred else etag
+        SourceState.objects.update_or_create(
+            source_id=source.id, defaults={"etag": kept_etag, "seen": seen}
+        )
+
+    # Phase 2: Post to Discord outside the transaction. If this fails, the listings are already
+    # marked as seen, preventing duplicates on retry.
+    payloads = build_payloads(fresh, source)
+    for payload in payloads:
         post_payload(webhook_url, payload)
-    logger.info("%s: posted %d%s", source.id, len(fresh), "" if before else " (seed run)")
-    # Keeping the old etag forces a refetch next run, so listings held back by the cap are not
-    # stuck behind a 304.
-    kept_etag = (before.etag if before else "") if deferred else etag
-    SourceState.objects.update_or_create(
-        source_id=source.id, defaults={"etag": kept_etag, "seen": seen}
-    )
+    logger.info("%s: posted %d%s", source.id, len(fresh), " (seed run)" if is_seed else "")
 
 
 def run(webhooks: Mapping[str, str], now: Optional[int] = None) -> List[Exception]:
@@ -54,11 +70,8 @@ def run(webhooks: Mapping[str, str], now: Optional[int] = None) -> List[Exceptio
     now = int(time.time()) if now is None else now
     errors: List[Exception] = []
     for source in SOURCES:
-        # A failed source rolls back to its previous state so the next run retries it, while the
-        # others still advance.
         try:
-            with transaction.atomic():
-                run_source(source, webhooks, now)
+            run_source(source, webhooks, now)
         except Exception as err:
             logger.exception("%s failed", source.id)
             errors.append(err)
