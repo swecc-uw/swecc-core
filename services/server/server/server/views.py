@@ -42,6 +42,10 @@ class ManagementCommandView(APIView):
             "name": "verify_account",
             "description": "Verify a user's SWECC account with their Discord",
         },
+        {
+            "name": "post_job_listings",
+            "description": "Post new SimplifyJobs internship and new grad listings to Discord",
+        },
     ]
 
     def get(self, request):

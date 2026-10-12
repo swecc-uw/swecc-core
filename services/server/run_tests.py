@@ -43,6 +43,6 @@ if __name__ == "__main__":
     TestRunner = get_runner(settings)
     test_runner = TestRunner(verbosity=2, interactive=False, keepdb=False)
 
-    # Run tests for resume_review and contentManage
-    failures = test_runner.run_tests(["resume_review", "contentManage"])
+    # Run tests for resume_review, contentManage and job_postings
+    failures = test_runner.run_tests(["resume_review", "contentManage", "job_postings"])
     sys.exit(bool(failures))

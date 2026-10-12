@@ -51,7 +51,7 @@ make test-coverage         # all services with coverage
 ./run_tests.sh -v ai       # verbose
 ```
 
-Server (Django) tests use `services/server/run_tests.py`, which forces SQLite in-memory and only runs `resume_review` and `contentManage` apps — adding a new Django app means editing that script to register it.
+Server (Django) tests use `services/server/run_tests.py`, which forces SQLite in-memory and only runs the `resume_review`, `contentManage` and `job_postings` apps — adding a new Django app means editing that script to register it.
 
 To run a single pytest test:
 ```bash

@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "cohort.apps.CohortConfig",
     "resume_review.apps.ResumeReviewConfig",
     "bench.apps.BenchConfig",
+    "job_postings.apps.JobPostingsConfig",
     "corsheaders",
     "rest_framework_api_key",
 ]

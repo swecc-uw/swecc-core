@@ -110,7 +110,7 @@ python run_tests.py
 The server uses a custom test runner (`run_tests.py`) that:
 - Configures Django to use SQLite in-memory database for testing
 - Sets up required environment variables
-- Runs tests for `resume_review` and `contentManage` apps
+- Runs tests for `resume_review`, `contentManage` and `job_postings` apps
 
 ## Continuous Integration
 
