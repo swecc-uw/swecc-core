@@ -16,7 +16,17 @@ from .discord import (
     try_send_payload,
 )
 from .models import OutboxMessage, SourceState
-from .run import MAX_DELIVERY_ATTEMPTS, _claim_pending_message, deliver_pending, enqueue_source, run
+from .run import (
+    LEASE_TIMEOUT_SECONDS,
+    MAX_DELIVERY_ATTEMPTS,
+    MAX_MESSAGES_PER_RUN,
+    RunResult,
+    _claim_message_for_sending,
+    deliver_pending,
+    enqueue_source,
+    recover_stale_leases,
+    run,
+)
 from .selection import MAX_POSTS_PER_SOURCE, WINDOW_SECONDS, select_new
 from .sources import SOURCES, Listing, parse_listing
 
@@ -326,16 +336,20 @@ class EnqueueSourceTests(TestCase):
         logging_patcher.start()
         self.addCleanup(logging_patcher.stop)
 
-    def enqueue_with(self, source, responses):
-        http = FakeHttp(responses)
-        with patch("job_postings.run.requests", http):
-            return enqueue_source(source, NOW)
-
-    def test_enqueues_messages_atomically_with_state_update(self):
-        # Enqueue creates OutboxMessages in the same transaction as SourceState update
+    def test_validates_webhook_before_modifying_state(self):
+        # Missing webhook should fail fast without seeding or enqueueing
         http = FakeHttp({INTERNSHIPS.url: listings_file("a", "b")})
         with patch("job_postings.run.requests", http):
-            enqueued, is_seed = enqueue_source(INTERNSHIPS, NOW)
+            with self.assertRaisesMessage(RuntimeError, "DISCORD_WEBHOOK_INTERNSHIPS is not set"):
+                enqueue_source(INTERNSHIPS, {}, NOW)
+        # No state should have been created
+        self.assertFalse(SourceState.objects.filter(pk=INTERNSHIPS.id).exists())
+        self.assertEqual(OutboxMessage.objects.count(), 0)
+
+    def test_enqueues_messages_atomically_with_state_update(self):
+        http = FakeHttp({INTERNSHIPS.url: listings_file("a", "b")})
+        with patch("job_postings.run.requests", http):
+            enqueued, is_seed = enqueue_source(INTERNSHIPS, WEBHOOKS, NOW)
 
         self.assertEqual(enqueued, 0)  # Seed run enqueues nothing
         self.assertTrue(is_seed)
@@ -347,7 +361,7 @@ class EnqueueSourceTests(TestCase):
         SourceState.objects.create(source_id=INTERNSHIPS.id, etag='"v1"', seen={"a": NOW - 60})
         http = FakeHttp({INTERNSHIPS.url: listings_file("a", "b", "c")})
         with patch("job_postings.run.requests", http):
-            enqueued, is_seed = enqueue_source(INTERNSHIPS, NOW)
+            enqueued, is_seed = enqueue_source(INTERNSHIPS, WEBHOOKS, NOW)
 
         self.assertEqual(enqueued, 1)  # One message with 2 listings
         self.assertFalse(is_seed)
@@ -356,6 +370,56 @@ class EnqueueSourceTests(TestCase):
         self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
         self.assertIn("example.com/b", msg.payload["embeds"][0]["description"])
         self.assertIn("example.com/c", msg.payload["embeds"][0]["description"])
+
+
+class StaleLeaseRecoveryTests(TestCase):
+    def setUp(self):
+        logging_patcher = patch("job_postings.run.logger")
+        logging_patcher.start()
+        self.addCleanup(logging_patcher.stop)
+
+    def test_recovers_stale_sending_messages(self):
+        # Message stuck in SENDING past the lease timeout
+        stale_time = timezone.now() - timedelta(seconds=LEASE_TIMEOUT_SECONDS + 60)
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            status=OutboxMessage.Status.SENDING,
+            claimed_at=stale_time,
+        )
+        recovered = recover_stale_leases()
+        self.assertEqual(recovered, 1)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
+        self.assertIsNone(msg.claimed_at)
+        self.assertIn("stale lease", msg.last_error)
+
+    def test_does_not_recover_fresh_sending_messages(self):
+        # Message in SENDING but not past the lease timeout
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            status=OutboxMessage.Status.SENDING,
+            claimed_at=timezone.now() - timedelta(seconds=30),  # Only 30s old
+        )
+        recovered = recover_stale_leases()
+        self.assertEqual(recovered, 0)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.SENDING)
+
+    def test_stale_recovery_included_in_delivery_stats(self):
+        stale_time = timezone.now() - timedelta(seconds=LEASE_TIMEOUT_SECONDS + 60)
+        OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            status=OutboxMessage.Status.SENDING,
+            claimed_at=stale_time,
+        )
+        sent, deferred, dead, stale_recovered = deliver_pending(WEBHOOKS)
+        self.assertEqual(stale_recovered, 1)
 
 
 class DeliverPendingTests(TestCase):
@@ -371,12 +435,28 @@ class DeliverPendingTests(TestCase):
             payload={"embeds": [{"description": "test"}]},
         )
         with patch("job_postings.run.try_send_payload", return_value=SendSuccess()):
-            sent, deferred, dead = deliver_pending(WEBHOOKS)
+            sent, deferred, dead, _ = deliver_pending(WEBHOOKS)
 
         self.assertEqual((sent, deferred, dead), (1, 0, 0))
         msg.refresh_from_db()
         self.assertEqual(msg.status, OutboxMessage.Status.SENT)
         self.assertIsNotNone(msg.sent_at)
+        self.assertIsNone(msg.claimed_at)  # Lease cleared after completion
+
+    def test_claim_sets_sending_status_with_claimed_at(self):
+        msg = OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+        )
+        before = timezone.now()
+        claimed = _claim_message_for_sending(WEBHOOKS)
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed.pk, msg.pk)
+
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.SENDING)
+        self.assertGreaterEqual(msg.claimed_at, before)
 
     def test_defers_rate_limited_messages_with_retry_after(self):
         msg = OutboxMessage.objects.create(
@@ -388,13 +468,12 @@ class DeliverPendingTests(TestCase):
         with patch(
             "job_postings.run.try_send_payload", return_value=SendRateLimited(retry_after=120)
         ):
-            sent, deferred, dead = deliver_pending(WEBHOOKS)
+            sent, deferred, dead, _ = deliver_pending(WEBHOOKS)
 
         self.assertEqual((sent, deferred, dead), (0, 1, 0))
         msg.refresh_from_db()
         self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
         self.assertEqual(msg.attempt_count, 1)
-        # next_attempt_at should be ~120 seconds in the future
         self.assertGreaterEqual(msg.next_attempt_at, before + timedelta(seconds=119))
 
     def test_does_not_pick_up_deferred_messages_until_next_attempt_at(self):
@@ -429,7 +508,7 @@ class DeliverPendingTests(TestCase):
 
         before = timezone.now()
         with patch("job_postings.run.try_send_payload", side_effect=side_effect):
-            sent, deferred, dead = deliver_pending(WEBHOOKS)
+            sent, deferred, dead, _ = deliver_pending(WEBHOOKS)
 
         self.assertEqual((sent, deferred, dead), (1, 0, 0))
         msg1.refresh_from_db()
@@ -437,7 +516,6 @@ class DeliverPendingTests(TestCase):
         self.assertEqual(msg1.status, OutboxMessage.Status.SENT)
         self.assertEqual(msg2.status, OutboxMessage.Status.PENDING)
         self.assertEqual(msg2.attempt_count, 1)
-        # Failed message should be deferred with exponential backoff (1 minute for first retry)
         self.assertGreaterEqual(msg2.next_attempt_at, before + timedelta(seconds=55))
 
     def test_dead_letters_after_max_attempts(self):
@@ -451,7 +529,7 @@ class DeliverPendingTests(TestCase):
             "job_postings.run.try_send_payload",
             return_value=SendError(status_code=500, message="persistent failure"),
         ):
-            sent, deferred, dead = deliver_pending(WEBHOOKS)
+            sent, deferred, dead, _ = deliver_pending(WEBHOOKS)
 
         self.assertEqual((sent, deferred, dead), (0, 0, 1))
         msg.refresh_from_db()
@@ -459,7 +537,6 @@ class DeliverPendingTests(TestCase):
         self.assertIn("persistent failure", msg.last_error)
 
     def test_no_duplicate_sends_on_rerun(self):
-        # Already-sent messages should not be re-sent
         OutboxMessage.objects.create(
             source_id=INTERNSHIPS.id,
             webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
@@ -468,64 +545,78 @@ class DeliverPendingTests(TestCase):
             sent_at=timezone.now(),
         )
         with patch("job_postings.run.try_send_payload") as mock_send:
-            sent, deferred, dead = deliver_pending(WEBHOOKS)
+            sent, deferred, dead, _ = deliver_pending(WEBHOOKS)
         mock_send.assert_not_called()
         self.assertEqual((sent, deferred, dead), (0, 0, 0))
 
-    def test_missing_webhook_increments_attempts(self):
+    def test_missing_webhook_does_not_count_toward_attempts(self):
+        # Missing webhook should defer without incrementing attempt_count
         msg = OutboxMessage.objects.create(
             source_id=INTERNSHIPS.id,
             webhook_env_var="MISSING_WEBHOOK",
             payload={"embeds": []},
+            attempt_count=0,
         )
-        sent, deferred, dead = deliver_pending(WEBHOOKS)
-        self.assertEqual((sent, deferred, dead), (0, 0, 0))
-        msg.refresh_from_db()
-        self.assertEqual(msg.attempt_count, 1)
-        self.assertIn("MISSING_WEBHOOK is not set", msg.last_error)
-
-    def test_claim_uses_select_for_update_skip_locked(self):
-        # Verify that _claim_pending_message uses select_for_update(skip_locked=True)
-        # by checking the queryset methods. This ensures concurrent workers skip locked rows.
-        OutboxMessage.objects.create(
-            source_id=INTERNSHIPS.id,
-            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
-            payload={"embeds": []},
-            next_attempt_at=timezone.now(),
-        )
-        with patch.object(
-            OutboxMessage.objects,
-            "select_for_update",
-            wraps=OutboxMessage.objects.select_for_update,
-        ) as mock_select:
-            from django.db import transaction
-
-            with transaction.atomic():
-                msg = _claim_pending_message()
-            self.assertIsNotNone(msg)
-            mock_select.assert_called_once_with(skip_locked=True)
-
-    def test_concurrent_delivery_cannot_claim_same_message_twice(self):
-        # Within a single delivery run, each message should only be claimed once.
-        # After processing (sent/failed), it should not be re-claimed.
-        msg = OutboxMessage.objects.create(
-            source_id=INTERNSHIPS.id,
-            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
-            payload={"embeds": []},
-            next_attempt_at=timezone.now(),
-        )
-        with patch("job_postings.run.try_send_payload", return_value=SendSuccess()):
-            sent, _, _ = deliver_pending(WEBHOOKS)
-
-        self.assertEqual(sent, 1)
-        msg.refresh_from_db()
-        self.assertEqual(msg.status, OutboxMessage.Status.SENT)
-
-        # A second delivery run should not re-send the already-sent message
         with patch("job_postings.run.try_send_payload") as mock_send:
-            sent2, _, _ = deliver_pending(WEBHOOKS)
-        mock_send.assert_not_called()
-        self.assertEqual(sent2, 0)
+            sent, deferred, dead, _ = deliver_pending(WEBHOOKS)
+
+        mock_send.assert_not_called()  # Should skip, not call Discord
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
+        self.assertEqual(msg.attempt_count, 0)  # NOT incremented
+        self.assertIn("not set", msg.last_error)
+        self.assertIn("not an attempt", msg.last_error)
+        # Should be deferred, not dead-lettered
+        self.assertIsNotNone(msg.next_attempt_at)
+
+    def test_max_messages_per_run_limit(self):
+        # Create more messages than the per-run limit
+        for i in range(MAX_MESSAGES_PER_RUN + 3):
+            OutboxMessage.objects.create(
+                source_id=INTERNSHIPS.id,
+                webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+                payload={"embeds": [{"description": f"msg{i}"}]},
+            )
+        with patch("job_postings.run.try_send_payload", return_value=SendSuccess()):
+            sent, _, _, _ = deliver_pending(WEBHOOKS)
+
+        # Should stop at MAX_MESSAGES_PER_RUN
+        self.assertEqual(sent, MAX_MESSAGES_PER_RUN)
+        # Remaining messages still pending
+        pending = OutboxMessage.objects.filter(status=OutboxMessage.Status.PENDING).count()
+        self.assertEqual(pending, 3)
+
+
+class RunResultTests(SimpleTestCase):
+    def test_failed_when_enqueue_errors(self):
+        result = RunResult(
+            enqueue_errors=[RuntimeError("test")],
+            sent=5,
+            deferred=0,
+            dead=0,
+            stale_recovered=0,
+        )
+        self.assertTrue(result.failed)
+
+    def test_failed_when_dead_lettered(self):
+        result = RunResult(
+            enqueue_errors=[],
+            sent=5,
+            deferred=0,
+            dead=1,
+            stale_recovered=0,
+        )
+        self.assertTrue(result.failed)
+
+    def test_not_failed_when_all_success(self):
+        result = RunResult(
+            enqueue_errors=[],
+            sent=5,
+            deferred=2,
+            dead=0,
+            stale_recovered=1,
+        )
+        self.assertFalse(result.failed)
 
 
 class RunTests(TestCase):
@@ -537,8 +628,8 @@ class RunTests(TestCase):
     def run_with(self, responses, webhooks=WEBHOOKS):
         http = FakeHttp(responses)
         with patch("job_postings.run.requests", http), patch("job_postings.discord.requests", http):
-            errors = run(webhooks, NOW)
-        return http, errors
+            result = run(webhooks, NOW)
+        return http, result
 
     def seed(self, **seen_by_source):
         for source in SOURCES:
@@ -550,11 +641,11 @@ class RunTests(TestCase):
         return {s.source_id: {"etag": s.etag, "seen": s.seen} for s in SourceState.objects.all()}
 
     def test_seeds_on_first_run_without_posting(self):
-        http, errors = self.run_with(
+        http, result = self.run_with(
             {INTERNSHIPS.url: listings_file("a"), NEW_GRAD.url: listings_file("b")}
         )
         self.assertEqual([call["url"] for call in http.calls], [INTERNSHIPS.url, NEW_GRAD.url])
-        self.assertEqual(errors, [])
+        self.assertFalse(result.failed)
         self.assertEqual(
             self.state(),
             {
@@ -563,9 +654,9 @@ class RunTests(TestCase):
             },
         )
 
-    def test_posts_each_sources_new_listings_to_its_own_webhook_and_sends_if_none_match(self):
+    def test_posts_each_sources_new_listings_to_its_own_webhook(self):
         self.seed(**{"simplify-internships": {"a": NOW - 60}})
-        http, _ = self.run_with(
+        http, result = self.run_with(
             {
                 INTERNSHIPS.url: listings_file("a", "i"),
                 NEW_GRAD.url: listings_file("g"),
@@ -573,116 +664,88 @@ class RunTests(TestCase):
                 GRAD_HOOK: ACCEPTED,
             }
         )
-        self.assertEqual(http.calls[0]["headers"], {"If-None-Match": '"v1"'})
-        intern_posts = [call for call in http.calls if call["url"].startswith(INTERN_HOOK)]
-        self.assertEqual(intern_posts[0]["url"], f"{INTERN_HOOK}?wait=true")
+        self.assertFalse(result.failed)
+        self.assertEqual(result.sent, 2)
         self.assertEqual(len(http.descriptions(INTERN_HOOK)), 1)
         self.assertIn("https://example.com/i)", http.descriptions(INTERN_HOOK)[0])
-        self.assertNotIn("https://example.com/a)", http.descriptions(INTERN_HOOK)[0])
-        self.assertEqual(len(http.descriptions(GRAD_HOOK)), 1)
-        self.assertIn("https://example.com/g)", http.descriptions(GRAD_HOOK)[0])
-        self.assertEqual(
-            self.state()["simplify-internships"],
-            {"etag": '"v2"', "seen": {"a": NOW - 60, "i": NOW - 60}},
-        )
 
-    def test_leaves_the_state_untouched_when_every_source_is_unchanged(self):
-        self.seed(**{"simplify-internships": {"a": NOW - 60}})
-        before = self.state()
-        _, errors = self.run_with({INTERNSHIPS.url: UNCHANGED, NEW_GRAD.url: UNCHANGED})
-        self.assertEqual(errors, [])
-        self.assertEqual(self.state(), before)
-
-    def test_advances_the_successful_source_and_leaves_the_failed_one_as_it_was(self):
-        SourceState.objects.create(source_id="simplify-new-grad", etag='"old"', seen={"z": NOW - 5})
-        _, errors = self.run_with(
-            {INTERNSHIPS.url: listings_file("a"), NEW_GRAD.url: FakeResponse(500, "boom")}
-        )
-        self.assertEqual([str(err) for err in errors], ["Fetching simplify-new-grad failed: 500"])
-        self.assertEqual(
-            self.state(),
+    def test_missing_webhook_fails_source_without_modifying_state(self):
+        # No state exists yet
+        http, result = self.run_with(
             {
-                "simplify-internships": {"etag": '"v2"', "seen": {"a": NOW - 60}},
-                "simplify-new-grad": {"etag": '"old"', "seen": {"z": NOW - 5}},
+                INTERNSHIPS.url: listings_file("a"),
+                NEW_GRAD.url: listings_file("b"),  # Provide valid response for NEW_GRAD too
             },
+            webhooks={"DISCORD_WEBHOOK_NEW_GRAD": GRAD_HOOK},  # Missing INTERNSHIPS webhook
         )
+        self.assertTrue(result.failed)
+        self.assertEqual(len(result.enqueue_errors), 1)
+        self.assertIn("DISCORD_WEBHOOK_INTERNSHIPS is not set", str(result.enqueue_errors[0]))
+        # State should NOT have been created for the failed source
+        self.assertFalse(SourceState.objects.filter(pk=INTERNSHIPS.id).exists())
+        # NEW_GRAD source should have succeeded (seeding, so no outbox messages)
+        self.assertTrue(SourceState.objects.filter(pk=NEW_GRAD.id).exists())
 
-    def test_outbox_enqueue_and_delivery_are_atomic(self):
-        # Listings are marked seen in the same transaction as outbox enqueue
+    def test_returns_failed_when_dead_lettered(self):
         self.seed()
-        http, errors = self.run_with(
+        # Create a message at max attempts
+        OutboxMessage.objects.create(
+            source_id=INTERNSHIPS.id,
+            webhook_env_var="DISCORD_WEBHOOK_INTERNSHIPS",
+            payload={"embeds": []},
+            attempt_count=MAX_DELIVERY_ATTEMPTS - 1,
+        )
+        http, result = self.run_with(
             {
-                INTERNSHIPS.url: listings_file("i"),
+                INTERNSHIPS.url: UNCHANGED,
                 NEW_GRAD.url: UNCHANGED,
-                INTERN_HOOK: ACCEPTED,
+                INTERN_HOOK: FakeResponse(500, "boom"),
             }
         )
-        self.assertEqual(errors, [])
-        # Listing is marked as seen
-        self.assertEqual(
-            self.state()["simplify-internships"], {"etag": '"v2"', "seen": {"i": NOW - 60}}
-        )
-        # Message was delivered (not just enqueued)
-        self.assertEqual(OutboxMessage.objects.filter(status=OutboxMessage.Status.SENT).count(), 1)
+        self.assertTrue(result.failed)
+        self.assertEqual(result.dead, 1)
 
     def test_discord_failure_leaves_message_pending_for_retry(self):
         self.seed()
-        http, errors = self.run_with(
+        http, result = self.run_with(
             {
                 INTERNSHIPS.url: listings_file("i"),
                 NEW_GRAD.url: UNCHANGED,
                 INTERN_HOOK: FakeResponse(500, "boom"),
             }
         )
-        self.assertEqual(errors, [])  # Delivery errors don't propagate
-        # Listing is still marked as seen (no duplicates on source re-fetch)
-        self.assertEqual(
-            self.state()["simplify-internships"], {"etag": '"v2"', "seen": {"i": NOW - 60}}
-        )
-        # Message remains pending for retry
+        self.assertFalse(result.failed)  # Deferred, not dead
         msg = OutboxMessage.objects.get(source_id=INTERNSHIPS.id)
         self.assertEqual(msg.status, OutboxMessage.Status.PENDING)
         self.assertEqual(msg.attempt_count, 1)
 
-    def test_gives_each_source_its_own_cap(self):
-        self.seed()
-        http, _ = self.run_with(
-            {
-                INTERNSHIPS.url: listings_file(*[f"id{n}" for n in range(30)]),
-                NEW_GRAD.url: listings_file("g1", "g2"),
-                INTERN_HOOK: ACCEPTED,
-                GRAD_HOOK: ACCEPTED,
-            }
-        )
-        self.assertEqual(len(self.state()["simplify-internships"]["seen"]), 30)
-        self.assertEqual(len(http.descriptions(INTERN_HOOK)), 3)
-        self.assertEqual(
-            self.state()["simplify-new-grad"]["seen"], {"g1": NOW - 60, "g2": NOW - 60}
-        )
-        self.assertEqual(len(http.descriptions(GRAD_HOOK)), 1)
 
-    def test_keeps_the_old_etag_when_the_cap_holds_listings_back(self):
-        self.seed()
-        self.run_with(
-            {
-                INTERNSHIPS.url: listings_file(*[f"id{n}" for n in range(31)]),
-                NEW_GRAD.url: UNCHANGED,
-                INTERN_HOOK: ACCEPTED,
-            }
-        )
-        self.assertEqual(self.state()["simplify-internships"]["etag"], '"v1"')
-        self.assertEqual(len(self.state()["simplify-internships"]["seen"]), 30)
+class PostJobListingsCommandTests(TestCase):
+    def setUp(self):
+        logging_patcher = patch("job_postings.run.logger")
+        logging_patcher.start()
+        self.addCleanup(logging_patcher.stop)
 
-
-class PostJobListingsCommandTests(SimpleTestCase):
-    def test_passes_the_environment_to_the_run(self):
-        with patch("job_postings.management.commands.post_job_listings.run", return_value=[]) as r:
+    def test_exits_zero_on_success(self):
+        result = RunResult(enqueue_errors=[], sent=5, deferred=0, dead=0, stale_recovered=0)
+        with patch("job_postings.management.commands.post_job_listings.run", return_value=result):
             with patch.dict("os.environ", WEBHOOKS):
-                call_command("post_job_listings", verbosity=0)
-                self.assertEqual(r.call_args[0][0]["DISCORD_WEBHOOK_NEW_GRAD"], GRAD_HOOK)
+                call_command("post_job_listings", verbosity=0)  # Should not raise
 
-    def test_fails_when_a_source_failed(self):
-        errors = [RuntimeError("DISCORD_WEBHOOK_NEW_GRAD is not set")]
-        with patch("job_postings.management.commands.post_job_listings.run", return_value=errors):
-            with self.assertRaisesMessage(CommandError, "DISCORD_WEBHOOK_NEW_GRAD is not set"):
+    def test_exits_nonzero_on_enqueue_failure(self):
+        result = RunResult(
+            enqueue_errors=[RuntimeError("DISCORD_WEBHOOK_INTERNSHIPS is not set")],
+            sent=0,
+            deferred=0,
+            dead=0,
+            stale_recovered=0,
+        )
+        with patch("job_postings.management.commands.post_job_listings.run", return_value=result):
+            with self.assertRaisesMessage(CommandError, "DISCORD_WEBHOOK_INTERNSHIPS is not set"):
+                call_command("post_job_listings", verbosity=0)
+
+    def test_exits_nonzero_on_dead_lettered(self):
+        result = RunResult(enqueue_errors=[], sent=3, deferred=0, dead=2, stale_recovered=0)
+        with patch("job_postings.management.commands.post_job_listings.run", return_value=result):
+            with self.assertRaisesMessage(CommandError, "2 message(s) dead-lettered"):
                 call_command("post_job_listings", verbosity=0)

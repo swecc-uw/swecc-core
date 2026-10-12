@@ -20,10 +20,15 @@ class OutboxMessage(models.Model):
 
     Messages are enqueued in the same transaction that marks listings as seen, ensuring atomicity.
     A separate delivery step sends pending messages, handling failures and rate limits gracefully.
+
+    Delivery uses at-least-once semantics: a message claimed for sending (status=SENDING) that
+    gets stuck (worker crash) is re-queued after a lease timeout, accepting rare duplicates over
+    silent drops since Discord webhooks have no idempotency key.
     """
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
+        SENDING = "sending", "Sending (claimed)"
         SENT = "sent", "Sent"
         DEAD = "dead", "Dead (gave up)"
 
@@ -34,6 +39,7 @@ class OutboxMessage(models.Model):
     attempt_count = models.PositiveIntegerField(default=0)
     next_attempt_at = models.DateTimeField(db_index=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True)
 
