@@ -38,6 +38,12 @@ class BotContext:
             "make.*money.*online",
             "air*free",
             "@everyone",
+            "moving overseas",
+            "give everything.*away",
+            "first-come, first-served",
+            "hollywood mirror",
+            "dm me for photos",
+            "phone or imessage",
         ]
         self.do_not_timeout = set()
 

@@ -67,6 +67,12 @@ class TestBotContext:
             "make.*money.*online",
             "air*free",
             "@everyone",
+            "moving overseas",
+            "give everything.*away",
+            "first-come, first-served",
+            "hollywood mirror",
+            "dm me for photos",
+            "phone or imessage",
         ]
 
         # Act & Assert
