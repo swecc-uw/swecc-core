@@ -10,12 +10,13 @@ from pydantic import BaseModel
 
 from .config import settings
 from .llm.context import ContextManager
-from .llm.gemini import Gemini
 from .llm.message import Message
+from .llm.openrouter import OpenRouter
 from .mq import consumers, initialize_rabbitmq, producers, shutdown_rabbitmq
 from .polling import PollingRequest, Status, generate_request_id
 
-client = Gemini()
+# Discord bot chat. Resume review still calls Gemini from mq/consumers.py.
+client = OpenRouter()
 ctx = ContextManager()
 
 waiting_requests: dict[str, PollingRequest] = {}
