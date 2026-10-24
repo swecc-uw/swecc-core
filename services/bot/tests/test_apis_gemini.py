@@ -92,7 +92,7 @@ class TestGeminiAPI:
         """Test formatting user message."""
         # Arrange
         mock_message = Mock()
-        mock_message.content = "Gemini what is the weather?"
+        mock_message.content = "rusty what is the weather?"
 
         # Act
         result = api.format_user_message(mock_message)
@@ -104,7 +104,7 @@ class TestGeminiAPI:
         """Test formatting user message is case insensitive."""
         # Arrange
         mock_message = Mock()
-        mock_message.content = "GEMINI tell me a joke"
+        mock_message.content = "RUSTY tell me a joke"
 
         # Act
         result = api.format_user_message(mock_message)

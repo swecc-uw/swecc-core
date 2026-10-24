@@ -12,6 +12,8 @@ import pytest
 # This prevents initialization errors during test collection
 os.environ.setdefault("GEMINI_API_KEY", "test_api_key")
 os.environ.setdefault("GEMINI_MODEL_NAME", "test-model")
+os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
+os.environ.setdefault("OPENROUTER_MODEL", "openrouter/free")
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "test_access_key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test_secret_key")
 os.environ.setdefault("AWS_BUCKET_NAME", "test-bucket")
@@ -27,6 +29,8 @@ def mock_env_for_imports(monkeypatch):
     """Set environment variables before any imports to prevent initialization errors."""
     monkeypatch.setenv("GEMINI_API_KEY", "test_api_key")
     monkeypatch.setenv("GEMINI_MODEL_NAME", "test-model")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test_openrouter_key")
+    monkeypatch.setenv("OPENROUTER_MODEL", "openrouter/free")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test_access_key")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test_secret_key")
     monkeypatch.setenv("AWS_BUCKET_NAME", "test-bucket")
@@ -60,6 +64,8 @@ def mock_env_vars(monkeypatch):
     """Set up mock environment variables for testing."""
     monkeypatch.setenv("GEMINI_API_KEY", "test_api_key")
     monkeypatch.setenv("GEMINI_MODEL_NAME", "test-model")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test_openrouter_key")
+    monkeypatch.setenv("OPENROUTER_MODEL", "openrouter/free")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test_access_key")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test_secret_key")
     monkeypatch.setenv("AWS_BUCKET_NAME", "test-bucket")

@@ -29,7 +29,7 @@ class GeminiAPI:
         self.allowed_channels = [self.OFF_TOPIC_CHANNEL_ID]
         self.allowlisted_roles_id = [int(os.getenv("OFFICER_ROLE_ID", "0"))]
 
-        self.prompt = "Gemini"
+        self.prompt = "rusty"
         self.max_context_length = max_context_length
         self.context_invalidation_time_seconds = context_invalidation_time_seconds
 
