@@ -44,6 +44,12 @@ class BotContext:
             "hollywood mirror",
             "dm me for photos",
             "phone or imessage",
+            "family emergency",
+            "no longer able to attend",
+            "climate pledge",
+            "not a bot",
+            r"take all \d+ or just a pair",
+            "serious accident",
         ]
         self.do_not_timeout = set()
 

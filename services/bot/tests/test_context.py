@@ -73,6 +73,12 @@ class TestBotContext:
             "hollywood mirror",
             "dm me for photos",
             "phone or imessage",
+            "family emergency",
+            "no longer able to attend",
+            "climate pledge",
+            "not a bot",
+            r"take all \d+ or just a pair",
+            "serious accident",
         ]
 
         # Act & Assert
