@@ -84,9 +84,15 @@ class TestGeminiAPI:
 
         # Assert
         assert api.ROLE in instruction
-        assert api.MESSAGE_FORMAT_INSTRUCTION in instruction
-        assert api.AUTHORIZED_INSTRUCTION in instruction
-        assert api.UNAUTHORIZED_INSTRUCTION in instruction
+        assert api.REPLY_INSTRUCTION in instruction
+        assert api.AUTHORIZED_INSTRUCTION not in instruction
+        assert api.UNAUTHORIZED_INSTRUCTION not in instruction
+        assert "is_authorized" not in instruction
+
+    def test_policy_instruction_follows_the_role_check(self, api):
+        """The Discord role check selects the instruction. The model does not."""
+        assert api.policy_instruction(True) == api.AUTHORIZED_INSTRUCTION
+        assert api.policy_instruction(False) == api.UNAUTHORIZED_INSTRUCTION
 
     def test_format_user_message(self, api):
         """Test formatting user message."""
@@ -218,11 +224,21 @@ class TestGeminiAPI:
         metadata = Metadata(is_authorized=True, author="test_user")
 
         # Act
-        with patch.object(api.session, "post", return_value=mock_response):
-            result = api.request_completion("test message", metadata, "test-key")
+        with patch.object(api.session, "post", return_value=mock_response) as mock_post:
+            result = api.request_completion(
+                "test message",
+                metadata,
+                "test-key",
+                system_instruction=api.policy_instruction(True),
+            )
 
         # Assert
         assert result == "test-request-123"
+        body = mock_post.call_args.kwargs["json"]
+        assert body["message"] == "test message"
+        assert body["metadata"]["is_authorized"] is True
+        assert body["system_instruction"] == api.AUTHORIZED_INSTRUCTION
+        assert "is_authorized" not in body["message"]
 
     def test_request_completion_failure(self, api):
         """Test failed completion request."""
@@ -292,7 +308,10 @@ class TestGeminiAPI:
         mock_response.__exit__ = Mock(return_value=False)
 
         # Act
-        with patch.object(api.session, "get", return_value=mock_response):
+        with (
+            patch.object(api.session, "get", return_value=mock_response),
+            patch("APIs.GeminiAPI.sleep"),
+        ):
             result = api.poll_for_response("test-request-123")
 
         # Assert

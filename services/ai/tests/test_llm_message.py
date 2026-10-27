@@ -45,8 +45,9 @@ class TestMessage:
         formatted = message.format_prompt()
 
         # Assert
-        assert "author: john_doe" in formatted
-        assert "is_authorized: False" in formatted
+        assert "author" not in formatted
+        assert "is_authorized" not in formatted
+        assert message.metadata["is_authorized"] is False
         assert "Message: What is Python?" in formatted
         assert formatted.startswith("\n")
 
@@ -79,7 +80,7 @@ class TestMessage:
         # Assert
         assert "Prompt:" in str_repr
         assert "Response: Answer" in str_repr
-        assert "key: value" in str_repr
+        assert "key" not in str_repr
         assert "Message: Question" in str_repr
 
     def test_message_repr_representation(self):
@@ -110,8 +111,8 @@ class TestMessage:
         assert length == len(str(message))
         assert length > 0
 
-    def test_message_len_with_metadata(self):
-        """Test __len__ includes metadata in calculation."""
+    def test_message_len_ignores_metadata(self):
+        """Metadata stays on the object and out of the model-facing text."""
         # Arrange
         message1 = Message(
             message="Test", response="Response", timestamp=datetime.now(), metadata={}
@@ -120,11 +121,12 @@ class TestMessage:
             message="Test",
             response="Response",
             timestamp=datetime.now(),
-            metadata={"author": "user", "role": "admin"},
+            metadata={"author": "user", "is_authorized": True},
         )
 
         # Act & Assert
-        assert len(message2) > len(message1)
+        assert len(message2) == len(message1)
+        assert message2.metadata["is_authorized"] is True
 
     def test_message_with_complex_metadata(self):
         """Test Message with complex metadata values."""
@@ -146,7 +148,8 @@ class TestMessage:
 
         # Assert
         formatted = message.format_prompt()
-        assert "author: test_user" in formatted
-        assert "is_authorized: True" in formatted
-        assert "channel_id: 12345" in formatted
-        assert "tags: ['python', 'testing']" in formatted
+        assert "author" not in formatted
+        assert "is_authorized" not in formatted
+        assert "channel_id" not in formatted
+        assert "Message: Complex test" in formatted
+        assert message.metadata == metadata
