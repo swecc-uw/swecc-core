@@ -102,7 +102,9 @@ class OpenRouter:
             text = _message_text(payload)
             if _is_excluded_model(served) or _is_safety_verdict(text):
                 last_safety_model = served or last_safety_model
-                logger.warning("Skipping content-safety response from model=%s", served or "unknown")
+                logger.warning(
+                    "Skipping content-safety response from model=%s", served or "unknown"
+                )
                 if served:
                     excluded.add(served)
                 if pool:

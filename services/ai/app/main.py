@@ -100,9 +100,7 @@ async def complete_task(request_id: str, key: str, message: CompleteRequest):
             if message.needs_context
             else message_parsed
         )
-        model_response = await client.prompt_model(
-            prompt, resolve_system_instruction(key, message)
-        )
+        model_response = await client.prompt_model(prompt, resolve_system_instruction(key, message))
         logger.info(f"\n{prompt}\n")
 
         ctx.add_message_to_context(
