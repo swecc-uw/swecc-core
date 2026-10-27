@@ -2,6 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Optional
 
 from fastapi import FastAPI, Response
 from fastapi import status as APIStatus
@@ -74,13 +75,20 @@ class CompleteRequest(BaseModel):
     message: str
     metadata: dict
     needs_context: bool = True
+    # Policy chosen by the caller from its own authorization check.
+    system_instruction: Optional[str] = None
 
 
 def format_message(message: CompleteRequest) -> str:
-    return (
-        "".join(f"{key}: {value}\n" for key, value in message.metadata.items())
-        + f"Message: {message.message}\n"
-    )
+    return message.message
+
+
+def resolve_system_instruction(key: str, message: CompleteRequest) -> str:
+    base = ctx.context_configs[key].system_instruction
+    policy = (message.system_instruction or "").strip()
+    if not policy:
+        return base
+    return f"{base}\n{policy}"
 
 
 async def complete_task(request_id: str, key: str, message: CompleteRequest):
@@ -93,7 +101,7 @@ async def complete_task(request_id: str, key: str, message: CompleteRequest):
             else message_parsed
         )
         model_response = await client.prompt_model(
-            prompt, ctx.context_configs[key].system_instruction
+            prompt, resolve_system_instruction(key, message)
         )
         logger.info(f"\n{prompt}\n")
 
@@ -106,15 +114,17 @@ async def complete_task(request_id: str, key: str, message: CompleteRequest):
                 metadata=message.metadata,
             ),
         )
-    except ValueError as e:
-        waiting_requests[request_id].status = Status.ERROR
-        waiting_requests[request_id].error = str(e)
-        logger.error(f"Error processing request {request_id}: {str(e)}")
-        return
     except Exception as e:
+        detail = str(e).strip() or type(e).__name__
         waiting_requests[request_id].status = Status.ERROR
-        waiting_requests[request_id].error = str(e)
-        logger.error(f"Error processing request {request_id}: {str(e)}")
+        waiting_requests[request_id].error = detail
+        logger.exception(
+            "Inference failed request_id=%s key=%s error_type=%s detail=%s",
+            request_id,
+            key,
+            type(e).__name__,
+            detail,
+        )
         return
 
     waiting_requests[request_id].status = Status.SUCCESS

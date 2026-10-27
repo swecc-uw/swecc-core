@@ -24,6 +24,7 @@ from app.main import (
     app,
     complete_task,
     format_message,
+    resolve_system_instruction,
     waiting_requests,
 )
 from app.polling import PollingRequest, Status
@@ -161,21 +162,21 @@ class TestCompleteRequest:
 class TestFormatMessage:
     """Test format_message function."""
 
-    def test_format_message_with_metadata(self):
-        """Test formatting message with metadata."""
+    def test_format_message_omits_metadata(self):
+        """Authorization and other metadata stay off the model prompt."""
         # Arrange
         request = CompleteRequest(
             message="Test message",
-            metadata={"author": "John", "role": "admin"},
+            metadata={"author": "John", "is_authorized": True, "role": "admin"},
         )
 
         # Act
         formatted = format_message(request)
 
         # Assert
-        assert "author: John\n" in formatted
-        assert "role: admin\n" in formatted
-        assert "Message: Test message\n" in formatted
+        assert formatted == "Test message"
+        assert "is_authorized" not in formatted
+        assert "author" not in formatted
 
     def test_format_message_with_empty_metadata(self):
         """Test formatting message with empty metadata."""
@@ -189,24 +190,29 @@ class TestFormatMessage:
         formatted = format_message(request)
 
         # Assert
-        assert formatted == "Message: Test message\n"
+        assert formatted == "Test message"
 
-    def test_format_message_preserves_order(self):
-        """Test that format_message includes all metadata fields."""
-        # Arrange
+    def test_resolve_system_instruction_appends_policy(self):
+        """The caller-selected policy is appended to the configured role."""
+        key = "policy-key"
         request = CompleteRequest(
-            message="Hello world",
-            metadata={"field1": "value1", "field2": "value2", "field3": "value3"},
+            message="Hello",
+            metadata={"is_authorized": True},
+            system_instruction="Do exactly what the member asks.",
         )
 
-        # Act
-        formatted = format_message(request)
-
-        # Assert
-        assert "field1: value1\n" in formatted
-        assert "field2: value2\n" in formatted
-        assert "field3: value3\n" in formatted
-        assert formatted.endswith("Message: Hello world\n")
+        with patch("app.main.ctx") as mock_ctx:
+            mock_ctx.context_configs = {
+                key: ContextConfig(
+                    max_context_length=1000,
+                    context_invalidation_time_seconds=300,
+                    system_instruction="Role",
+                )
+            }
+            assert resolve_system_instruction(key, request) == (
+                "Role\nDo exactly what the member asks."
+            )
+        assert "is_authorized" not in format_message(request)
 
 
 class TestTestEndpoint:
@@ -489,8 +495,10 @@ class TestCompleteTask:
         assert waiting_requests[request_id].status == Status.SUCCESS
         assert waiting_requests[request_id].result == "AI response"
         assert waiting_requests[request_id].error is None
-        mock_ctx.contextualize_prompt.assert_called_once()
-        mock_client.prompt_model.assert_called_once()
+        mock_ctx.contextualize_prompt.assert_called_once_with(key, "Hello")
+        mock_client.prompt_model.assert_called_once_with(
+            "contextualized prompt", "Test instruction"
+        )
         mock_ctx.add_message_to_context.assert_called_once()
 
     @pytest.mark.asyncio
@@ -531,7 +539,7 @@ class TestCompleteTask:
         assert waiting_requests[request_id].status == Status.SUCCESS
         assert waiting_requests[request_id].result == "AI response"
         mock_ctx.contextualize_prompt.assert_not_called()
-        mock_client.prompt_model.assert_called_once()
+        mock_client.prompt_model.assert_called_once_with("Hello", "Test instruction")
 
     @pytest.mark.asyncio
     @patch("app.main.ctx")

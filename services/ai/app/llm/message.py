@@ -14,11 +14,9 @@ class Message:
     metadata: dict
 
     def format_prompt(self):
-        prompt = "\n"
-        for key, value in self.metadata.items():
-            prompt += f"{key}: {value}\n"
-        prompt += f"Message: {self.message}\n"
-        return prompt
+        # Metadata (including is_authorized) stays on the object for the server.
+        # The model only sees the member's message and the prior reply.
+        return f"\nMessage: {self.message}\n"
 
     def __str__(self):
         return f"Prompt: {self.format_prompt()}\nResponse: {self.response}"
